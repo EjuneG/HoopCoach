@@ -28,6 +28,7 @@ import traceback
 from typing import Iterable
 
 # 显式引入所有业务模块会用到的标准库与第三方核心依赖，确保 PyInstaller 稳定打入 _internal/
+import base64  # noqa: F401
 import concurrent.futures  # noqa: F401
 import difflib  # noqa: F401
 import getpass  # noqa: F401
@@ -35,6 +36,7 @@ import glob  # noqa: F401
 import hashlib  # noqa: F401
 import html  # noqa: F401
 import http.server  # noqa: F401
+import io  # noqa: F401
 import math  # noqa: F401
 import mimetypes  # noqa: F401
 import platform  # noqa: F401
@@ -53,13 +55,13 @@ import zipfile  # noqa: F401
 
 try:
     import tkinter as tk  # noqa: F401
-    from tkinter import filedialog, messagebox, ttk  # noqa: F401
+    from tkinter import filedialog, font as tkfont, messagebox, ttk  # noqa: F401
 except Exception:
     tk = None
     messagebox = None
 
 try:
-    from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont  # noqa: F401
+    from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageTk  # noqa: F401
 except Exception:
     pass
 

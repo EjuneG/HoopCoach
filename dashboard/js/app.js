@@ -39,9 +39,40 @@
     plannerData: null,
     boxSubTab: "gap",
     boxSearch: "",
+    compat: null,
+    compatCoreId: 1002,
+    compatSlotA: null,
+    compatSlotB: null,
+    compatSubMode: "forward",
+    compatFwdSearch: "",
+    compatFwdPos: "ALL",
+    compatFwdOnlyOwned: false,
+    compatFwdOnlyHasNote: false,
+    compatRevType: "note",
+    compatRevNoteId: "",
+    compatRevActorId: 1007,
+    compatRevStar: 0,
+    compatRevPos: "ALL",
+    compatRevOnlyOwned: false,
+    compatRevData: null,
+    compatRevLoading: false,
+    picker: {
+      open: false,
+      target: "core",
+      source: "chars",
+      search: "",
+      pos: "ALL",
+      onlyOwned: false,
+      sortByRel: true,
+      allowNotes: false,
+      coreForRel: null,
+      onPick: null,
+    },
     livePollMs: 2500,
     liveTimer: null,
     liveLast: null,
+    plans: [],
+    selectedPlanId: null,
   };
 
   /* -------------------- 工具函数 -------------------- */
@@ -106,6 +137,12 @@
     if (viewName === "box" && !state.plannerData) {
       loadPlanner();
     }
+    if (viewName === "compat") {
+      ensureCompatReady();
+    }
+    if (viewName === "plans") {
+      renderPlansView();
+    }
     if (viewName === "live") {
       pollLiveNow();
       startLiveLoop();
@@ -129,8 +166,8 @@
     $("overview-kpis").innerHTML = `
       <div class="kpi-card">
         <div class="kpi-label">历史最高分</div>
-        <div class="kpi-val" style="color:var(--gold)">${k.best_rank.toLocaleString()}</div>
-        <div class="kpi-foot"><span>破万 ${k.over_10k_count} / ${k.total_runs} 局</span><span class="badge badge-gold">${k.total_runs ? Math.round(k.over_10k_count / k.total_runs * 100) : 0}%</span></div>
+        <div class="kpi-val kpi-val-gold">${k.best_rank.toLocaleString()}</div>
+        <div class="kpi-foot"><span>破万 ${k.over_10k_count} / ${k.total_runs} 局</span><span class="badge badge-champ">★ ${k.total_runs ? Math.round(k.over_10k_count / k.total_runs * 100) : 0}%</span></div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">近 10 局均分</div>
@@ -144,8 +181,8 @@
       </div>
       <div class="kpi-card">
         <div class="kpi-label">自备 7 阶彩笔记</div>
-        <div class="kpi-val" style="color:var(--purple)">${k.rainbow_notes_count} <span style="font-size:14px;font-weight:500;color:var(--text-muted)">(${k.rainbow_chars_count}人)</span></div>
-        <div class="kpi-foot"><span>总笔记 ${k.own_notes_total} 自备 · ${k.borrowed_notes_total} 好友</span>${k.diamonds ? `<span class="badge badge-blue">💎 ${esc(k.diamonds)}</span>` : ""}</div>
+        <div class="kpi-val kpi-val-purple">${k.rainbow_notes_count} <span style="font-size:14px;font-weight:600;font-style:normal;color:var(--text-muted)">(${k.rainbow_chars_count}人)</span></div>
+        <div class="kpi-foot"><span>总笔记 ${k.own_notes_total} 自备 · ${k.borrowed_notes_total} 好友</span>${k.diamonds ? `<span class="badge badge-blue">◆ ${esc(k.diamonds)}</span>` : ""}</div>
       </div>
     `;
 
@@ -158,7 +195,7 @@
         <div class="pos-card ${p.is_10k ? "is-10k" : "need-10k"}" data-run-id="${esc(p.best_run_id)}">
           <div class="pos-top">
             <span class="pos-code">${esc(p.pos)} · ${esc(p.pos_cn)}</span>
-            <span class="badge ${p.is_10k ? "badge-green" : "badge-gold"}">${p.is_10k ? "已破万" : "差 " + gap}</span>
+            <span class="badge ${p.is_10k ? "badge-champ" : "badge-orange"}">${p.is_10k ? "★ 已破万" : "差 " + gap}</span>
           </div>
           <div class="pos-who">
             ${avatarHtml(p.best_head, p.best_char)}
@@ -205,7 +242,7 @@
     // 5. 冲分队列 & 瓶颈
     $("overview-updated").textContent = `快照同步 ${ov.generated_at || ""}`;
     $("overview-warnings").innerHTML = (ov.goal_warnings || [])
-      .map((w) => `<div class="warn-banner">⚠️ ${esc(w)}</div>`)
+      .map((w) => `<div class="warn-banner">▲ ${esc(w)}</div>`)
       .join("");
 
     const bList = (ov.bottlenecks || []).slice(0, 6);
@@ -229,11 +266,11 @@
             <span class="num">当前 <strong>${b.current_best_rank.toLocaleString()}</strong> / 目标 ${b.target_rank.toLocaleString()}</span>
             <span class="${b.rank_gap === 0 ? "diff-pos" : ""}">${b.rank_gap === 0 ? "已达标" : "差 " + b.rank_gap}</span>
           </div>
-          <div class="pos-bar"><div class="pos-bar-fill" style="width:${pct}%;background:${b.rank_gap === 0 ? "var(--green)" : "var(--accent)"}"></div></div>
+          <div class="pos-bar"><div class="pos-bar-fill" style="width:${pct}%;background:${b.rank_gap === 0 ? "var(--mint)" : "var(--accent)"}"></div></div>
           <div class="goal-note">${esc(b.primary_bottleneck || b.advice || "")}</div>
         </div>
       `;
-    }).join("") : '<div class="empty-state">暂未配置养成队列或同步历史战绩。可先在桌面控制台点击「🔄 扫描历史战绩」，或切换到「角色 Box &amp; 配装规划」查看全角色通用笔记/器材方案。</div>';
+    }).join("") : '<div class="empty-state">暂未配置养成队列或同步历史战绩。可先在桌面控制台点击「扫描历史战绩」，或切换到「笔记与配装」查看全角色通用方案。</div>';
 
     document.querySelectorAll(".goal-card[data-cid]").forEach((el) => {
       el.addEventListener("click", () => {
@@ -247,6 +284,26 @@
         }
       });
     });
+  }
+
+  function getThemeChartPalette() {
+    const cs = getComputedStyle(document.documentElement);
+    const pick = (name, fallback) => (cs.getPropertyValue(name) || "").trim() || fallback;
+    const isDark = (document.documentElement.getAttribute("data-theme") || "light") === "dark";
+    return {
+      isDark,
+      grid: pick("--chart-grid", isDark ? "rgba(148,184,255,0.14)" : "rgba(16,27,51,0.11)"),
+      axis: pick("--chart-axis", isDark ? "#98acd0" : "#526485"),
+      line: pick("--chart-line", isDark ? "#4d8dff" : "#1b5bff"),
+      gradTop: pick("--chart-grad-top", isDark ? "rgba(77,141,255,0.30)" : "rgba(27,92,255,0.22)"),
+      gradBot: pick("--chart-grad-bot", isDark ? "rgba(77,141,255,0.02)" : "rgba(27,92,255,0.02)"),
+      dotStroke: pick("--chart-dot-stroke", isDark ? "#131f38" : "#ffffff"),
+      line10k: pick("--chart-10k-line", isDark ? "#ffb703" : "#e68a00"),
+      label10k: pick("--chart-10k-label", isDark ? "#ffc83d" : "#b86700"),
+      dot10k: pick("--chart-10k-dot", isDark ? "#ffb703" : "#ff8a00"),
+      dot10kStroke: pick("--chart-10k-dot-stroke", isDark ? "#131f38" : "#101b33"),
+      pillBg10k: pick("--chart-10k-pill-bg", isDark ? "rgba(255,183,3,0.18)" : "#fff4d1"),
+    };
   }
 
   function renderTrendChart() {
@@ -265,11 +322,13 @@
       return;
     }
 
-    const W = 960;
-    const H = 245;
-    const padL = 50;
-    const padR = 20;
-    const padT = 18;
+    const pal = getThemeChartPalette();
+    const measuredW = host.clientWidth ? Math.round(host.clientWidth) : 1120;
+    const W = Math.max(680, Math.min(1320, measuredW));
+    const H = 252;
+    const padL = 54;
+    const padR = 24;
+    const padT = 20;
     const padB = 30;
     const plotW = W - padL - padR;
     const plotH = H - padT - padB;
@@ -282,22 +341,37 @@
     const xOf = (i) => padL + (runs.length === 1 ? plotW / 2 : (i / (runs.length - 1)) * plotW);
     const yOf = (v) => padT + plotH - ((v - minY) / spanY) * plotH;
 
-    // 水平参考线
+    // 水平参考线（10,000 破万标签自动避让高分点，放到较空的一侧）
+    const qLen = Math.max(1, Math.ceil(runs.length * 0.28));
+    const leftMax = Math.max(...scores.slice(0, qLen));
+    const rightMax = Math.max(...scores.slice(-qLen));
+    const pillOnLeft = leftMax <= rightMax;
+    const pillW = 92;
+    const pillX = pillOnLeft ? (padL + 10) : (W - padR - pillW - 4);
+
     const ticks = [];
     const step = spanY > 3500 ? 1000 : 500;
     for (let v = minY; v <= maxY; v += step) {
       ticks.push(v);
     }
     const gridSvg = ticks.map((v) => {
-      const y = yOf(v).toFixed(1);
+      const y = yOf(v);
+      const yStr = y.toFixed(1);
       const is10k = v === 10000;
+      const badge10k = is10k ? `
+        <rect x="${pillX}" y="${(y - 21).toFixed(1)}" width="${pillW}" height="18" rx="9"
+              fill="${pal.pillBg10k}" stroke="${pal.line10k}" stroke-width="1.3" />
+        <text x="${pillX + pillW / 2}" y="${(y - 8.5).toFixed(1)}" text-anchor="middle"
+              fill="${pal.label10k}" font-size="10.5" font-weight="800">★ 10,000 破万</text>
+      ` : "";
       return `
-        <line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}"
-              stroke="${is10k ? "var(--gold)" : "var(--border)"}"
-              stroke-dasharray="${is10k ? "5 4" : "none"}"
-              stroke-width="${is10k ? 1.4 : 1}" />
-        <text x="${padL - 8}" y="${Number(y) + 4}" text-anchor="end"
-              fill="${is10k ? "var(--gold)" : "var(--text-dim)"}" font-size="11">${v}</text>
+        <line x1="${padL}" y1="${yStr}" x2="${W - padR}" y2="${yStr}"
+              stroke="${is10k ? pal.line10k : pal.grid}"
+              stroke-dasharray="${is10k ? "6 4" : "none"}"
+              stroke-width="${is10k ? 1.8 : 1}" />
+        <text x="${padL - 9}" y="${(y + 4).toFixed(1)}" text-anchor="end"
+              fill="${is10k ? pal.label10k : pal.axis}" font-size="11" font-weight="${is10k ? 800 : 600}">${v.toLocaleString()}</text>
+        ${badge10k}
       `;
     }).join("");
 
@@ -306,33 +380,37 @@
     const areaPts = `${xOf(0).toFixed(1)},${(padT + plotH).toFixed(1)} ${pts} ${xOf(runs.length - 1).toFixed(1)},${(padT + plotH).toFixed(1)}`;
 
     // X 轴稀疏日期标签
-    const labelCount = Math.min(6, runs.length);
+    const labelCount = Math.min(7, runs.length);
     const xLabels = [];
     for (let k = 0; k < labelCount; k++) {
       const idx = labelCount === 1 ? 0 : Math.round((k / (labelCount - 1)) * (runs.length - 1));
-      xLabels.push(`<text x="${xOf(idx).toFixed(1)}" y="${H - 8}" text-anchor="middle" fill="var(--text-dim)" font-size="11">${esc(runs[idx].date_label.slice(0, 5))}</text>`);
+      xLabels.push(`<text x="${xOf(idx).toFixed(1)}" y="${H - 8}" text-anchor="middle" fill="${pal.axis}" font-size="11" font-weight="600">${esc(runs[idx].date_label.slice(0, 5))}</text>`);
     }
 
     // 节点圆点
+    const baseRad = runs.length > 60 ? 3.6 : 4.5;
     const dots = runs.map((r, i) => {
       const cx = xOf(i).toFixed(1);
       const cy = yOf(r.final_rank).toFixed(1);
-      const col = r.final_rank >= 10000 ? "var(--gold)" : "var(--accent)";
-      const rad = runs.length > 50 ? 3.5 : 4.5;
-      return `<circle class="chart-dot" data-idx="${i}" cx="${cx}" cy="${cy}" r="${rad}" fill="${col}" stroke="var(--surface)" stroke-width="1.5" style="cursor:pointer" />`;
+      const is10k = r.final_rank >= 10000;
+      const col = is10k ? pal.dot10k : pal.line;
+      const stroke = is10k ? pal.dot10kStroke : pal.dotStroke;
+      const rad = is10k ? baseRad + 1.2 : baseRad;
+      return `<circle class="chart-dot" data-idx="${i}" cx="${cx}" cy="${cy}" r="${rad}" fill="${col}" stroke="${stroke}" stroke-width="${is10k ? 1.8 : 1.6}" style="cursor:pointer" />`;
     }).join("");
 
+    const gradId = pal.isDark ? "trendGradDark" : "trendGradLight";
     host.innerHTML = `
-      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
         <defs>
-          <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.26" />
-            <stop offset="100%" stop-color="var(--accent)" stop-opacity="0.01" />
+          <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="${pal.gradTop}" />
+            <stop offset="100%" stop-color="${pal.gradBot}" />
           </linearGradient>
         </defs>
         ${gridSvg}
-        <polygon points="${areaPts}" fill="url(#trendGrad)" />
-        <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+        <polygon points="${areaPts}" fill="url(#${gradId})" />
+        <polyline points="${pts}" fill="none" stroke="${pal.line}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" />
         ${xLabels.join("")}
         ${dots}
       </svg>
@@ -344,13 +422,13 @@
       dot.addEventListener("mouseenter", (e) => {
         const r = runs[Number(dot.dataset.idx)];
         tip.innerHTML = `
-          <div style="font-weight:700;margin-bottom:3px">${esc(r.main_name)} · <span style="color:${r.final_rank >= 10000 ? "var(--gold)" : "var(--accent)"}">${r.final_rank.toLocaleString()}</span></div>
+          <div style="font-weight:800;margin-bottom:3px">${esc(r.main_name)} · <span style="color:${r.final_rank >= 10000 ? "var(--gold-text)" : "var(--accent)"}">${r.final_rank.toLocaleString()}</span></div>
           <div style="color:var(--text-muted)">${esc(r.date_label)} · #${r.seq_no}</div>
           <div style="color:var(--text-muted);margin-top:2px">吻合 ${r.coach_match_pct.toFixed(0)}% · 均亏 ${r.avg_turn_ev_loss.toFixed(1)} EV</div>
         `;
         tip.classList.remove("hidden");
         const rect = wrap.getBoundingClientRect();
-        const left = Math.min(rect.width - 180, Math.max(8, e.clientX - rect.left + 12));
+        const left = Math.min(rect.width - 185, Math.max(8, e.clientX - rect.left + 12));
         const top = Math.max(8, e.clientY - rect.top - 64);
         tip.style.left = left + "px";
         tip.style.top = top + "px";
@@ -509,9 +587,9 @@
     // Top 失误回合
     const subTurns = d.top_suboptimal_turns || [];
     const subHtml = !d.has_archive
-      ? '<p class="panel-sub">离线快照仅包含摘要；启动本地服务 <code>python3 src/dashboard_server.py</code> 可查看完整逐回合失误分析。</p>'
+      ? '<p class="panel-sub">离线快照仅包含摘要；启动本地服务后可查看完整逐回合失误分析。</p>'
       : subTurns.length === 0
-      ? '<div class="badge badge-green" style="padding:6px 12px">✅ 本局未出现显著 EV 失误回合，整体贴合军师推荐</div>'
+      ? '<div class="badge badge-green" style="padding:6px 12px">★ 本局未出现显著 EV 失误回合，整体贴合军师推荐</div>'
       : `
         <div class="table-wrap">
           <table class="data-table">
@@ -598,7 +676,10 @@
             </div>
           </div>
           <div style="text-align:right">
-            <div class="run-hero-score num ${d.final_rank >= 10000 ? "is-10k" : ""}">${d.final_rank.toLocaleString()}</div>
+            <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px">
+              ${d.final_rank >= 10000 ? '<span class="badge badge-champ">★ 破万纪录</span>' : ""}
+              <div class="run-hero-score num ${d.final_rank >= 10000 ? "is-10k" : ""}">${d.final_rank.toLocaleString()}</div>
+            </div>
             <div class="panel-sub">六维总和 ${d.stat_sum.toLocaleString()}</div>
           </div>
         </div>
@@ -736,12 +817,12 @@
 
   async function loadPlanner() {
     if (!state.online) {
-      $("planner-notes-body").innerHTML = '<div class="empty-state">离线快照模式下不支持实时配对运算，请运行 <code>python3 src/dashboard_server.py</code></div>';
+      $("planner-notes-body").innerHTML = '<div class="empty-state">离线快照模式下不支持实时配对运算，请先启动本地作战室服务</div>';
       $("planner-equips-body").innerHTML = "";
       return;
     }
-    $("planner-notes-body").innerHTML = '<div class="empty-state">正在调用 note_advisor 真值计算…</div>';
-    $("planner-equips-body").innerHTML = '<div class="empty-state">正在调用 equipment_advisor 真值计算…</div>';
+    $("planner-notes-body").innerHTML = '<div class="empty-state">正在计算最优笔记配对方案…</div>';
+    $("planner-equips-body").innerHTML = '<div class="empty-state">正在计算最优器材配装方案…</div>';
     try {
       const qs = new URLSearchParams({
         char_id: String(state.plannerCharId),
@@ -767,8 +848,17 @@
           <div class="panel-sub">定位：${esc(c.roles_str || "—")} · 主练：${esc((c.recommend_train || []).join(" / "))}</div>
         </div>
       </div>
-      <div class="panel-sub">${esc(p.equipments.owned_pvp_note || p.equipments.wish_headline || "")}</div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div class="panel-sub">${esc(p.equipments.owned_pvp_note || p.equipments.wish_headline || "")}</div>
+        <button id="btn-jump-compat-core" class="action-btn action-btn-sm" type="button">▸ 查相性沙盒</button>
+      </div>
     `;
+    const jumpBtn = $("btn-jump-compat-core");
+    if (jumpBtn) {
+      jumpBtn.addEventListener("click", () => {
+        openCompatForCore(c.id, true);
+      });
+    }
     renderPlannerNotes();
     renderPlannerEquips();
   }
@@ -786,7 +876,7 @@
       const rows = owned.length ? owned : fallbackAll;
       const isAllFallback = !owned.length && fallbackAll.length > 0;
       host.innerHTML = rows.length ? `
-        ${isAllFallback ? '<div class="panel-sub" style="margin-bottom:8px">💡 暂未同步个人角色池，以下展示全图鉴原生同位置高相性种马推荐</div>' : ""}
+        ${isAllFallback ? '<div class="panel-sub" style="margin-bottom:8px">◆ 暂未同步个人角色池，以下展示全图鉴原生同位置高相性种马推荐</div>' : ""}
         <div class="table-wrap">
           <table class="data-table">
             <thead><tr><th>${isAllFallback ? "同位置种马（全图鉴）" : "同位置种马（已拥有）"}</th><th>双边关系分</th><th>现有自备最高</th><th>主练</th></tr></thead>
@@ -832,7 +922,7 @@
     `;
 
     const bannerHtml = isGenericFallback
-      ? '<div class="panel-sub" style="margin-bottom:8px">💡 暂未同步个人笔记池，以下基于全角色关系矩阵给出通用最高契合双搭档参考（优先挑选带对应主属性上限词条的高分笔记）</div>'
+      ? '<div class="panel-sub" style="margin-bottom:8px">◆ 暂未同步个人笔记池，以下基于全角色关系矩阵给出通用最高契合双搭档参考（优先挑选带对应主属性上限词条的高分笔记）</div>'
       : "";
     host.innerHTML = bannerHtml + `<div class="combo-list">${combos.slice(0, 5).map((cb, idx) => `
       <div class="combo-card">
@@ -878,7 +968,7 @@
 
     const host = $("planner-equips-body");
     const fallbackHint = ownedEmptyFallback
-      ? '<div class="panel-sub" style="margin-bottom:8px">💡 暂未同步个人自有器材池，以下自动展示全图鉴通用毕业 5 卡方案作为参考</div>'
+      ? '<div class="panel-sub" style="margin-bottom:8px">◆ 暂未同步个人自有器材池，以下自动展示全图鉴通用毕业 5 卡方案作为参考</div>'
       : "";
     const patHtml = pat && pat.tag ? `<div style="margin-bottom:10px"><span class="badge badge-blue">${esc(pat.tag)}</span></div>` : "";
     host.innerHTML = fallbackHint + patHtml + `<div class="equip-loadout-list">${list.map((it) => `
@@ -914,7 +1004,7 @@
         return;
       }
       const headHint = !hasOwnedAny
-        ? '<div class="panel-sub" style="margin-bottom:10px">💡 暂未同步个人角色与笔记池，以下展示全图鉴角色；点击任意角色即可在上方查看通用笔记与毕业器材配装</div>'
+        ? '<div class="panel-sub" style="margin-bottom:10px">◆ 暂未同步个人角色与笔记池，以下展示全图鉴角色；点击任意角色即可在上方查看通用笔记与毕业器材配装</div>'
         : "";
       host.innerHTML = headHint + POS_ORDER.map((pos) => {
         const items = visibleChars.filter((c) => c.pos === pos).sort((a, b) => b.best_rank - a.best_rank);
@@ -963,7 +1053,7 @@
         <div class="table-wrap">
           <table class="data-table">
             <thead>
-              <tr><th>球员</th><th>阶数</th><th>总分</th>${tab === "bor_notes" ? "<th>好友</th>" : ""}<th>词条亮点</th><th>最近同步</th></tr>
+              <tr><th>球员</th><th>阶数</th><th>总分</th>${tab === "bor_notes" ? "<th>好友</th>" : ""}<th>词条亮点</th><th>最近同步</th><th>操作</th></tr>
             </thead>
             <tbody>
               ${filtered.slice(0, 60).map((n) => `
@@ -974,12 +1064,18 @@
                   ${tab === "bor_notes" ? `<td><span class="badge badge-gold">${esc(n.friend || "好友")}</span></td>` : ""}
                   <td style="color:var(--text-muted);font-size:12px">${esc(n.highlights || "—")}</td>
                   <td style="color:var(--text-dim);font-size:11px">${esc(n.last_seen || "—")}</td>
+                  <td><button class="action-btn action-btn-sm btn-note-rev" type="button" data-nid="${esc(n.note_id)}" data-aid="${n.actor_id}">▸ 反查</button></td>
                 </tr>
               `).join("")}
             </tbody>
           </table>
         </div>
       `;
+      host.querySelectorAll(".btn-note-rev").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          openCompatReverseForNote(btn.dataset.nid, Number(btn.dataset.aid));
+        });
+      });
       return;
     }
 
@@ -1123,8 +1219,8 @@
             <div class="run-hero-left">
               ${avatarHtml(e.main_head, e.main_name, "avatar-lg")}
               <div>
-                <div style="font-size:17px;font-weight:700">${esc(e.main_name)} <span class="badge badge-blue">${esc(e.main_pos || "?")}</span></div>
-                <div class="panel-sub">第 ${e.week_no || "—"} 周 · ${esc(e.day_label)} · 回合 ${e.exp_round}/49 ${e.is_beach ? "· 🏖️海滩集训" : ""}</div>
+                <div style="font-size:17px;font-weight:800">${esc(e.main_name)} <span class="badge badge-blue">${esc(e.main_pos || "?")}</span></div>
+                <div class="panel-sub">第 ${e.week_no || "—"} 周 · ${esc(e.day_label)} · 回合 ${e.exp_round}/49 ${e.is_beach ? "· ★ 海滩集训" : ""}</div>
               </div>
             </div>
             <div style="text-align:right">
@@ -1144,7 +1240,7 @@
           <div class="metric-strip">
             <div class="metric-box">
               <div class="metric-box-label">金币</div>
-              <div class="metric-box-val num" style="color:var(--gold)">${e.gold}</div>
+              <div class="metric-box-val num" style="color:var(--gold-text)">${e.gold}</div>
             </div>
             <div class="metric-box">
               <div class="metric-box-label">经理能量 / 爆发</div>
@@ -1189,13 +1285,1665 @@
     `;
   }
 
+  /* ==================== 视图 4：笔记相性查询与极速选人 ==================== */
+  const HARMONY_BONUS_DEFAULT = { 0: 0, 1: 2, 2: 5, 3: 10 };
+
+  function getCompatChar(cid) {
+    if (!state.compat || !cid) return null;
+    return (state.compat.characters || []).find((c) => Number(c.id) === Number(cid)) || null;
+  }
+
+  function getAllCompatNotes() {
+    if (!state.compat) return [];
+    return [...(state.compat.own_notes || []), ...(state.compat.borrowed_notes || [])];
+  }
+
+  function findCompatNoteById(noteId) {
+    if (!noteId || !state.compat) return null;
+    return getAllCompatNotes().find((n) => String(n.note_id) === String(noteId)) || null;
+  }
+
+  function getBestNoteForActor(actorId, preferOwn) {
+    if (!state.compat) return null;
+    const own = (state.compat.own_notes || []).filter((n) => Number(n.actor_id) === Number(actorId));
+    const bor = (state.compat.borrowed_notes || []).filter((n) => Number(n.actor_id) === Number(actorId));
+    if (preferOwn !== false && own.length) return own[0];
+    if (bor.length) return bor[0];
+    if (own.length) return own[0];
+    return null;
+  }
+
+  function getRelScore(coreId, partnerId) {
+    if (!state.compat || !coreId || !partnerId || Number(coreId) === Number(partnerId)) return 0;
+    const row = (state.compat.rel_scores || {})[String(coreId)];
+    if (!row) return 0;
+    return Number(row[String(partnerId)] || 0);
+  }
+
+  function getHarmonyBonus(star) {
+    const map = (state.compat && state.compat.rules && state.compat.rules.harmony_bonus_by_star) || HARMONY_BONUS_DEFAULT;
+    return Number(map[String(star)] ?? HARMONY_BONUS_DEFAULT[Number(star)] ?? 0);
+  }
+
+  function charSearchHaystack(c) {
+    if (!c) return "";
+    return [
+      c.short_name,
+      c.show_name,
+      c.en_name,
+      ...(c.aliases || []),
+      c.pinyin,
+      c.pos,
+      c.best_pos,
+      c.school,
+      ...(c.recommend_train || []),
+      ...(c.rec_stats_names || []),
+    ].filter(Boolean).join(" ").toLowerCase();
+  }
+
+  function charMatchesQuery(c, kw) {
+    const q = (kw || "").trim().toLowerCase();
+    if (!q) return true;
+    const hay = charSearchHaystack(c);
+    return q.split(/\s+/).every((tok) => hay.includes(tok));
+  }
+
+  function relBadgeClass(rel) {
+    if (rel >= 18) return "rel-s";
+    if (rel >= 14) return "rel-a";
+    if (rel >= 10) return "rel-b";
+    return "rel-c";
+  }
+
+  function getSlotContribution(coreId, slot) {
+    if (!slot || !slot.actorId) {
+      return { rel: 0, star: 0, bonus: 0, total: 0, isSameAsCore: false };
+    }
+    const aid = Number(slot.actorId);
+    const isSame = Number(coreId) === aid;
+    const rel = isSame ? 0 : getRelScore(coreId, aid);
+    let star = 0;
+    if (slot.mode === "note" && slot.note) {
+      const ht = slot.note.harmony_targets || {};
+      star = Number(ht[String(coreId)] || 0);
+    } else {
+      star = Number(slot.star || 0);
+    }
+    const bonus = getHarmonyBonus(star);
+    return { rel, star, bonus, total: rel + bonus, isSameAsCore: isSame };
+  }
+
+  function evaluateCompatNumbers(totalCompat) {
+    const rules = (state.compat && state.compat.rules) || {};
+    const levels = rules.harmony_levels || [
+      { level: 1, rank_name: "无", min_compatibility_score: 0, inheritance_learn_times: 1 },
+      { level: 2, rank_name: "差", min_compatibility_score: 1, inheritance_learn_times: 2 },
+      { level: 3, rank_name: "一般", min_compatibility_score: 10, inheritance_learn_times: 3 },
+      { level: 4, rank_name: "良", min_compatibility_score: 20, inheritance_learn_times: 4 },
+      { level: 5, rank_name: "优", min_compatibility_score: 30, inheritance_learn_times: 5 },
+      { level: 6, rank_name: "极", min_compatibility_score: 45, inheritance_learn_times: 5 },
+    ];
+    const triggers = rules.entry_triggers || [
+      { required_compatibility_score: 0, min_triggered_entries: 2, max_triggered_entries: 4 },
+      { required_compatibility_score: 5, min_triggered_entries: 3, max_triggered_entries: 5 },
+      { required_compatibility_score: 10, min_triggered_entries: 4, max_triggered_entries: 6 },
+      { required_compatibility_score: 15, min_triggered_entries: 4, max_triggered_entries: 7 },
+      { required_compatibility_score: 20, min_triggered_entries: 4, max_triggered_entries: 8 },
+      { required_compatibility_score: 40, min_triggered_entries: 5, max_triggered_entries: 10 },
+      { required_compatibility_score: 60, min_triggered_entries: 5, max_triggered_entries: 11 },
+    ];
+
+    let curLv = levels[0];
+    let nextLv = null;
+    for (let i = 0; i < levels.length; i++) {
+      if (totalCompat >= Number(levels[i].min_compatibility_score)) {
+        curLv = levels[i];
+        nextLv = i + 1 < levels.length ? levels[i + 1] : null;
+      }
+    }
+    let curTr = triggers[0];
+    for (let i = 0; i < triggers.length; i++) {
+      if (totalCompat >= Number(triggers[i].required_compatibility_score)) {
+        curTr = triggers[i];
+      }
+    }
+    const learnTimes = Number(curLv.inheritance_learn_times);
+    const trigMin = Number(curTr.min_triggered_entries);
+    const trigMax = Number(curTr.max_triggered_entries);
+    const expected = Number((learnTimes * (trigMin + trigMax) / 2).toFixed(1));
+    let tierCls = "tier-none";
+    if (totalCompat >= 60) tierCls = "tier-max";
+    else if (totalCompat >= 40) tierCls = "tier-great";
+    else if (totalCompat >= 30) tierCls = "tier-good";
+    else if (totalCompat >= 20) tierCls = "tier-mid";
+    else if (totalCompat >= 1) tierCls = "tier-low";
+
+    return {
+      totalCompat,
+      rankName: curLv.rank_name,
+      level: Number(curLv.level),
+      learnTimes,
+      trigMin,
+      trigMax,
+      expected,
+      nextLv,
+      tierCls,
+    };
+  }
+
+  function makeNoteSlot(noteObj) {
+    if (!noteObj) return null;
+    return {
+      actorId: Number(noteObj.actor_id),
+      mode: "note",
+      star: 0,
+      note: noteObj,
+    };
+  }
+
+  function makeSimSlot(actorId, star) {
+    return {
+      actorId: Number(actorId),
+      mode: "sim",
+      star: Number(star || 0),
+      note: null,
+    };
+  }
+
+  function findBestAutoPairForCore(coreId) {
+    if (!state.compat || !coreId) return [null, null];
+    const own = (state.compat.own_notes || []).filter((n) => Number(n.actor_id) !== Number(coreId));
+    const bor = (state.compat.borrowed_notes || []).filter((n) => Number(n.actor_id) !== Number(coreId));
+
+    const scorePair = (n1, n2) => {
+      const c1 = getSlotContribution(coreId, makeNoteSlot(n1));
+      const c2 = getSlotContribution(coreId, makeNoteSlot(n2));
+      const tot = c1.total + c2.total;
+      const ev = evaluateCompatNumbers(tot);
+      const tierBonus = tot >= 60 ? 64 + (tot - 60) * 0.15 : tot >= 40 ? 54 + (tot - 40) * 0.15 : tot >= 30 ? 30 + (tot - 30) * 1.8 : tot;
+      const avgSc = (Number(n1.score || 0) + Number(n2.score || 0)) / 2;
+      return ev.expected * 8 + tierBonus + avgSc * 0.35;
+    };
+
+    let best = null;
+    let bestVal = -1;
+    // 1. 优先尝试 1自备 + 1好友借用
+    for (const n1 of own) {
+      for (const n2 of bor) {
+        if (Number(n1.actor_id) === Number(n2.actor_id)) continue;
+        const v = scorePair(n1, n2);
+        if (v > bestVal) {
+          bestVal = v;
+          best = [makeNoteSlot(n1), makeNoteSlot(n2)];
+        }
+      }
+    }
+    // 2. 同时对比 2纯自备，若更强或无借用则选纯自备
+    for (let i = 0; i < own.length; i++) {
+      for (let j = i + 1; j < own.length; j++) {
+        if (Number(own[i].actor_id) === Number(own[j].actor_id)) continue;
+        const v = scorePair(own[i], own[j]);
+        if (v > bestVal) {
+          bestVal = v;
+          best = [makeNoteSlot(own[i]), makeNoteSlot(own[j])];
+        }
+      }
+    }
+    if (best) return best;
+
+    // 3. 空池优雅降级：取全图鉴基础关系分最高的 2 位角色
+    const chars = (state.compat.characters || [])
+      .filter((c) => Number(c.id) !== Number(coreId))
+      .sort((a, b) => getRelScore(coreId, b.id) - getRelScore(coreId, a.id));
+    if (chars.length >= 2) {
+      return [makeSimSlot(chars[0].id, 0), makeSimSlot(chars[1].id, 0)];
+    }
+    return [null, null];
+  }
+
+  function ensureCompatReady() {
+    if (!state.compat) {
+      $("compat-sandbox-slots").innerHTML = '<div class="empty-state">正在加载全角色相性矩阵…</div>';
+      return;
+    }
+    if (!getCompatChar(state.compatCoreId) && state.compat.characters.length) {
+      state.compatCoreId = state.compat.characters[0].id;
+    }
+    if (!state.compatSlotA && !state.compatSlotB) {
+      const [sA, sB] = findBestAutoPairForCore(state.compatCoreId);
+      state.compatSlotA = sA;
+      state.compatSlotB = sB;
+    }
+    // 初始化反查默认对象（优先取最高分自备彩笔记）
+    if (!state.compatRevNoteId && state.compat.own_notes && state.compat.own_notes.length) {
+      state.compatRevType = "note";
+      state.compatRevNoteId = state.compat.own_notes[0].note_id;
+      state.compatRevActorId = state.compat.own_notes[0].actor_id;
+    } else if (!state.compatRevNoteId && state.compat.characters.length) {
+      state.compatRevType = "actor";
+      state.compatRevActorId = state.compat.characters[0].id;
+    }
+    renderCompatView();
+  }
+
+  function openCompatForCore(charId, autoFill) {
+    state.compatCoreId = Number(charId);
+    if (autoFill && state.compat) {
+      const [sA, sB] = findBestAutoPairForCore(state.compatCoreId);
+      state.compatSlotA = sA;
+      state.compatSlotB = sB;
+    }
+    state.compatSubMode = "forward";
+    syncCompatModeSeg();
+    switchView("compat");
+    renderCompatView();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function openCompatReverseForNote(noteId, actorId) {
+    state.compatSubMode = "reverse";
+    if (noteId) {
+      state.compatRevType = "note";
+      state.compatRevNoteId = String(noteId);
+      if (actorId) state.compatRevActorId = Number(actorId);
+    } else if (actorId) {
+      state.compatRevType = "actor";
+      state.compatRevNoteId = "";
+      state.compatRevActorId = Number(actorId);
+    }
+    state.compatRevData = null;
+    syncCompatModeSeg();
+    switchView("compat");
+    renderCompatView();
+    loadCompatReverseData();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function syncCompatModeSeg() {
+    const seg = $("compat-mode-seg");
+    if (!seg) return;
+    seg.querySelectorAll(".seg-btn").forEach((b) => {
+      b.classList.toggle("active", b.dataset.cmode === state.compatSubMode);
+    });
+  }
+
+  function renderCompatView() {
+    if (!state.compat) return;
+    renderCompatSandbox();
+    renderCompatWorkspace();
+  }
+
+  function renderCompatSandbox() {
+    const core = getCompatChar(state.compatCoreId);
+    const slotA = state.compatSlotA;
+    const slotB = state.compatSlotB;
+    const cA = getSlotContribution(state.compatCoreId, slotA);
+    const cB = getSlotContribution(state.compatCoreId, slotB);
+    const dupActors = Boolean(slotA && slotB && Number(slotA.actorId) === Number(slotB.actorId));
+
+    const renderPartnerSlot = (which, slot, contrib) => {
+      const label = which === "A" ? "笔记槽位 A" : "笔记槽位 B";
+      if (!slot || !slot.actorId) {
+        return `
+          <div class="sandbox-slot is-empty" data-slot-open="${which}">
+            <div class="slot-head">
+              <span class="slot-label">${label}</span>
+              <span class="badge">空槽</span>
+            </div>
+            <div class="slot-empty-cta">
+              <strong>+ 点击极速选人 / 选笔记</strong>
+              <span>支持拼音首字母、位置与真实笔记池</span>
+            </div>
+          </div>
+        `;
+      }
+      const ch = getCompatChar(slot.actorId);
+      const isNote = slot.mode === "note" && slot.note;
+      const n = slot.note;
+      const warnCls = (contrib.isSameAsCore || dupActors) ? "is-warn" : "";
+      const noteTag = isNote
+        ? (n.friend ? `<span class="badge badge-gold">借:${esc(n.friend)}</span>` : '<span class="badge badge-purple">自备</span>')
+        : '<span class="badge">自由模拟</span>';
+      const scoreTag = isNote ? `<span class="badge ${n.rank >= 7 ? "badge-purple" : ""}">${n.rank}阶 ${n.score}</span>` : "";
+
+      const footerHtml = isNote
+        ? `
+          <div class="slot-footer">
+            <span style="font-size:11.5px;color:${contrib.bonus > 0 ? "var(--gold-text)" : "var(--text-dim)"}">
+              ${contrib.bonus > 0 ? `★ 命中主力契合 ${contrib.star}★ (+${contrib.bonus})` : "对当前主力无专属契合词条"}
+            </span>
+            <div style="display:flex;gap:4px">
+              <button class="mini-btn" type="button" data-slot-tosim="${which}" title="切换为自由调节星级模拟">切模拟</button>
+              <button class="mini-btn" type="button" data-slot-clear="${which}" title="清空该槽位">×</button>
+            </div>
+          </div>
+        `
+        : `
+          <div class="slot-footer">
+            <div class="star-pills">
+              ${[0, 1, 2, 3].map((st) => {
+                const b = getHarmonyBonus(st);
+                return `<button type="button" class="star-pill ${Number(slot.star) === st ? "active" : ""}" data-slot-star="${which}:${st}">${st === 0 ? "0★" : `${st}★+${b}`}</button>`;
+              }).join("")}
+            </div>
+            <button class="mini-btn" type="button" data-slot-clear="${which}" title="清空该槽位">×</button>
+          </div>
+        `;
+
+      return `
+        <div class="sandbox-slot ${warnCls}">
+          <div class="slot-head">
+            <span class="slot-label">${label}</span>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span class="badge ${contrib.total >= 18 ? "badge-green" : contrib.total >= 14 ? "badge-blue" : ""}">贡献 +${contrib.total}</span>
+              <button class="mini-btn" type="button" data-slot-open="${which}">换人/笔记</button>
+            </div>
+          </div>
+          <div class="slot-main" data-slot-open="${which}">
+            ${avatarHtml(ch ? ch.head : (n ? n.head : ""), ch ? ch.short_name : "", "avatar")}
+            <div class="slot-main-info">
+              <div class="slot-char-name">
+                <span>${esc(ch ? ch.short_name : (n ? n.actor_name : slot.actorId))}</span>
+                ${ch ? `<span class="badge">${esc(ch.pos)}</span>` : ""}
+                ${noteTag}
+                ${scoreTag}
+              </div>
+              <div class="slot-char-sub">
+                ${contrib.isSameAsCore ? '<span style="color:var(--red)">▲ 与主力同名，基础关系分为 0</span>' : `基础关系 +${contrib.rel}${contrib.bonus ? ` · 契合 +${contrib.bonus}` : ""}`}
+                ${isNote && n.highlights ? ` · ${esc(n.highlights)}` : ""}
+              </div>
+            </div>
+          </div>
+          ${footerHtml}
+        </div>
+      `;
+    };
+
+    const coreHtml = core ? `
+      <div class="sandbox-slot is-core">
+        <div class="slot-head">
+          <span class="slot-label">育成主力 C</span>
+          <button class="mini-btn active" type="button" data-slot-open="core">▸ 换主力</button>
+        </div>
+        <div class="slot-main" data-slot-open="core">
+          ${avatarHtml(core.head, core.short_name, "avatar-lg")}
+          <div class="slot-main-info">
+            <div class="slot-char-name">
+              <span>${esc(core.short_name)}</span>
+              <span class="badge badge-blue">${esc(core.pos)}</span>
+              ${core.owned ? '<span class="badge badge-green">已拥有</span>' : '<span class="badge">图鉴</span>'}
+            </div>
+            <div class="slot-char-sub">${esc(core.school || "—")} · 主练：${esc((core.recommend_train || []).join("/") || "—")}</div>
+          </div>
+        </div>
+        <div class="slot-footer">
+          <span style="font-size:11.5px;color:var(--text-muted)">历史最高 ${core.best_rank ? core.best_rank.toLocaleString() : "—"} · ${core.has_rainbow_note ? "已有7阶彩" : core.best_own_note_rank ? `${core.best_own_note_rank}阶 ${core.best_own_note_score}` : "无自备笔记"}</span>
+          <button class="mini-btn" type="button" id="btn-compat-goto-planner">配装参谋 →</button>
+        </div>
+      </div>
+    ` : "";
+
+    $("compat-sandbox-slots").innerHTML = `
+      ${coreHtml}
+      <div class="compat-arrow" aria-hidden="true">←</div>
+      ${renderPartnerSlot("A", slotA, cA)}
+      ${renderPartnerSlot("B", slotB, cB)}
+    `;
+
+    // 绑定沙盒槽位交互
+    $("compat-sandbox-slots").querySelectorAll("[data-slot-open]").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const target = el.dataset.slotOpen;
+        if (target === "core") {
+          openQuickPicker({
+            target: "core",
+            title: "选择育成主力 C",
+            allowNotes: false,
+            onPick: (picked) => {
+              state.compatCoreId = Number(picked.char.id);
+              renderCompatView();
+            },
+          });
+        } else {
+          openQuickPicker({
+            target,
+            title: `为【${core ? core.short_name : "主力"}】选择笔记槽位 ${target}`,
+            allowNotes: true,
+            coreForRel: state.compatCoreId,
+            onPick: (picked) => {
+              const newSlot = picked.type === "note" ? makeNoteSlot(picked.note) : makeSimSlot(picked.char.id, 0);
+              if (target === "A") state.compatSlotA = newSlot;
+              else state.compatSlotB = newSlot;
+              renderCompatView();
+            },
+          });
+        }
+      });
+    });
+
+    $("compat-sandbox-slots").querySelectorAll("[data-slot-star]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const [which, stStr] = btn.dataset.slotStar.split(":");
+        const st = Number(stStr);
+        if (which === "A" && state.compatSlotA) state.compatSlotA.star = st;
+        if (which === "B" && state.compatSlotB) state.compatSlotB.star = st;
+        renderCompatView();
+      });
+    });
+
+    $("compat-sandbox-slots").querySelectorAll("[data-slot-tosim]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const which = btn.dataset.slotTosim;
+        const sl = which === "A" ? state.compatSlotA : state.compatSlotB;
+        if (sl) {
+          const curStar = getSlotContribution(state.compatCoreId, sl).star;
+          const next = makeSimSlot(sl.actorId, curStar);
+          if (which === "A") state.compatSlotA = next;
+          else state.compatSlotB = next;
+          renderCompatView();
+        }
+      });
+    });
+
+    $("compat-sandbox-slots").querySelectorAll("[data-slot-clear]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (btn.dataset.slotClear === "A") state.compatSlotA = null;
+        else state.compatSlotB = null;
+        renderCompatView();
+      });
+    });
+
+    const gotoPlanner = $("btn-compat-goto-planner");
+    if (gotoPlanner && core) {
+      gotoPlanner.addEventListener("click", (e) => {
+        e.stopPropagation();
+        state.plannerCharId = core.id;
+        const sel = $("planner-char-select");
+        if (sel) sel.value = String(core.id);
+        switchView("box");
+        loadPlanner();
+      });
+    }
+
+    // 渲染实时计算结果仪表条
+    const relTotal = cA.rel + cB.rel;
+    const bonusTotal = cA.bonus + cB.bonus;
+    const totalCompat = relTotal + bonusTotal;
+    const ev = evaluateCompatNumbers(totalCompat);
+    const pct = Math.min(100, Math.round((totalCompat / 65) * 100));
+
+    const ticks = [
+      { v: 10, lbl: "10 一般" },
+      { v: 20, lbl: "20 良" },
+      { v: 30, lbl: "30 优·5次" },
+      { v: 40, lbl: "40 满词条" },
+      { v: 45, lbl: "45 极" },
+      { v: 60, lbl: "60 隐藏" },
+    ];
+
+    let hintCls = "";
+    let hintText = "";
+    if (dupActors) {
+      hintCls = "is-warn";
+      hintText = "▲ 槽位 A 与槽位 B 为同一名角色：游戏内开局不能同时装备两本同一角色的主笔记，请替换其中一个槽位。";
+    } else if (cA.isSameAsCore || cB.isSameAsCore) {
+      hintCls = "is-warn";
+      hintText = "▲ 携带与育成主力同名的笔记时，该笔记的基础关系分按规则记为 0 分（仍可生效专属契合词条）。";
+    } else if (!slotA || !slotB) {
+      hintText = "◆ 还可以再从下方正查列表点击一名搭档补齐双笔记槽位，实时查看完整总相性与触发词条期望。";
+    } else if (totalCompat >= 60) {
+      hintCls = "is-max";
+      hintText = `★ 已突破 60 分隐藏满档！每次学习触发 5~11 条词条（全场 5 次期望 ${ev.expected} 条），顶配起跑！`;
+    } else if (totalCompat >= 40) {
+      hintCls = "is-great";
+      hintText = `◆ 已达 40+ 满词条档（40~59 分同为 5 次学习 × 单次 5~10 条词条；${totalCompat < 45 ? "与 45 分『极』实机词条收益完全一致，" : ""}不必为凑虚分牺牲主属性上限词条；距 60 隐藏档差 ${60 - totalCompat} 分）。`;
+    } else if (totalCompat >= 30) {
+      hintText = `◆ 已达 30 分【优】并拉满 5 次学习！再补 ${40 - totalCompat} 分即可进 40 分满词条档（单次 4~8 → 5~10 条，多出 1 张 2★/3★ 专属契合即可跨档）。`;
+    } else {
+      hintText = `▸ 距 30 分【优】（满 5 次学习）还差 ${30 - totalCompat} 分；建议在下方正查墙按关系分降序挑选高相性搭档。`;
+    }
+
+    $("compat-result-bar").innerHTML = `
+      <div class="compat-result-top">
+        <div class="compat-score-block">
+          <span class="compat-score-num num">${totalCompat}</span>
+          <span style="font-size:13px;color:var(--text-muted)">总相性分</span>
+          <span class="compat-tier-badge ${ev.tierCls}">${esc(ev.rankName)} · Lv.${ev.level}</span>
+          <span class="badge badge-blue">学习 ${ev.learnTimes} 次</span>
+          <span class="badge">单次 ${ev.trigMin}~${ev.trigMax} 词条</span>
+          <span class="badge badge-green">全场期望 ${ev.expected} 条</span>
+        </div>
+        <div class="compat-formula-row num">
+          <span>关系分 <strong>${cA.rel} + ${cB.rel} = ${relTotal}</strong></span>
+          <span>·</span>
+          <span>专属契合 <strong>+${cA.bonus} + ${cB.bonus} = +${bonusTotal}</strong></span>
+        </div>
+      </div>
+
+      <div class="compat-meter-wrap">
+        <div class="compat-meter-track">
+          <div class="compat-meter-fill" style="width:${pct}%"></div>
+        </div>
+        <div class="compat-meter-ticks">
+          ${ticks.map((tk) => `
+            <span class="compat-meter-tick ${totalCompat >= tk.v ? "reached" : ""}" style="left:${Math.min(96, Math.round((tk.v / 65) * 100))}%">${tk.lbl}</span>
+          `).join("")}
+        </div>
+      </div>
+
+      <div class="compat-hint-banner ${hintCls}">${hintText}</div>
+    `;
+  }
+
+  function renderCompatWorkspace() {
+    const mode = state.compatSubMode;
+    const hintEl = $("compat-mode-hint");
+    if (mode === "forward") {
+      if (hintEl) hintEl.textContent = "点击卡片智能填入沙盒槽位；自动训练刷彩优先选【同位刷彩】";
+      renderCompatForward();
+    } else if (mode === "reverse") {
+      if (hintEl) hintEl.textContent = "选一本真实笔记或任意角色，反查它能把谁推上 30【优】/ 40 满档 / 45【极】";
+      renderCompatReverse();
+    } else {
+      if (hintEl) hintEl.textContent = "一键定位 3 人永动互刷彩笔记闭环与下一步最值得练的枢纽种马";
+      renderCompatBreeding();
+    }
+  }
+
+  function renderCompatForward() {
+    const core = getCompatChar(state.compatCoreId);
+    const host = $("compat-workspace-body");
+    if (!core || !state.compat) {
+      host.innerHTML = '<div class="empty-state">暂无角色数据</div>';
+      return;
+    }
+
+    const posFilters = [
+      { key: "ALL", label: "全部" },
+      { key: "SAME", label: `★同位刷彩 (${core.pos})` },
+      ...POS_ORDER.map((p) => ({ key: p, label: p })),
+    ];
+
+    const slotAId = state.compatSlotA ? Number(state.compatSlotA.actorId) : 0;
+    const slotBId = state.compatSlotB ? Number(state.compatSlotB.actorId) : 0;
+
+    const partners = (state.compat.characters || [])
+      .filter((c) => Number(c.id) !== Number(core.id))
+      .map((c) => ({
+        ...c,
+        rel: getRelScore(core.id, c.id),
+        revRel: getRelScore(c.id, core.id),
+        samePos: Boolean(core.pos && c.pos === core.pos),
+        hasAnyNote: c.own_note_count > 0 || c.borrow_note_count > 0,
+      }))
+      .filter((c) => {
+        if (state.compatFwdPos === "SAME" && !c.samePos) return false;
+        if (state.compatFwdPos !== "ALL" && state.compatFwdPos !== "SAME" && c.pos !== state.compatFwdPos) return false;
+        if (state.compatFwdOnlyOwned && !c.owned) return false;
+        if (state.compatFwdOnlyHasNote && !c.hasAnyNote) return false;
+        if (state.compatFwdSearch && !charMatchesQuery(c, state.compatFwdSearch)) return false;
+        return true;
+      })
+      .sort((a, b) => b.rel - a.rel || Number(b.owned) - Number(a.owned) || b.best_own_note_score - a.best_own_note_score || a.id - b.id);
+
+    host.innerHTML = `
+      <div class="compat-filter-bar">
+        <div class="pill-group">
+          ${posFilters.map((f) => `<button type="button" class="filter-pill ${state.compatFwdPos === f.key ? "active" : ""}" data-fwd-pos="${f.key}">${esc(f.label)}</button>`).join("")}
+        </div>
+        <div class="head-controls">
+          <input id="compat-fwd-search" class="ctrl-input" type="search" value="${esc(state.compatFwdSearch)}" placeholder="搜角色 / 拼音(lgs) / 学校…" />
+          <label class="chk-pill"><input type="checkbox" id="compat-fwd-owned" ${state.compatFwdOnlyOwned ? "checked" : ""} /><span>仅已拥有</span></label>
+          <label class="chk-pill"><input type="checkbox" id="compat-fwd-hasnote" ${state.compatFwdOnlyHasNote ? "checked" : ""} /><span>有自备/借用笔记</span></label>
+        </div>
+      </div>
+
+      ${partners.length ? `
+        <div class="compat-partner-grid">
+          ${partners.map((p) => {
+            const inA = p.id === slotAId;
+            const inB = p.id === slotBId;
+            const cardCls = inA ? "in-slot-a" : inB ? "in-slot-b" : "";
+            const noteBadge = p.has_rainbow_note
+              ? `<span class="badge badge-purple">彩 ${p.best_own_note_score}</span>`
+              : p.best_own_note_rank
+              ? `<span class="badge">自备 ${p.best_own_note_score}</span>`
+              : "";
+            const borBadge = p.best_borrow_score
+              ? `<span class="badge badge-gold">借 ${p.best_borrow_score}</span>`
+              : "";
+            return `
+              <div class="partner-card ${cardCls}" data-partner-cid="${p.id}">
+                <div class="partner-card-top">
+                  ${avatarHtml(p.head, p.short_name, "avatar")}
+                  <div class="partner-card-meta">
+                    <div class="partner-card-name">
+                      <span>${esc(p.short_name)}</span>
+                      <span class="badge">${esc(p.pos)}</span>
+                      ${p.owned ? '<span style="color:var(--green);font-size:11px" title="已拥有角色">★</span>' : ""}
+                    </div>
+                    <div class="partner-card-sub">${esc(p.school || "—")} · 反向 +${p.revRel}</div>
+                  </div>
+                  <span class="partner-rel-badge ${relBadgeClass(p.rel)}" title="对${esc(core.short_name)}基础关系分">+${p.rel}</span>
+                </div>
+                <div class="partner-card-foot">
+                  <div class="partner-badges">
+                    ${p.samePos ? '<span class="badge badge-blue">同位刷彩</span>' : ""}
+                    ${noteBadge}
+                    ${borBadge}
+                  </div>
+                  <div class="partner-card-actions">
+                    <button type="button" class="mini-btn ${inA ? "active" : ""}" data-put-slot="A:${p.id}">${inA ? "已在A" : "+槽A"}</button>
+                    <button type="button" class="mini-btn ${inB ? "active" : ""}" data-put-slot="B:${p.id}">${inB ? "已在B" : "+槽B"}</button>
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      ` : '<div class="empty-state">当前筛选条件下无匹配搭档，可清空搜索或取消勾选筛选</div>'}
+    `;
+
+    const sInput = $("compat-fwd-search");
+    if (sInput) {
+      sInput.addEventListener("input", (e) => {
+        state.compatFwdSearch = e.target.value;
+        const curPos = e.target.selectionStart;
+        renderCompatForward();
+        const nextInp = $("compat-fwd-search");
+        if (nextInp) {
+          nextInp.focus();
+          if (curPos != null) nextInp.setSelectionRange(curPos, curPos);
+        }
+      });
+    }
+    host.querySelectorAll("[data-fwd-pos]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.compatFwdPos = btn.dataset.fwdPos;
+        renderCompatForward();
+      });
+    });
+    const ownChk = $("compat-fwd-owned");
+    if (ownChk) {
+      ownChk.addEventListener("change", (e) => {
+        state.compatFwdOnlyOwned = e.target.checked;
+        renderCompatForward();
+      });
+    }
+    const noteChk = $("compat-fwd-hasnote");
+    if (noteChk) {
+      noteChk.addEventListener("change", (e) => {
+        state.compatFwdOnlyHasNote = e.target.checked;
+        renderCompatForward();
+      });
+    }
+
+    const assignPartnerToSlot = (which, cid) => {
+      const bestN = getBestNoteForActor(cid, which === "A");
+      const newSlot = bestN ? makeNoteSlot(bestN) : makeSimSlot(cid, 0);
+      if (which === "A") state.compatSlotA = newSlot;
+      else state.compatSlotB = newSlot;
+      renderCompatView();
+    };
+
+    host.querySelectorAll("[data-put-slot]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const [which, cidStr] = btn.dataset.putSlot.split(":");
+        assignPartnerToSlot(which, Number(cidStr));
+      });
+    });
+
+    host.querySelectorAll(".partner-card[data-partner-cid]").forEach((card) => {
+      card.addEventListener("click", () => {
+        const cid = Number(card.dataset.partnerCid);
+        if (cid === slotAId || cid === slotBId) return;
+        const target = !state.compatSlotA ? "A" : !state.compatSlotB ? "B" : "B";
+        assignPartnerToSlot(target, cid);
+      });
+    });
+  }
+
+  function computeReverseActivationOffline() {
+    if (!state.compat) return null;
+    const isReal = state.compatRevType === "note" && state.compatRevNoteId;
+    const realNote = isReal ? findCompatNoteById(state.compatRevNoteId) : null;
+    const aid = realNote ? Number(realNote.actor_id) : Number(state.compatRevActorId);
+    const ch = getCompatChar(aid);
+    if (!ch) return null;
+
+    const hStar = Number(state.compatRevStar || 0);
+    const htMap = realNote ? (realNote.harmony_targets || {}) : {};
+    const targetNote = realNote || {
+      note_id: `virtual_${aid}_${hStar}`,
+      actor_id: aid,
+      actor_name: ch.short_name,
+      pos: ch.pos,
+      head: ch.head,
+      rank: 0,
+      score: 0,
+      friend: "",
+      harmony_targets: {},
+      harmony_str: hStar > 0 ? `假设全角色 ${hStar}★(+${getHarmonyBonus(hStar)})` : "0★ 基础关系分",
+      highlights: "离线虚拟角色单卡推演",
+    };
+
+    const isTargetOwn = !realNote || realNote.source === "own";
+    const ownPartners = (state.compat.own_notes || []).filter((n) => Number(n.actor_id) !== aid);
+    const borPartners = (state.compat.borrowed_notes || []).filter((n) => Number(n.actor_id) !== aid);
+
+    const calcList = (partners, minScore) => {
+      const out = [];
+      for (const c of state.compat.characters || []) {
+        if (Number(c.id) === aid) continue;
+        let best = null;
+        for (const p of partners) {
+          if (Number(p.actor_id) === Number(c.id)) continue;
+          const r1 = getRelScore(c.id, aid);
+          const s1 = realNote ? Number(htMap[String(c.id)] || 0) : hStar;
+          const b1 = getHarmonyBonus(s1);
+          const r2 = getRelScore(c.id, p.actor_id);
+          const s2 = Number((p.harmony_targets || {})[String(c.id)] || 0);
+          const b2 = getHarmonyBonus(s2);
+          const tot = r1 + b1 + r2 + b2;
+          const avgSc = (Number(targetNote.score || 0) + Number(p.score || 0)) / 2;
+          if (!best || tot > best.total_compat || (tot === best.total_compat && avgSc > best.avg_note_score)) {
+            const ev = evaluateCompatNumbers(tot);
+            best = {
+              char_id: c.id,
+              char_name: c.short_name,
+              pos: c.pos,
+              head: c.head,
+              owned: c.owned,
+              total_compat: tot,
+              rank_name: ev.rankName,
+              level: ev.level,
+              learn_times: ev.learnTimes,
+              trig_min: ev.trigMin,
+              trig_max: ev.trigMax,
+              expected_triggers: ev.expected,
+              r1, s1, b1, r2, s2, b2,
+              avg_note_score: Number(avgSc.toFixed(1)),
+              partner: p,
+            };
+          }
+        }
+        if (best && best.total_compat >= minScore) out.push(best);
+      }
+      return out.sort((a, b) => b.total_compat - a.total_compat || b.avg_note_score - a.avg_note_score).slice(0, 20);
+    };
+
+    const staticRankings = (state.compat.characters || [])
+      .filter((c) => Number(c.id) !== aid)
+      .map((c) => {
+        const rel = getRelScore(c.id, aid);
+        const hs = realNote ? Number(htMap[String(c.id)] || 0) : hStar;
+        const hb = getHarmonyBonus(hs);
+        return {
+          char_id: c.id,
+          char_name: c.short_name,
+          pos: c.pos,
+          head: c.head,
+          same_pos: Boolean(ch.pos && c.pos === ch.pos),
+          owned: c.owned,
+          rel,
+          harmony_star: hs,
+          harmony_bonus: hb,
+          single_contrib: rel + hb,
+        };
+      })
+      .sort((a, b) => b.single_contrib - a.single_contrib || b.rel - a.rel);
+
+    return {
+      ok: true,
+      is_virtual: !realNote,
+      source_tag: realNote ? (realNote.friend ? `借:${realNote.friend}` : "自备") : (hStar ? `角色推演 (${hStar}★)` : "角色基础推演"),
+      is_target_own: isTargetOwn,
+      target_note: targetNote,
+      own_activations: calcList(ownPartners, 26),
+      borrow_activations: isTargetOwn ? calcList(borPartners, 28) : [],
+      static_rankings: staticRankings,
+    };
+  }
+
+  async function loadCompatReverseData() {
+    if (!state.compat) return;
+    if (!state.online) {
+      state.compatRevData = computeReverseActivationOffline();
+      renderCompatReverse();
+      return;
+    }
+    state.compatRevLoading = true;
+    renderCompatReverse();
+    try {
+      const qs = new URLSearchParams();
+      if (state.compatRevType === "note" && state.compatRevNoteId) {
+        qs.set("note_id", state.compatRevNoteId);
+      } else {
+        qs.set("actor_id", String(state.compatRevActorId));
+        qs.set("harmony_star", String(state.compatRevStar));
+      }
+      state.compatRevData = await apiGet("/api/compatibility/note_activation?" + qs.toString());
+    } catch (_) {
+      state.compatRevData = computeReverseActivationOffline();
+    } finally {
+      state.compatRevLoading = false;
+      renderCompatReverse();
+    }
+  }
+
+  function renderCompatReverse() {
+    const host = $("compat-workspace-body");
+    if (!state.compat) return;
+    if (!state.compatRevData && !state.compatRevLoading) {
+      loadCompatReverseData();
+      return;
+    }
+
+    const ownTop = (state.compat.own_notes || []).slice(0, 8);
+    const borTop = (state.compat.borrowed_notes || []).slice(0, 4);
+    const quickNotes = [...ownTop, ...borTop];
+
+    const quickChipsHtml = quickNotes.length ? `
+      <div class="reverse-quick-notes">
+        <span style="font-size:12px;color:var(--text-muted)">快选本地笔记：</span>
+        ${quickNotes.map((n) => {
+          const isAct = state.compatRevType === "note" && String(state.compatRevNoteId) === String(n.note_id);
+          return `
+            <button type="button" class="quick-note-chip ${isAct ? "active" : ""}" data-qnote="${esc(n.note_id)}" data-qaid="${n.actor_id}">
+              <span>${esc(n.actor_name)}</span>
+              <span style="opacity:0.85">${n.rank}阶${n.score}</span>
+              ${n.friend ? `<span style="color:var(--gold-text)">借</span>` : ""}
+            </button>
+          `;
+        }).join("")}
+      </div>
+    ` : "";
+
+    const d = state.compatRevData;
+    const tn = d && d.target_note ? d.target_note : null;
+
+    const starBarHtml = (state.compatRevType === "actor")
+      ? `
+        <div class="star-pills">
+          ${[0, 1, 2, 3].map((st) => `<button type="button" class="star-pill ${state.compatRevStar === st ? "active" : ""}" data-rev-star="${st}">${st === 0 ? "0★基础" : `假设${st}★+${getHarmonyBonus(st)}`}</button>`).join("")}
+        </div>
+      `
+      : "";
+
+    const heroHtml = `
+      <div class="reverse-hero">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          ${tn ? avatarHtml(tn.head, tn.actor_name, "avatar-lg") : ""}
+          <div>
+            <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:15px;font-weight:700">
+              <span>${tn ? esc(tn.actor_name) : "请选择笔记或角色"}</span>
+              ${tn && tn.pos ? `<span class="badge">${esc(tn.pos)}</span>` : ""}
+              ${d ? `<span class="badge ${d.is_virtual ? "badge-blue" : "badge-purple"}">${esc(d.source_tag)}</span>` : ""}
+              ${tn && tn.score ? `<span class="badge badge-gold">${tn.rank}阶 ${tn.score}分</span>` : ""}
+            </div>
+            <div class="panel-sub" style="margin-top:3px">
+              ${tn ? `专属契合：${esc(tn.harmony_str || "无")} · ${esc(tn.highlights || "")}` : "点右侧按钮打开极速选人 / 选笔记浮层"}
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          ${starBarHtml}
+          <button id="btn-rev-pick" class="action-btn action-btn-primary" type="button">▸ 换笔记 / 换角色</button>
+        </div>
+      </div>
+    `;
+
+    if (state.compatRevLoading) {
+      host.innerHTML = heroHtml + quickChipsHtml + '<div class="empty-state">正在精确验算相性反查结果…</div>';
+      bindReverseControls(host);
+      return;
+    }
+
+    if (!d || !d.ok) {
+      host.innerHTML = heroHtml + quickChipsHtml + `<div class="empty-state">${esc((d && d.error) || "暂无反查数据")}</div>`;
+      bindReverseControls(host);
+      return;
+    }
+
+    const filterFn = (it) => {
+      if (state.compatRevOnlyOwned && !it.owned) return false;
+      if (state.compatRevPos !== "ALL" && it.pos !== state.compatRevPos) return false;
+      return true;
+    };
+
+    const ownActs = (d.own_activations || []).filter(filterFn);
+    const borActs = (d.borrow_activations || []).filter(filterFn);
+    const statics = (d.static_rankings || []).filter(filterFn);
+
+    const renderActTable = (title, items) => {
+      if (!items.length) return "";
+      return `
+        <div>
+          <h3 class="sub-title" style="margin-bottom:8px">${title}</h3>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>目标主力</th><th>总相性</th><th>配方拆解</th><th>试算</th></tr></thead>
+              <tbody>
+                ${items.slice(0, 12).map((it) => `
+                  <tr>
+                    <td style="display:flex;align-items:center;gap:7px">
+                      ${avatarHtml(it.head, it.char_name, "avatar-sm")}
+                      <div>
+                        <strong>${esc(it.char_name)}</strong> <span style="color:var(--text-dim);font-size:11px">${esc(it.pos)}</span>
+                        ${it.owned ? '<span style="color:var(--green);font-size:11px">★</span>' : ""}
+                      </div>
+                    </td>
+                    <td>
+                      <span class="badge ${it.total_compat >= 40 ? "badge-green" : it.total_compat >= 30 ? "badge-blue" : "badge-gold"}">${it.total_compat} · ${esc(it.rank_name)}</span>
+                    </td>
+                    <td style="font-size:12px;color:var(--text-muted)">
+                      本卡(+${it.r1}${it.b1 ? `+${it.b1}` : ""}) + ${esc(it.partner.actor_name)}${it.partner.friend ? `[${esc(it.partner.friend)}]` : ""}(+${it.r2}${it.b2 ? `+${it.b2}` : ""})
+                    </td>
+                    <td>
+                      <button type="button" class="mini-btn btn-load-rev-pair"
+                        data-core="${it.char_id}"
+                        data-pnid="${esc(it.partner.note_id || "")}"
+                        data-paid="${it.partner.actor_id}">进沙盒</button>
+                    </td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    };
+
+    const actsHtml = (ownActs.length || borActs.length)
+      ? `<div class="reverse-split">
+           ${renderActTable("◆ 搭配你的自备笔记直达高相性", ownActs)}
+           ${renderActTable("★ 搭配好友助战笔记直达高相性", borActs)}
+         </div>`
+      : '<div class="panel-sub" style="margin-bottom:12px">◆ 当前池暂无可配对的其他高分笔记，以下展示全图鉴 37 名角色的单卡相性贡献排行：</div>';
+
+    host.innerHTML = `
+      ${heroHtml}
+      ${quickChipsHtml}
+      <div class="compat-filter-bar">
+        <div class="pill-group">
+          ${["ALL", ...POS_ORDER].map((p) => `<button type="button" class="filter-pill ${state.compatRevPos === p ? "active" : ""}" data-rev-pos="${p}">${p === "ALL" ? "全部位置" : p}</button>`).join("")}
+        </div>
+        <label class="chk-pill"><input type="checkbox" id="compat-rev-owned" ${state.compatRevOnlyOwned ? "checked" : ""} /><span>仅看已拥有角色</span></label>
+      </div>
+      ${actsHtml}
+      <h3 class="sub-title" style="margin-bottom:10px">◆ 全图鉴单卡相性贡献排行（点任意卡片设为上方主力 C 试算）</h3>
+      <div class="compat-partner-grid">
+        ${statics.map((s) => `
+          <div class="partner-card" data-rev-setcore="${s.char_id}">
+            <div class="partner-card-top">
+              ${avatarHtml(s.head, s.char_name, "avatar")}
+              <div class="partner-card-meta">
+                <div class="partner-card-name">
+                  <span>${esc(s.char_name)}</span>
+                  <span class="badge">${esc(s.pos)}</span>
+                  ${s.owned ? '<span style="color:var(--green);font-size:11px">★</span>' : ""}
+                </div>
+                <div class="partner-card-sub">基础关系 +${s.rel}${s.harmony_bonus ? ` · ★专属 +${s.harmony_bonus}` : ""}</div>
+              </div>
+              <span class="partner-rel-badge ${relBadgeClass(s.single_contrib)}">+${s.single_contrib}</span>
+            </div>
+            <div class="partner-card-foot">
+              <div class="partner-badges">
+                ${s.same_pos ? '<span class="badge badge-blue">同位刷彩</span>' : ""}
+                ${s.harmony_bonus ? `<span class="badge badge-gold">${s.harmony_star}★契合</span>` : ""}
+              </div>
+              <span style="font-size:11px;color:var(--accent)">设为 C 试算 →</span>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    `;
+
+    bindReverseControls(host);
+  }
+
+  function bindReverseControls(host) {
+    const pickBtn = $("btn-rev-pick");
+    if (pickBtn) {
+      pickBtn.addEventListener("click", () => {
+        openQuickPicker({
+          target: "reverse",
+          title: "选择要反查的笔记或角色",
+          allowNotes: true,
+          defaultSource: (state.compat.own_notes || []).length ? "own" : "chars",
+          onPick: (picked) => {
+            if (picked.type === "note") {
+              state.compatRevType = "note";
+              state.compatRevNoteId = String(picked.note.note_id);
+              state.compatRevActorId = Number(picked.note.actor_id);
+            } else {
+              state.compatRevType = "actor";
+              state.compatRevNoteId = "";
+              state.compatRevActorId = Number(picked.char.id);
+            }
+            state.compatRevData = null;
+            loadCompatReverseData();
+          },
+        });
+      });
+    }
+
+    host.querySelectorAll("[data-qnote]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.compatRevType = "note";
+        state.compatRevNoteId = btn.dataset.qnote;
+        state.compatRevActorId = Number(btn.dataset.qaid);
+        state.compatRevData = null;
+        loadCompatReverseData();
+      });
+    });
+
+    host.querySelectorAll("[data-rev-star]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.compatRevStar = Number(btn.dataset.revStar);
+        state.compatRevData = null;
+        loadCompatReverseData();
+      });
+    });
+
+    host.querySelectorAll("[data-rev-pos]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.compatRevPos = btn.dataset.revPos;
+        renderCompatReverse();
+      });
+    });
+
+    const ownChk = $("compat-rev-owned");
+    if (ownChk) {
+      ownChk.addEventListener("change", (e) => {
+        state.compatRevOnlyOwned = e.target.checked;
+        renderCompatReverse();
+      });
+    }
+
+    host.querySelectorAll(".btn-load-rev-pair").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const coreId = Number(btn.dataset.core);
+        const pnid = btn.dataset.pnid;
+        const paid = Number(btn.dataset.paid);
+        const curNote = state.compatRevType === "note" ? findCompatNoteById(state.compatRevNoteId) : null;
+        const slotA = curNote ? makeNoteSlot(curNote) : makeSimSlot(state.compatRevActorId, state.compatRevStar);
+        const pNote = findCompatNoteById(pnid);
+        const slotB = pNote ? makeNoteSlot(pNote) : makeSimSlot(paid, 0);
+        state.compatCoreId = coreId;
+        state.compatSlotA = slotA;
+        state.compatSlotB = slotB;
+        renderCompatSandbox();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    });
+
+    host.querySelectorAll("[data-rev-setcore]").forEach((card) => {
+      card.addEventListener("click", () => {
+        const coreId = Number(card.dataset.revSetcore);
+        const curNote = state.compatRevType === "note" ? findCompatNoteById(state.compatRevNoteId) : null;
+        state.compatCoreId = coreId;
+        state.compatSlotA = curNote ? makeNoteSlot(curNote) : makeSimSlot(state.compatRevActorId, state.compatRevStar);
+        state.compatSlotB = null;
+        renderCompatSandbox();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    });
+  }
+
+  function renderCompatBreeding() {
+    const host = $("compat-workspace-body");
+    const br = state.compat && state.compat.breeding;
+    if (!br) {
+      host.innerHTML = '<div class="empty-state">暂无养成循环规划数据</div>';
+      return;
+    }
+
+    const triHtml = (br.triangles || []).length ? `
+      <h3 class="sub-title" style="margin-bottom:10px">★ 黄金三角互哺圈（3 人天生相性保底 ≥32 分，凑齐后可无限互刷高分彩笔记）</h3>
+      <div class="triangle-grid">
+        ${br.triangles.map((t, idx) => {
+          const stBadge = t.status === "complete"
+            ? '<span class="badge badge-green">已闭环</span>'
+            : t.status === "near"
+            ? '<span class="badge badge-gold">仅差1人</span>'
+            : t.status === "reference"
+            ? '<span class="badge badge-blue">全图鉴参考</span>'
+            : '<span class="badge">待开拓</span>';
+          return `
+            <div class="triangle-card ${t.status === "complete" ? "is-complete" : ""}">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+                <div style="font-weight:700;font-size:13.5px">黄金圈 #${idx + 1} · 保底 <span style="color:var(--green)">${t.min_compat}</span> / 均 ${t.avg_compat}</div>
+                ${stBadge}
+              </div>
+              <div class="triangle-members">
+                ${t.members.map((m, mi) => {
+                  const others = t.members.filter((_, oi) => oi !== mi).map((o) => o.actor_id);
+                  return `
+                    <div class="triangle-member" data-tri-load="${m.actor_id}:${others[0]}:${others[1]}" title="点击以${esc(m.name)}为主力载入沙盒">
+                      ${avatarHtml(m.head, m.name, "avatar-sm")}
+                      <div style="font-weight:700;font-size:12.5px">${esc(m.name)}</div>
+                      <div style="font-size:11px;color:var(--accent)">练她 +${m.compat_from_others}</div>
+                      <div style="font-size:10.5px;color:${m.has_own ? "var(--purple)" : "var(--text-dim)"}">${m.has_own ? `${m.own_rank}阶 ${m.own_score}` : "缺自备"}</div>
+                    </div>
+                  `;
+                }).join("")}
+              </div>
+              <div class="panel-sub" style="margin:0">${esc(t.tip)}</div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    ` : "";
+
+    const hubs = br.hub_ranking || [];
+    const hubHtml = hubs.length ? `
+      <h3 class="sub-title" style="margin-bottom:10px">★ 刷笔记枢纽角色 Top 10（综合 下游辐射广度 × 当前可喂饱度 × 笔记缺口）</h3>
+      <div class="table-wrap" style="margin-bottom:18px">
+        <table class="data-table">
+          <thead><tr><th>#</th><th>枢纽角色</th><th>状态</th><th>下游辐射 (Top8均 / ≥15人数)</th><th>主要喂养对象</th><th>操作</th></tr></thead>
+          <tbody>
+            ${hubs.slice(0, 10).map((h, i) => `
+              <tr>
+                <td><span class="badge ${i < 3 ? "badge-green" : ""}">#${i + 1}</span></td>
+                <td style="display:flex;align-items:center;gap:8px">${avatarHtml(h.head, h.name, "avatar-sm")}<strong>${esc(h.name)}</strong> <span style="color:var(--text-dim);font-size:11px">${esc(h.pos)}</span></td>
+                <td><span class="badge ${h.own_status === "missing" ? "badge-red" : h.own_status === "good" ? "badge-green" : "badge-gold"}">${esc(h.own_tag)}</span></td>
+                <td class="num"><strong>${h.top8_avg}</strong> / ${h.high_15_cnt}人</td>
+                <td style="font-size:12px;color:var(--text-muted)">${(h.top_targets || []).slice(0, 4).map((x) => `${esc(x.actor_name)}(+${x.rel})`).join("、")}</td>
+                <td><button type="button" class="mini-btn btn-hub-sandbox" data-cid="${h.actor_id}">进沙盒</button></td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    ` : "";
+
+    const steps = br.stepping_stones || [];
+    const stepHtml = steps.length ? `
+      <h3 class="sub-title" style="margin-bottom:6px">▸ 卡手角色「两步铺路反推链」（当前纯自备 &lt;35 分的主力，先练哪位种马最赚）</h3>
+      <div class="stepping-list">
+        ${steps.map((s) => `
+          <div class="stepping-card">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              ${avatarHtml(s.target_head, s.target_name, "avatar-sm")}
+              <div style="font-size:13px">
+                想练 <strong>${esc(s.target_name)}</strong>（现自备 ${s.cur_compat}分）
+                ➔ 先练 <strong>${esc(s.bridge_name)}</strong>（现可 ${s.bridge_now_compat}分 靠 ${esc(s.bridge_now_n1)}+${esc(s.bridge_now_n2)}）
+                ➔ 搭现有 ${esc(s.partner_name)} 可直拉 <strong style="color:var(--green)">${s.proj_0star}~${s.proj_2star}分</strong>
+              </div>
+            </div>
+            <button type="button" class="mini-btn btn-hub-sandbox" data-cid="${s.bridge_id}">先练 ${esc(s.bridge_name)} →</button>
+          </div>
+        `).join("")}
+      </div>
+    ` : "";
+
+    const warnHtml = state.compat.revision_warning
+      ? `<div class="compat-hint-banner" style="margin-top:16px">${esc(state.compat.revision_warning)}</div>`
+      : "";
+
+    host.innerHTML = triHtml + hubHtml + stepHtml + warnHtml;
+
+    host.querySelectorAll("[data-tri-load]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const [cId, aId, bId] = el.dataset.triLoad.split(":").map(Number);
+        state.compatCoreId = cId;
+        const nA = getBestNoteForActor(aId, true);
+        const nB = getBestNoteForActor(bId, true);
+        state.compatSlotA = nA ? makeNoteSlot(nA) : makeSimSlot(aId, 0);
+        state.compatSlotB = nB ? makeNoteSlot(nB) : makeSimSlot(bId, 0);
+        renderCompatSandbox();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    });
+
+    host.querySelectorAll(".btn-hub-sandbox").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        openCompatForCore(Number(btn.dataset.cid), true);
+      });
+    });
+  }
+
+  /* ==================== 全局极速选人 / 选笔记浮层 ==================== */
+  function openQuickPicker(opts) {
+    if (!state.compat) return;
+    const pk = state.picker;
+    pk.open = true;
+    pk.target = opts.target || "core";
+    pk.allowNotes = Boolean(opts.allowNotes);
+    pk.source = pk.allowNotes && opts.defaultSource ? opts.defaultSource : "chars";
+    pk.search = "";
+    pk.pos = "ALL";
+    pk.onlyOwned = false;
+    pk.coreForRel = opts.coreForRel ? Number(opts.coreForRel) : null;
+    pk.sortByRel = Boolean(pk.coreForRel);
+    pk.onPick = opts.onPick || null;
+
+    $("picker-modal-title").textContent = opts.title || "极速选人";
+    const srcSeg = $("picker-source-seg");
+    srcSeg.classList.toggle("hidden", !pk.allowNotes);
+    if (pk.allowNotes) {
+      const ownCnt = (state.compat.own_notes || []).length;
+      const borCnt = (state.compat.borrowed_notes || []).length;
+      const btns = srcSeg.querySelectorAll(".seg-btn");
+      if (btns[0]) btns[0].textContent = `全部角色 (${(state.compat.characters || []).length})`;
+      if (btns[1]) btns[1].textContent = `我的自备 (${ownCnt})`;
+      if (btns[2]) btns[2].textContent = `好友可借 (${borCnt})`;
+      btns.forEach((b) => b.classList.toggle("active", b.dataset.psrc === pk.source));
+    }
+
+    const inp = $("picker-search-input");
+    inp.value = "";
+    $("compat-picker-modal").classList.remove("hidden");
+    renderQuickPicker();
+    setTimeout(() => inp.focus(), 20);
+  }
+
+  function closeQuickPicker() {
+    state.picker.open = false;
+    $("compat-picker-modal").classList.add("hidden");
+  }
+
+  function getPickerFilteredItems() {
+    const pk = state.picker;
+    if (!state.compat) return [];
+    const kw = pk.search.trim().toLowerCase();
+    const coreId = pk.coreForRel;
+
+    if (pk.source === "chars") {
+      let list = (state.compat.characters || []).map((c) => ({
+        type: "char",
+        char: c,
+        rel: coreId ? getRelScore(coreId, c.id) : 0,
+        isSameAsCore: Boolean(coreId && Number(coreId) === Number(c.id)),
+      }));
+      list = list.filter((it) => {
+        if (pk.pos !== "ALL" && it.char.pos !== pk.pos) return false;
+        if (pk.onlyOwned && !it.char.owned) return false;
+        if (kw && !charMatchesQuery(it.char, kw)) return false;
+        return true;
+      });
+      if (coreId && pk.sortByRel) {
+        list.sort((a, b) => Number(a.isSameAsCore) - Number(b.isSameAsCore) || b.rel - a.rel || Number(b.char.owned) - Number(a.char.owned) || a.char.id - b.char.id);
+      } else {
+        list.sort((a, b) => Number(b.char.owned) - Number(a.char.owned) || POS_ORDER.indexOf(a.char.pos) - POS_ORDER.indexOf(b.char.pos) || b.char.best_rank - a.char.best_rank || a.char.id - b.char.id);
+      }
+      return list;
+    }
+
+    const srcNotes = pk.source === "own" ? (state.compat.own_notes || []) : (state.compat.borrowed_notes || []);
+    let list = srcNotes.map((n) => {
+      const ch = getCompatChar(n.actor_id);
+      const rel = coreId ? getRelScore(coreId, n.actor_id) : 0;
+      const hStar = coreId ? Number((n.harmony_targets || {})[String(coreId)] || 0) : 0;
+      const hBonus = getHarmonyBonus(hStar);
+      return {
+        type: "note",
+        note: n,
+        char: ch,
+        rel,
+        hStar,
+        hBonus,
+        totalContrib: rel + hBonus,
+      };
+    });
+    list = list.filter((it) => {
+      if (pk.pos !== "ALL" && it.note.pos !== pk.pos) return false;
+      if (kw) {
+        const hay = `${charSearchHaystack(it.char)} ${it.note.actor_name} ${it.note.friend || ""} ${it.note.highlights || ""} ${it.note.score} ${it.note.rank}阶`.toLowerCase();
+        if (!kw.split(/\s+/).every((tok) => hay.includes(tok))) return false;
+      }
+      return true;
+    });
+    if (coreId) {
+      list.sort((a, b) => b.totalContrib - a.totalContrib || b.note.score - a.note.score);
+    } else {
+      list.sort((a, b) => b.note.rank - a.note.rank || b.note.score - a.note.score);
+    }
+    return list;
+  }
+
+  function renderQuickPicker() {
+    const pk = state.picker;
+    const filterRow = $("picker-filter-row");
+    const posPills = ["ALL", ...POS_ORDER].map((p) =>
+      `<button type="button" class="filter-pill ${pk.pos === p ? "active" : ""}" data-pk-pos="${p}">${p === "ALL" ? "全部位置" : p}</button>`
+    ).join("");
+    const rightCtrls = `
+      <div class="head-controls">
+        ${pk.source === "chars" ? `<label class="chk-pill"><input type="checkbox" id="pk-only-owned" ${pk.onlyOwned ? "checked" : ""} /><span>仅已拥有</span></label>` : ""}
+        ${pk.source === "chars" && pk.coreForRel ? `<label class="chk-pill"><input type="checkbox" id="pk-sort-rel" ${pk.sortByRel ? "checked" : ""} /><span>按相性优先排序</span></label>` : ""}
+      </div>
+    `;
+    filterRow.innerHTML = `<div class="pill-group">${posPills}</div>${rightCtrls}`;
+
+    filterRow.querySelectorAll("[data-pk-pos]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        pk.pos = btn.dataset.pkPos;
+        renderQuickPicker();
+      });
+    });
+    const ownChk = $("pk-only-owned");
+    if (ownChk) {
+      ownChk.addEventListener("change", (e) => {
+        pk.onlyOwned = e.target.checked;
+        renderQuickPicker();
+      });
+    }
+    const sortChk = $("pk-sort-rel");
+    if (sortChk) {
+      sortChk.addEventListener("change", (e) => {
+        pk.sortByRel = e.target.checked;
+        renderQuickPicker();
+      });
+    }
+
+    const items = getPickerFilteredItems();
+    const body = $("picker-body");
+    if (!items.length) {
+      body.innerHTML = `<div class="empty-state">${pk.source === "chars" ? "没有匹配的角色，试试输入拼音首字母或切换位置筛选" : "当前分类暂无笔记，可切到「全部角色」进行自由模拟"}</div>`;
+      return;
+    }
+
+    if (pk.source === "chars") {
+      body.innerHTML = `
+        <div class="picker-char-grid">
+          ${items.map((it, idx) => {
+            const c = it.char;
+            return `
+              <div class="picker-char-card ${idx === 0 ? "is-first" : ""} ${it.isSameAsCore ? "is-disabled" : ""}" data-pk-idx="${idx}">
+                ${avatarHtml(c.head, c.short_name, "avatar-sm")}
+                <div style="min-width:0;flex:1">
+                  <div style="font-weight:700;font-size:13px;display:flex;align-items:center;gap:4px">
+                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.short_name)}</span>
+                    ${c.owned ? '<span style="color:var(--green);font-size:10px">★</span>' : ""}
+                  </div>
+                  <div style="font-size:11px;color:var(--text-muted)">${esc(c.pos)} · ${esc((c.school || "").slice(0, 4))}</div>
+                </div>
+                ${pk.coreForRel ? `<span class="partner-rel-badge ${relBadgeClass(it.rel)}" style="font-size:12px;padding:2px 6px">+${it.rel}</span>` : ""}
+              </div>
+            `;
+          }).join("")}
+        </div>
+      `;
+    } else {
+      body.innerHTML = `
+        <div class="picker-note-list">
+          ${items.map((it, idx) => {
+            const n = it.note;
+            return `
+              <div class="picker-note-card ${idx === 0 ? "is-first" : ""}" data-pk-idx="${idx}">
+                <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1">
+                  ${avatarHtml(n.head, n.actor_name, "avatar")}
+                  <div style="min-width:0;flex:1">
+                    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13.5px;font-weight:700">
+                      <span>${esc(n.actor_name)}</span>
+                      <span class="badge">${esc(n.pos)}</span>
+                      <span class="badge ${n.rank >= 7 ? "badge-purple" : ""}">${n.rank}阶 ${n.score}分</span>
+                      ${n.friend ? `<span class="badge badge-gold">借:${esc(n.friend)}</span>` : ""}
+                      ${it.hBonus > 0 ? `<span class="badge badge-green">★契合${it.hStar}★(+${it.hBonus})</span>` : ""}
+                    </div>
+                    <div class="panel-sub" style="margin-top:2px">${esc(n.highlights || "—")}${n.harmony_str ? ` · ${esc(n.harmony_str)}` : ""}</div>
+                  </div>
+                </div>
+                ${pk.coreForRel ? `<span class="partner-rel-badge ${relBadgeClass(it.totalContrib)}">+${it.totalContrib}</span>` : `<span class="badge">反查 →</span>`}
+              </div>
+            `;
+          }).join("")}
+        </div>
+      `;
+    }
+
+    body.querySelectorAll("[data-pk-idx]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const picked = items[Number(el.dataset.pkIdx)];
+        if (!picked) return;
+        const cb = pk.onPick;
+        closeQuickPicker();
+        if (cb) cb(picked);
+      });
+    });
+  }
+
+  /* ==================== 视图 4.5：养成计划与专题攻略 ==================== */
+  function renderInlineMd(raw) {
+    let s = esc(raw);
+    s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
+    s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    s = s.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+    s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, text, href) => {
+      const safe = /^https?:\/\//i.test(href) ? href : "#";
+      return safe === "#" ? `<span>${text}</span>` : `<a href="${safe}" target="_blank" rel="noopener">${text}</a>`;
+    });
+    return s;
+  }
+
+  function renderMarkdown(mdText) {
+    if (!mdText) return "";
+    // 去掉 HTML 元信息注释块
+    const cleaned = String(mdText).replace(/<!--[\s\S]*?-->/g, "").replace(/\r\n/g, "\n");
+    const lines = cleaned.split("\n");
+    const out = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+      const trim = line.trim();
+
+      if (!trim) {
+        i += 1;
+        continue;
+      }
+
+      // 代码块
+      if (trim.startsWith("```")) {
+        const lang = trim.slice(3).trim();
+        const buf = [];
+        i += 1;
+        while (i < lines.length && !lines[i].trim().startsWith("```")) {
+          buf.push(lines[i]);
+          i += 1;
+        }
+        i += 1;
+        out.push(`<pre class="md-pre"><code data-lang="${esc(lang)}">${esc(buf.join("\n"))}</code></pre>`);
+        continue;
+      }
+
+      // 分隔线
+      if (/^-{3,}$/.test(trim) || /^\*{3,}$/.test(trim)) {
+        out.push("<hr class=\"md-hr\" />");
+        i += 1;
+        continue;
+      }
+
+      // 标题
+      const hm = trim.match(/^(#{1,4})\s+(.+)$/);
+      if (hm) {
+        const lvl = hm[1].length;
+        out.push(`<h${lvl} class="md-h${lvl}">${renderInlineMd(hm[2])}</h${lvl}>`);
+        i += 1;
+        continue;
+      }
+
+      // 引用块
+      if (trim.startsWith(">")) {
+        const qbuf = [];
+        while (i < lines.length && lines[i].trim().startsWith(">")) {
+          qbuf.push(lines[i].trim().replace(/^>\s?/, ""));
+          i += 1;
+        }
+        out.push(`<blockquote class="md-quote">${qbuf.map((x) => renderInlineMd(x)).join("<br/>")}</blockquote>`);
+        continue;
+      }
+
+      // 表格
+      if (trim.includes("|") && i + 1 < lines.length && /^\s*\|?[\s:\-|]+\|[\s:\-|]*$/.test(lines[i + 1])) {
+        const parseRow = (row) => row.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+        const headers = parseRow(line);
+        i += 2;
+        const rows = [];
+        while (i < lines.length && lines[i].trim().includes("|") && lines[i].trim() !== "") {
+          rows.push(parseRow(lines[i]));
+          i += 1;
+        }
+        const thead = `<thead><tr>${headers.map((h) => `<th>${renderInlineMd(h)}</th>`).join("")}</tr></thead>`;
+        const tbody = `<tbody>${rows.map((r) => `<tr>${headers.map((_, idx) => `<td>${renderInlineMd(r[idx] || "")}</td>`).join("")}</tr>`).join("")}</tbody>`;
+        out.push(`<div class="md-table-wrap"><table class="md-table">${thead}${tbody}</table></div>`);
+        continue;
+      }
+
+      // 无序 / 任务列表
+      if (/^[-*+]\s+/.test(trim)) {
+        const items = [];
+        while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
+          const itemRaw = lines[i].replace(/^\s*[-*+]\s+/, "");
+          const chk = itemRaw.match(/^\[( |x|X)\]\s+(.*)$/);
+          if (chk) {
+            const done = chk[1].toLowerCase() === "x";
+            items.push(`<li class="md-task ${done ? "done" : ""}"><span class="md-chk">${done ? "☑" : "☐"}</span><span>${renderInlineMd(chk[2])}</span></li>`);
+          } else {
+            items.push(`<li>${renderInlineMd(itemRaw)}</li>`);
+          }
+          i += 1;
+        }
+        out.push(`<ul class="md-ul">${items.join("")}</ul>`);
+        continue;
+      }
+
+      // 有序列表
+      if (/^\d+\.\s+/.test(trim)) {
+        const items = [];
+        while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
+          items.push(`<li>${renderInlineMd(lines[i].replace(/^\s*\d+\.\s+/, ""))}</li>`);
+          i += 1;
+        }
+        out.push(`<ol class="md-ol">${items.join("")}</ol>`);
+        continue;
+      }
+
+      // 普通段落
+      const pbuf = [trim];
+      i += 1;
+      while (
+        i < lines.length &&
+        lines[i].trim() &&
+        !/^(#{1,4}\s|```|>|[-*+]\s|\d+\.\s|---+$)/.test(lines[i].trim())
+      ) {
+        pbuf.push(lines[i].trim());
+        i += 1;
+      }
+      out.push(`<p class="md-p">${renderInlineMd(pbuf.join(" "))}</p>`);
+    }
+    return out.join("\n");
+  }
+
+  function renderPlansView() {
+    const listEl = $("plans-list");
+    const detailEl = $("plans-detail-area");
+    const pillEl = $("plans-count-pill");
+    if (!listEl || !detailEl) return;
+
+    const plans = state.plans || [];
+    if (pillEl) pillEl.textContent = `${plans.length} 份`;
+
+    if (!plans.length) {
+      listEl.innerHTML = `<div class="empty-state">docs/ 下暂无 *_plan.md 或 *_guide.md 文档</div>`;
+      detailEl.innerHTML = `<div class="panel empty-state">把计划写进 docs/*_plan.md 后点击右上角刷新即可显示</div>`;
+      return;
+    }
+
+    if (!state.selectedPlanId || !plans.some((p) => p.id === state.selectedPlanId)) {
+      state.selectedPlanId = plans[0].id;
+    }
+
+    listEl.innerHTML = plans.map((p) => {
+      const active = p.id === state.selectedPlanId;
+      const badgeCls = p.kind === "plan" ? "badge-accent" : "badge-gold";
+      return `
+        <div class="plan-card ${active ? "active" : ""}" data-plan-id="${esc(p.id)}">
+          <div class="plan-card-top">
+            <span class="badge ${badgeCls}">${esc(p.tag)}</span>
+            <span class="plan-status">${esc(p.status)}</span>
+          </div>
+          <div class="plan-card-title">${esc(p.title)}</div>
+          <div class="plan-card-summary">${esc(p.summary || "")}</div>
+          <div class="plan-card-meta">
+            <span>${esc(p.rel_path)}</span>
+            <span>${esc(p.updated_at)}</span>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    listEl.querySelectorAll("[data-plan-id]").forEach((el) => {
+      el.addEventListener("click", () => {
+        state.selectedPlanId = el.dataset.planId;
+        renderPlansView();
+      });
+    });
+
+    const cur = plans.find((p) => p.id === state.selectedPlanId) || plans[0];
+    const charsHtml = (cur.related_chars || []).length
+      ? `
+        <div class="plan-chars-bar">
+          <span class="panel-sub">快捷直达配装器：</span>
+          ${cur.related_chars.map((c) => `
+            <button type="button" class="plan-char-chip" data-jump-char="${c.char_id}">
+              ${c.head_url ? `<img src="${esc(c.head_url)}" alt="${esc(c.name)}" />` : ""}
+              <span>${esc(c.name)}</span>
+              <span class="chip-pos">${esc(c.position)}</span>
+            </button>
+          `).join("")}
+        </div>
+      `
+      : "";
+
+    detailEl.innerHTML = `
+      <article class="panel plan-doc-panel">
+        <div class="plan-doc-head">
+          <div class="plan-doc-badges">
+            <span class="badge ${cur.kind === "plan" ? "badge-accent" : "badge-gold"}">${esc(cur.tag)}</span>
+            <span class="badge badge-green">${esc(cur.status)}</span>
+            <span class="panel-sub">文件：<code>${esc(cur.rel_path)}</code> · 更新：${esc(cur.updated_at)}</span>
+          </div>
+          ${charsHtml}
+        </div>
+        <div class="md-body">${renderMarkdown(cur.markdown)}</div>
+      </article>
+    `;
+
+    detailEl.querySelectorAll("[data-jump-char]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const cid = Number(btn.dataset.jumpChar);
+        if (!cid) return;
+        state.plannerCharId = cid;
+        const sel = $("planner-char-select");
+        if (sel) sel.value = String(cid);
+        switchView("box");
+        loadPlanner();
+      });
+    });
+  }
+
   /* ==================== 初始化与事件绑定 ==================== */
   async function loadCoreData() {
     try {
-      const [ov, box] = await Promise.all([apiGet("/api/overview"), apiGet("/api/box")]);
+      const [ov, box, compat, plansRes] = await Promise.all([
+        apiGet("/api/overview"),
+        apiGet("/api/box"),
+        apiGet("/api/compatibility"),
+        apiGet("/api/plans").catch(() => ({ plans: [] })),
+      ]);
       state.online = true;
       state.overview = ov;
       state.box = box;
+      state.compat = compat;
+      state.plans = (plansRes && plansRes.plans) || [];
       setConnBadge(true, "本地服务在线");
     } catch (_) {
       state.online = false;
@@ -1203,6 +2951,8 @@
       if (snap) {
         state.overview = snap.overview;
         state.box = snap.box;
+        state.compat = snap.compatibility || null;
+        state.plans = (snap.plans && snap.plans.plans) || [];
         setConnBadge(false, "离线快照模式");
       } else {
         setConnBadge(false, "未连接数据");
@@ -1213,6 +2963,12 @@
     renderOverview();
     renderRunsList();
     initBoxControls();
+    if (state.view === "compat") {
+      ensureCompatReady();
+    }
+    if (state.view === "plans") {
+      renderPlansView();
+    }
 
     // 在线时静默探测一次 live 状态以点亮顶部指示灯
     if (state.online) {
@@ -1225,17 +2981,37 @@
     }
   }
 
+  const ICON_SUN_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>';
+  const ICON_MOON_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+
+  function updateThemeButton(theme) {
+    const btn = $("btn-theme");
+    if (!btn) return;
+    const isDark = theme === "dark";
+    btn.innerHTML = isDark ? ICON_SUN_SVG : ICON_MOON_SVG;
+    btn.title = isDark ? "切换亮色校园主题" : "切换深色护眼主题";
+    btn.setAttribute("aria-label", btn.title);
+  }
+
   function bindEvents() {
     document.querySelectorAll(".nav-btn").forEach((btn) => {
       btn.addEventListener("click", () => switchView(btn.dataset.view));
     });
 
     $("btn-theme").addEventListener("click", () => {
-      const cur = document.documentElement.getAttribute("data-theme") || "dark";
+      const cur = document.documentElement.getAttribute("data-theme") || "light";
       const next = cur === "dark" ? "light" : "dark";
       document.documentElement.setAttribute("data-theme", next);
       try { localStorage.setItem("lqsn_dash_theme_v1", next); } catch (_) {}
-      $("btn-theme").textContent = next === "dark" ? "☀" : "🌙";
+      updateThemeButton(next);
+      renderTrendChart();
+    });
+
+    let resizeTimer = null;
+    window.addEventListener("resize", () => {
+      if (state.view !== "overview") return;
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => renderTrendChart(), 120);
     });
 
     $("btn-refresh-all").addEventListener("click", async () => {
@@ -1244,8 +3020,10 @@
       }
       state.runDetailCache = {};
       state.plannerData = null;
+      state.compatRevData = null;
       await loadCoreData();
       if (state.view === "box") loadPlanner();
+      if (state.view === "compat") ensureCompatReady();
       if (state.view === "live") pollLiveNow();
     });
 
@@ -1287,6 +3065,21 @@
       state.plannerCharId = Number(e.target.value);
       loadPlanner();
     });
+    const plannerQuickBtn = $("btn-planner-quick-pick");
+    if (plannerQuickBtn) {
+      plannerQuickBtn.addEventListener("click", () => {
+        openQuickPicker({
+          target: "planner",
+          title: "极速选择配装目标角色",
+          allowNotes: false,
+          onPick: (picked) => {
+            state.plannerCharId = Number(picked.char.id);
+            $("planner-char-select").value = String(state.plannerCharId);
+            loadPlanner();
+          },
+        });
+      });
+    }
     $("planner-focus-select").addEventListener("change", (e) => {
       state.plannerFocus = e.target.value;
       loadPlanner();
@@ -1330,6 +3123,68 @@
       renderBoxSubTab();
     });
 
+    // 相性查询沙盒与工作台控制
+    $("btn-compat-autofill").addEventListener("click", () => {
+      const [sA, sB] = findBestAutoPairForCore(state.compatCoreId);
+      state.compatSlotA = sA;
+      state.compatSlotB = sB;
+      renderCompatView();
+    });
+    $("btn-compat-swap").addEventListener("click", () => {
+      const tmp = state.compatSlotA;
+      state.compatSlotA = state.compatSlotB;
+      state.compatSlotB = tmp;
+      renderCompatView();
+    });
+    $("btn-compat-clear").addEventListener("click", () => {
+      state.compatSlotA = null;
+      state.compatSlotB = null;
+      renderCompatView();
+    });
+    $("compat-mode-seg").querySelectorAll(".seg-btn").forEach((b) => {
+      b.addEventListener("click", () => {
+        state.compatSubMode = b.dataset.cmode;
+        syncCompatModeSeg();
+        renderCompatWorkspace();
+      });
+    });
+
+    // 极速选人 / 选笔记浮层控制
+    $("btn-picker-close").addEventListener("click", closeQuickPicker);
+    $("compat-picker-modal").addEventListener("click", (e) => {
+      if (e.target === $("compat-picker-modal")) closeQuickPicker();
+    });
+    $("picker-source-seg").querySelectorAll(".seg-btn").forEach((b) => {
+      b.addEventListener("click", () => {
+        state.picker.source = b.dataset.psrc;
+        $("picker-source-seg").querySelectorAll(".seg-btn").forEach((x) => x.classList.remove("active"));
+        b.classList.add("active");
+        renderQuickPicker();
+        $("picker-search-input").focus();
+      });
+    });
+    $("picker-search-input").addEventListener("input", (e) => {
+      state.picker.search = e.target.value;
+      renderQuickPicker();
+    });
+    $("picker-search-input").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        const items = getPickerFilteredItems();
+        if (items.length) {
+          e.preventDefault();
+          const picked = items[0];
+          const cb = state.picker.onPick;
+          closeQuickPicker();
+          if (cb) cb(picked);
+        }
+      }
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && state.picker.open) {
+        closeQuickPicker();
+      }
+    });
+
     // Live 控制
     $("live-poll-seg").querySelectorAll(".seg-btn").forEach((b) => {
       b.addEventListener("click", () => {
@@ -1343,8 +3198,9 @@
   }
 
   document.addEventListener("DOMContentLoaded", () => {
-    const curTheme = document.documentElement.getAttribute("data-theme") || "dark";
-    $("btn-theme").textContent = curTheme === "dark" ? "☀" : "🌙";
+    const curTheme = document.documentElement.getAttribute("data-theme") || "light";
+    document.documentElement.setAttribute("data-theme", curTheme);
+    updateThemeButton(curTheme);
     bindEvents();
     loadCoreData();
   });

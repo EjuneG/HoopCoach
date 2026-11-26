@@ -311,6 +311,25 @@ def _score_single_card(
     }
 
 
+_UI_RARITY_ORDER = {"彩": 4, "SSR": 4, "金": 3, "SR": 3, "银": 2, "白": 1, "未知": 0}
+
+
+def sort_skill_choices_for_ui(skill_list: list[dict]) -> list[dict]:
+    """
+    按实机三选一界面真实展示顺序重排技能卡（2026-11-27 R36/R43 实机截图验证）：
+    游戏 UI 会将高稀有度卡（彩 > 金 > 银 > 白）排在左侧槽位，同稀有度保持服务器下发相对顺序。
+    """
+    indexed = []
+    for raw_idx, card in enumerate(skill_list or ()):
+        c = card or {}
+        sid = int(c.get("skill_id") or 0)
+        entry = get_skill_entry(sid) if sid > 0 else None
+        rar = str((entry or {}).get("rarity") or "未知")
+        indexed.append((-_UI_RARITY_ORDER.get(rar, 0), raw_idx, c))
+    indexed.sort(key=lambda x: (x[0], x[1]))
+    return [x[2] for x in indexed]
+
+
 def evaluate_skill_choices(
     char_id: int,
     skill_list: list[dict],
@@ -318,16 +337,17 @@ def evaluate_skill_choices(
     note_pool: list | dict | None = None,
 ) -> list[dict]:
     """
-    评估选技能左中右候选卡，按原槽位 slot_idx=0..N-1 返回完整评分、排名、短角标与样式 key。
+    评估选技能左中右候选卡，按实机 UI 展示顺序 (slot_idx=0..N-1) 返回完整评分、排名、短角标与样式 key。
     """
     if not skill_list:
         return []
     char_roles = get_char_role_tags(char_id)
     learned_set = _normalize_learned_set(learned_skills)
+    ui_cards = sort_skill_choices_for_ui(skill_list)
 
     results = [
         _score_single_card(idx, card or {}, char_roles, learned_set, note_pool)
-        for idx, card in enumerate(skill_list)
+        for idx, card in enumerate(ui_cards)
     ]
 
     ordered = sorted(

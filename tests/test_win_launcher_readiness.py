@@ -362,6 +362,105 @@ class TestWinLauncherReadiness(unittest.TestCase):
                 ea.EQUIP_POOL_FILE = orig_ea_pool
                 ea.load_equip_data(force_reload=True)
 
+    def test_bright_anime_theme_tokens_and_copy_redline(self) -> None:
+        theme = win_launcher.THEME
+        self.assertEqual(theme["bg"].upper(), "#F5F8FF")
+        self.assertEqual(theme["surface"].upper(), "#FFFFFF")
+        self.assertEqual(theme["ink"].upper(), "#101B33")
+        self.assertEqual(theme["blue"].upper(), "#1B5BFF")
+        self.assertEqual(theme["primary"].upper(), "#FF5126")
+        self.assertEqual(theme["gold"].upper(), "#FFB703")
+        self.assertEqual(theme["hud_on_bg"].upper(), "#12B886")
+        self.assertEqual(theme["berry"].upper(), "#F03E5A")
+
+        src_path = os.path.join(SRC_DIR, "win_launcher.py")
+        with open(src_path, "r", encoding="utf-8") as f:
+            src = f.read()
+
+        self.assertIn("HoopCoach · 星奈军师", src)
+        for forbidden in ("纯只读", "零侵入", "Win32 分层", "免命令行", "🏀", "👑", "📒", "🎯", "📖", "🌴", "⏳", "⚠️"):
+            self.assertNotIn(forbidden, src, f"win_launcher.py 不应再包含旧术语或易出豆腐块 Emoji: {forbidden}")
+
+    def test_mascot_sticker_discovery_render_and_fallback(self) -> None:
+        items = win_launcher.discover_mascot_stickers(ROOT_DIR)
+        self.assertGreaterEqual(len(items), 10)
+        self.assertEqual(items[0]["char_id"], 1001)
+        self.assertEqual(items[0]["name"], "澪奈")
+
+        # 缺失图片路径必须静默降级返回 None，不抛异常
+        self.assertIsNone(win_launcher.render_mascot_sticker_image("/nonexistent/q_head.png"))
+
+        # 有 Pillow 时应成功渲染圆角硬边贴纸（含 2px 漫画阴影）
+        try:
+            import PIL  # noqa: F401
+            has_pil = True
+        except ImportError:
+            has_pil = False
+
+        rendered = win_launcher.render_mascot_sticker_image(items[0]["path"], size=44)
+        if has_pil:
+            self.assertIsNotNone(rendered)
+            self.assertEqual(rendered.size, (46, 46))
+        else:
+            self.assertIsNone(rendered)
+
+        # 空目录静默降级 + 轮换持久化验证
+        with tempfile.TemporaryDirectory(prefix="hoopcoach_mascot_") as tmp_dir:
+            self.assertEqual(win_launcher.discover_mascot_stickers(tmp_dir), [])
+
+            orig_base = pc.BASE_DIR
+            pc.BASE_DIR = tmp_dir
+            try:
+                app = object.__new__(win_launcher.LQSNCoachDesktopApp)
+                app._mascot_items = items[:3]
+                app._mascot_index = 0
+                app._mascot_btn = None
+                app._mascot_quip_bubble = None
+                app._mascot_quip_after_id = None
+                app.root = None
+                app.var_mascot_name = _DummyVar("")
+                app.var_mascot_quip = _DummyVar("")
+
+                app._on_rotate_mascot()
+                self.assertEqual(app._mascot_index, 1)
+                self.assertIn(items[1]["name"], app.var_mascot_name.get())
+                self.assertIn(items[1]["quip"], app.var_mascot_quip.get())
+                prefs = win_launcher.load_launcher_ui_prefs(tmp_dir)
+                self.assertEqual(prefs.get("mascot_char_id"), items[1]["char_id"])
+            finally:
+                pc.BASE_DIR = orig_base
+
+    def test_pil_to_tk_photo_fallback_without_imagetk(self) -> None:
+        """缺少 PIL.ImageTk 时（如旧版 rt1 壳热更）应回退 Tk 原生 base64 PNG PhotoImage。"""
+        try:
+            from PIL import Image
+        except ImportError:
+            return
+
+        captured = {}
+
+        class _FakeTk:
+            @staticmethod
+            def PhotoImage(data=None):
+                captured["data"] = data
+                return ("fake-photo", len(data or ""))
+
+        img = Image.new("RGBA", (8, 8), (255, 81, 38, 255))
+        orig_tk = win_launcher.tk
+        orig_imagetk = sys.modules.get("PIL.ImageTk")
+        win_launcher.tk = _FakeTk
+        sys.modules["PIL.ImageTk"] = None  # type: ignore[assignment]
+        try:
+            photo = win_launcher._pil_to_tk_photo(img)
+            self.assertIsNotNone(photo)
+            self.assertTrue(isinstance(captured.get("data"), str) and len(captured["data"]) > 20)
+        finally:
+            win_launcher.tk = orig_tk
+            if orig_imagetk is None:
+                sys.modules.pop("PIL.ImageTk", None)
+            else:
+                sys.modules["PIL.ImageTk"] = orig_imagetk
+
 
 if __name__ == "__main__":
     unittest.main()

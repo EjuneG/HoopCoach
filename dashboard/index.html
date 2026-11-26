@@ -1,36 +1,50 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="dark">
+<html lang="zh-CN" data-theme="light">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="color-scheme" content="dark light" />
+  <meta name="color-scheme" content="light dark" />
   <script>
     (function () {
       try {
         var t = localStorage.getItem("lqsn_dash_theme_v1");
         if (t === "light" || t === "dark") {
           document.documentElement.setAttribute("data-theme", t);
+        } else {
+          document.documentElement.setAttribute("data-theme", "light");
         }
       } catch (_) {}
     })();
   </script>
-  <title>LQSNCoach · 私人作战室</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%235b8cff'/><text x='16' y='21' text-anchor='middle' font-size='16' fill='white'>🏀</text></svg>" />
+  <title>HoopCoach 作战室</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Crect x='2' y='2' width='32' height='32' rx='9' fill='%23ffffff' stroke='%23101b33' stroke-width='2.5'/%3E%3Ccircle cx='18' cy='18' r='11.5' fill='%23ff5126' stroke='%23101b33' stroke-width='2.2'/%3E%3Cpath d='M18 6.5V29.5M6.5 18H29.5M10.8 9.8C14.2 13 14.2 23 10.8 26.2M25.2 9.8C21.8 13 21.8 23 25.2 26.2' fill='none' stroke='%23101b33' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <span class="brand-dot" aria-hidden="true"></span>
-        <span class="brand-title">LQSNCoach</span>
-        <span class="brand-tag">私人作战室</span>
+        <span class="brand-logo" aria-hidden="true">
+          <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="18" cy="18" r="13.2" fill="#FF5126" stroke="#101B33" stroke-width="2.4" />
+            <path d="M18 4.8V31.2M4.8 18H31.2" stroke="#101B33" stroke-width="2" stroke-linecap="round" />
+            <path d="M9.4 8.4C13.6 12.4 13.6 23.6 9.4 27.6" stroke="#101B33" stroke-width="2" stroke-linecap="round" />
+            <path d="M26.6 8.4C22.4 12.4 22.4 23.6 26.6 27.6" stroke="#101B33" stroke-width="2" stroke-linecap="round" />
+            <path d="M11 10.2C12.6 8.7 14.6 7.9 16.4 7.9" stroke="#FFD166" stroke-width="2.1" stroke-linecap="round" />
+          </svg>
+        </span>
+        <span class="brand-text">
+          <span class="brand-title">Hoop<span>Coach</span></span>
+          <span class="brand-tag">作战室</span>
+        </span>
       </div>
 
       <nav class="main-nav" role="tablist" aria-label="主视图导航">
         <button class="nav-btn active" data-view="overview" role="tab" aria-selected="true" type="button">总览</button>
         <button class="nav-btn" data-view="runs" role="tab" aria-selected="false" type="button">单局复盘</button>
         <button class="nav-btn" data-view="box" role="tab" aria-selected="false" type="button">笔记与配装</button>
+        <button class="nav-btn" data-view="compat" role="tab" aria-selected="false" type="button">相性查询</button>
+        <button class="nav-btn" data-view="plans" role="tab" aria-selected="false" type="button">养成计划</button>
         <button class="nav-btn" data-view="live" role="tab" aria-selected="false" type="button">
           <span class="live-indicator" id="nav-live-dot"></span>实时监控
         </button>
@@ -38,8 +52,13 @@
 
       <div class="topbar-actions">
         <span class="conn-badge" id="conn-badge">连接中…</span>
-        <button id="btn-refresh-all" class="icon-btn" type="button" title="重新加载本地归档与快照">↻</button>
-        <button id="btn-theme" class="icon-btn" type="button" title="切换深色/浅色主题">☀</button>
+        <button id="btn-refresh-all" class="icon-btn" type="button" title="重新加载本地归档与快照" aria-label="重新加载本地归档与快照">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+            <polyline points="21 3 21 9 15 9" />
+          </svg>
+        </button>
+        <button id="btn-theme" class="icon-btn" type="button" title="切换深色/浅色主题" aria-label="切换深色/浅色主题"></button>
       </div>
     </div>
   </header>
@@ -87,7 +106,7 @@
         <div class="panel-head">
           <div>
             <h2 class="panel-title">当前冲分目标与瓶颈雷达</h2>
-            <p class="panel-sub">同步自 config/training_goal.yaml 与 daily_queue.json，点击目标直接打开实盘配对</p>
+            <p class="panel-sub">同步自本地养成队列与目标配置，点击目标直接打开实盘配对</p>
           </div>
           <span class="panel-sub" id="overview-updated"></span>
         </div>
@@ -131,10 +150,11 @@
         <div class="panel-head">
           <div>
             <h2 class="panel-title">实盘开局配对器</h2>
-            <p class="panel-sub">直接读取你本地抓到的自备笔记、好友可借笔记与 7 张自有 SSR 真实练度（调用 note_advisor / equipment_advisor 真值）</p>
+            <p class="panel-sub">基于本地自备笔记、好友可借笔记与自有 SSR 器材练度，实时计算最优开局组合</p>
           </div>
           <div class="head-controls">
             <select id="planner-char-select" class="ctrl-select"></select>
+            <button id="btn-planner-quick-pick" class="action-btn" type="button" title="打开极速头像/拼音选人浮层">▸ 速选</button>
             <div class="seg" id="planner-mode-seg">
               <button type="button" class="seg-btn active" data-mode="score">冲评分</button>
               <button type="button" class="seg-btn" data-mode="pvp_22">PVP 2+2</button>
@@ -196,7 +216,60 @@
       </section>
     </section>
 
-    <!-- ==================== 视图 4：后台挂机实时监控 ==================== -->
+    <!-- ==================== 视图 4：笔记相性查询与沙盒 ==================== -->
+    <section id="view-compat" class="view-panel">
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title">笔记相性试算沙盒（A + B ➔ 主力 C）</h2>
+            <p class="panel-sub">点任意槽位支持中文 / 拼音首字母 / 位置 / 学校极速秒搜，也可直接带入你本地的自备与好友真实笔记</p>
+          </div>
+          <div class="head-controls">
+            <button id="btn-compat-autofill" class="action-btn action-btn-primary" type="button">★ 填手头最优</button>
+            <button id="btn-compat-swap" class="action-btn" type="button" title="互换笔记槽位 A 与 B">⇄ 互换</button>
+            <button id="btn-compat-clear" class="action-btn" type="button">清空 A/B</button>
+          </div>
+        </div>
+
+        <div class="compat-sandbox-grid" id="compat-sandbox-slots"></div>
+        <div class="compat-result-bar" id="compat-result-bar"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div class="seg" id="compat-mode-seg">
+            <button type="button" class="seg-btn active" data-cmode="forward">◆ 正查：谁最搭当前主力</button>
+            <button type="button" class="seg-btn" data-cmode="reverse">▸ 反查：单笔记 / 角色激活谁</button>
+            <button type="button" class="seg-btn" data-cmode="breeding">★ 黄金三角 &amp; 刷笔记枢纽</button>
+          </div>
+          <span class="panel-sub" id="compat-mode-hint">点击卡片智能填入沙盒槽位，省去下拉翻找</span>
+        </div>
+
+        <div id="compat-workspace-body"></div>
+      </section>
+    </section>
+
+    <!-- ==================== 视图 4.5：养成计划与专题攻略 ==================== -->
+    <section id="view-plans" class="view-panel">
+      <div class="plans-layout">
+        <aside class="panel plans-sidebar">
+          <div class="panel-head" style="margin-bottom:10px">
+            <div>
+              <h2 class="panel-title">计划与攻略目录</h2>
+              <p class="panel-sub">自动收录本地养成计划与专题攻略</p>
+            </div>
+            <span class="pill" id="plans-count-pill">0 份</span>
+          </div>
+          <div class="plans-list" id="plans-list"></div>
+        </aside>
+
+        <div class="plans-main" id="plans-detail-area">
+          <div class="panel empty-state">从左侧选择一份养成计划或攻略开始查阅</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 视图 5：后台挂机实时监控 ==================== -->
     <section id="view-live" class="view-panel">
       <section class="panel live-header-panel">
         <div class="live-status-row">
@@ -222,6 +295,33 @@
       <div id="live-main-body"></div>
     </section>
   </main>
+
+  <!-- ==================== 全局极速选人 / 选笔记浮层 ==================== -->
+  <div id="compat-picker-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="picker-modal-title">
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <div>
+          <h3 class="panel-title" id="picker-modal-title">极速选人</h3>
+          <p class="panel-sub" id="picker-modal-sub">支持中文名、简称、拼音首字母（如 lgs / st / zq）、位置（PF）或学校名，按 Enter 秒选首项</p>
+        </div>
+        <button id="btn-picker-close" class="icon-btn" type="button" title="关闭 (Esc)">✕</button>
+      </div>
+
+      <div class="picker-toolbar">
+        <div class="picker-top-row">
+          <div class="seg hidden" id="picker-source-seg">
+            <button type="button" class="seg-btn active" data-psrc="chars">全部角色</button>
+            <button type="button" class="seg-btn" data-psrc="own">我的自备笔记</button>
+            <button type="button" class="seg-btn" data-psrc="borrow">好友可借笔记</button>
+          </div>
+          <input id="picker-search-input" class="ctrl-input grow" type="search" placeholder="输入姓名 / 拼音首字母 / 学校 / 位置，按 Enter 选中第一个…" autocomplete="off" />
+        </div>
+        <div class="picker-filter-row" id="picker-filter-row"></div>
+      </div>
+
+      <div class="picker-body" id="picker-body"></div>
+    </div>
+  </div>
 
   <script src="data/snapshot.js" defer></script>
   <script src="js/app.js" defer></script>

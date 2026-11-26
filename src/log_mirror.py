@@ -14,6 +14,7 @@ from __future__ import annotations
 import glob
 import os
 import re
+import time
 from collections import deque
 from typing import Optional
 
@@ -179,8 +180,20 @@ class LiveLogMirror:
                 if record_events:
                     events.append({"kind": "rpc", "name": rpc_name})
 
+        if "[UIManager]BlockInput:" in line:
+            bm = re.search(r"BlockInput:\s+(true|false)", line)
+            if bm:
+                if bm.group(1) == "true":
+                    self.state["block_input"] = True
+                    self.state["block_input_ts"] = time.time()
+                else:
+                    self.state["block_input"] = False
+                    self.state["block_input_ts"] = 0.0
+
         if "[UIManager]" in line and "CloseAll" in line:
             self.state["store_buy_pending"] = False
+            self.state["block_input"] = False
+            self.state["block_input_ts"] = 0.0
         elif "[UIManager]" in line and ("OpenUIView" in line or "CloseUIView" in line or "HideUIView" in line):
             um = re.search(
                 r"(OpenUIView|CloseUIView|HideUIView)(?:</color>|:)?\s+(?:\d+\s+(?:(?:true|false)\s+)?)?((?:ui\.view\.|mini_game\.)[^\s,;\]]+)",

@@ -14,63 +14,184 @@ hud_badges.py — 跨平台共享原生贴身角标规格引擎（零 GTK / 零 
 
 from __future__ import annotations
 
+import glob
 import html
+import os
 import re
+import sys
 from typing import Callable, Optional
+
+
+# ── 共享日系校园篮球番视觉规范（Design Tokens · 双平台同源） ──
+HUD_PAPER_RGB = (248 / 255.0, 252 / 255.0, 255 / 255.0)  # #F8FCFF 奶白底
+HUD_PAPER_RGBA = (248 / 255.0, 252 / 255.0, 255 / 255.0, 0.99)
+HUD_INK_STROKE_RGB = (20 / 255.0, 35 / 255.0, 66 / 255.0)  # #142342 深墨蓝细描边
+HUD_INK_STROKE_RGBA = (20 / 255.0, 35 / 255.0, 66 / 255.0, 0.98)
+HUD_SHADOW_RGBA = (20 / 255.0, 35 / 255.0, 66 / 255.0, 0.68)  # 轻巧 2px 硬偏移阴影
+HUD_CHAMPION_GOLD_RGB = (255 / 255.0, 183 / 255.0, 3 / 255.0)  # #FFB703 冠军金
+HUD_SKY_BLUE_RGB = (34 / 255.0, 167 / 255.0, 255 / 255.0)  # #22A7FF 清透天蓝
+HUD_TEXT_INK = "#101B33"
+HUD_TEXT_SECONDARY = "#435370"
+HUD_TEXT_MUTED = "#6C7D9C"
+DEFAULT_Q_AVATAR_CHAR_ID = 1001  # 默认降级角色：澪奈
 
 
 # style_key: (grad_top_rgb, grad_bot_rgb, border_rgba, default_left_fg, default_right_fg)
 ACCENT_PALETTES = {
     "best": (
-        (255 / 255.0, 198 / 255.0, 38 / 255.0),
-        (255 / 255.0, 168 / 255.0, 24 / 255.0),
-        (1.0, 1.0, 1.0, 0.97),
-        "#3B2500",
-        "#1E3246",
+        (255 / 255.0, 81 / 255.0, 38 / 255.0),   # #FF5126 炽热篮球橙红
+        (224 / 255.0, 58 / 255.0, 18 / 255.0),   # #E03A12 深橙（配 #FFB703 冠军金斜切饰条）
+        HUD_INK_STROKE_RGBA,
+        "#FFFFFF",
+        HUD_TEXT_INK,
     ),
     "second": (
-        (66 / 255.0, 180 / 255.0, 248 / 255.0),
-        (42 / 255.0, 152 / 255.0, 235 / 255.0),
-        (186 / 255.0, 218 / 255.0, 242 / 255.0, 0.96),
+        (27 / 255.0, 91 / 255.0, 255 / 255.0),   # #1B5BFF 运动宝蓝
+        (17 / 255.0, 57 / 255.0, 166 / 255.0),   # #1139A6 深宝蓝
+        HUD_INK_STROKE_RGBA,
         "#FFFFFF",
-        "#334E68",
+        HUD_TEXT_INK,
     ),
     "shop": (
-        (42 / 255.0, 198 / 255.0, 126 / 255.0),
-        (24 / 255.0, 168 / 255.0, 102 / 255.0),
-        (167 / 255.0, 243 / 255.0, 208 / 255.0, 0.96),
+        (18 / 255.0, 184 / 255.0, 134 / 255.0),  # #12B886 薄荷绿
+        (11 / 255.0, 150 / 255.0, 108 / 255.0),  # #0B966C 深薄荷
+        HUD_INK_STROKE_RGBA,
         "#FFFFFF",
-        "#1E3246",
+        HUD_TEXT_INK,
     ),
     "warn": (
-        (251 / 255.0, 113 / 255.0, 133 / 255.0),
-        (225 / 255.0, 29 / 255.0, 72 / 255.0),
-        (254 / 255.0, 205 / 255.0, 211 / 255.0, 0.96),
+        (240 / 255.0, 62 / 255.0, 90 / 255.0),   # #F03E5A 警示莓红
+        (201 / 255.0, 36 / 255.0, 66 / 255.0),   # #C92442 深莓红
+        HUD_INK_STROKE_RGBA,
         "#FFFFFF",
-        "#881337",
+        "#9F1239",
     ),
     "dup": (
-        (148 / 255.0, 163 / 255.0, 184 / 255.0),
-        (100 / 255.0, 116 / 255.0, 139 / 255.0),
-        (203 / 255.0, 213 / 255.0, 225 / 255.0, 0.92),
+        (108 / 255.0, 125 / 255.0, 156 / 255.0),  # #6C7D9C 辅助灰蓝
+        (67 / 255.0, 83 / 255.0, 112 / 255.0),    # #435370 次级墨蓝
+        (20 / 255.0, 35 / 255.0, 66 / 255.0, 0.90),
         "#FFFFFF",
-        "#64748B",
+        HUD_TEXT_SECONDARY,
     ),
     "unknown": (
-        (66 / 255.0, 180 / 255.0, 248 / 255.0),
-        (42 / 255.0, 152 / 255.0, 235 / 255.0),
-        (186 / 255.0, 218 / 255.0, 242 / 255.0, 0.94),
+        (34 / 255.0, 167 / 255.0, 255 / 255.0),  # #22A7FF 清透天蓝
+        (27 / 255.0, 91 / 255.0, 255 / 255.0),   # #1B5BFF 运动宝蓝
+        HUD_INK_STROKE_RGBA,
         "#FFFFFF",
-        "#334E68",
+        HUD_TEXT_SECONDARY,
     ),
     "muted": (
-        (148 / 255.0, 163 / 255.0, 184 / 255.0),
-        (115 / 255.0, 130 / 255.0, 150 / 255.0),
-        (203 / 255.0, 213 / 255.0, 225 / 255.0, 0.90),
+        (108 / 255.0, 125 / 255.0, 156 / 255.0),
+        (82 / 255.0, 98 / 255.0, 128 / 255.0),
+        (20 / 255.0, 35 / 255.0, 66 / 255.0, 0.88),
         "#FFFFFF",
-        "#64748B",
+        HUD_TEXT_MUTED,
     ),
 }
+
+
+def extract_active_char_id(state: Optional[dict]) -> Optional[int]:
+    """从育成状态中提取当前主练/预选角色 char_id（如 1002 龙宫寺、1046 希雅）。"""
+    if not isinstance(state, dict):
+        return None
+    for key in ("main_char_id", "pre_edu_char_id", "char_id"):
+        raw = state.get(key)
+        if raw is None or raw == "":
+            continue
+        try:
+            cid = int(raw)
+            if cid > 0:
+                return cid
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _default_asset_roots() -> list[str]:
+    roots: list[str] = []
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass and os.path.isdir(meipass):
+        roots.append(meipass)
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if repo_root not in roots and os.path.isdir(repo_root):
+        roots.append(repo_root)
+    return roots
+
+
+def _find_q_avatar_in_roots(cid: int, roots: list[str]) -> Optional[str]:
+    for root in roots:
+        heads_dir = os.path.join(root, "data", "hoopgirls", "heads")
+        if os.path.isdir(heads_dir):
+            matches = sorted(glob.glob(os.path.join(heads_dir, f"q_head_s_{cid}_*.png")))
+            if matches and os.path.isfile(matches[0]):
+                return matches[0]
+            exact = os.path.join(heads_dir, f"q_head_s_{cid}.png")
+            if os.path.isfile(exact):
+                return exact
+        for rel in (
+            os.path.join("packaging", "assets", "site", f"q_{cid}.png"),
+            os.path.join("assets", "site", f"q_{cid}.png"),
+        ):
+            cand = os.path.join(root, rel)
+            if os.path.isfile(cand):
+                return cand
+    return None
+
+
+def resolve_q_avatar_path(
+    char_id: Optional[int] = None,
+    *,
+    base_dir: Optional[str] = None,
+    default_char_id: Optional[int] = DEFAULT_Q_AVATAR_CHAR_ID,
+) -> Optional[str]:
+    """
+    跨平台解析 Q 版小头像路径（零 Pillow / GTK 依赖）：
+    优先 `data/hoopgirls/heads/q_head_s_<id>_*.png`，次选 `packaging/assets/site/q_<id>.png`；
+    当 `char_id` 缺失或对应资源不存在时，平滑降级到 `default_char_id`（默认 1001 澪奈），
+    若仍无可用文件则返回 None（由渲染层无缝降级为几何徽章，绝不抛异常）。
+    """
+    roots = [base_dir] if base_dir is not None else _default_asset_roots()
+    if not roots:
+        return None
+
+    target_cid: Optional[int] = None
+    if char_id is not None:
+        try:
+            cid_int = int(char_id)
+            if cid_int > 0:
+                target_cid = cid_int
+        except (TypeError, ValueError):
+            target_cid = None
+
+    if target_cid is not None:
+        hit = _find_q_avatar_in_roots(target_cid, roots)
+        if hit:
+            return hit
+
+    if default_char_id is not None:
+        try:
+            def_cid = int(default_char_id)
+            if def_cid > 0 and def_cid != target_cid:
+                return _find_q_avatar_in_roots(def_cid, roots)
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
+def build_trough_spec(
+    trough_markup: str,
+    *,
+    char_id: Optional[int] = None,
+    is_bottom: bool = False,
+    focus_badge: str = "",
+) -> dict:
+    """构造可携带 char_id 的顶栏/底栏状态胶囊 spec。"""
+    return {
+        "markup": trough_markup or "",
+        "char_id": char_id,
+        "is_bottom": bool(is_bottom),
+        "focus_badge": focus_badge or "",
+    }
 
 
 DEFAULT_HUD_ANCHORS = {
@@ -294,7 +415,7 @@ def format_train_subject_markup(
     if include_tag:
         key_tag = clean_train_highlight_tag((item or {}).get("hud_tags") or [])
         if key_tag:
-            tag_fg = "#B45309" if style_key == "best" else "#0369A1"
+            tag_fg = "#E03A12" if style_key == "best" else "#1B5BFF"
             return f"{base_mk}<span size='88%' foreground='{tag_fg}'> · {html.escape(key_tag)}</span>"
     return base_mk
 
@@ -402,13 +523,13 @@ def build_weekday_trough_line(
             )
             if syn_tips:
                 clean_syn = strip_markup_to_clean_text(syn_tips[0])[:38]
-                return f"{tag}｜<span foreground='#C2410C'>{html.escape(clean_syn)}</span>"
+                return f"{tag}｜<span foreground='#E03A12'>{html.escape(clean_syn)}</span>"
         except Exception:
             pass
 
     if raw_tips:
         clean_t = strip_markup_to_clean_text(raw_tips[0])[:38]
-        color = "#C2410C" if any(k in clean_t for k in ("必买", "免费", "哨", "集训", "海滩", "许愿")) else "#253B52"
+        color = "#E03A12" if any(k in clean_t for k in ("必买", "免费", "哨", "集训", "海滩", "许愿")) else HUD_TEXT_INK
         return f"{tag}｜<span foreground='{color}'>{html.escape(clean_t)}</span>"
 
     if get_whistle_step_fn:
@@ -418,11 +539,11 @@ def build_weekday_trough_line(
         w_clean = w_clean.replace("/次", "")
         w_clean = re.sub(r"\(([^)]+)\)", r" · \1", w_clean)
         w_esc = html.escape(w_clean)
-        w_esc = re.sub(r"(\d+/\d+)", r"<span foreground='#1E88E5'>\1</span>", w_esc)
-        w_esc = w_esc.replace(" · ", "<span foreground='#607D94'> · </span>")
-        return f"{tag}｜<span foreground='#253B52'>{w_esc}</span>"
+        w_esc = re.sub(r"(\d+/\d+)", r"<span foreground='#1B5BFF'>\1</span>", w_esc)
+        w_esc = w_esc.replace(" · ", f"<span foreground='{HUD_TEXT_MUTED}'> · </span>")
+        return f"{tag}｜<span foreground='{HUD_TEXT_INK}'>{w_esc}</span>"
 
-    return f"{tag}｜<span foreground='#253B52'>实时参谋就绪</span>"
+    return f"{tag}｜<span foreground='{HUD_TEXT_INK}'>实时参谋就绪</span>"
 
 
 def build_badges_for_mode(
@@ -600,7 +721,7 @@ def build_badges_for_mode(
                 check_lineup_and_equip_synergy_fn=check_lineup_and_equip_synergy_fn,
             )
         elif shop_badge:
-            trough_line = f"商店｜<span foreground='#C2410C'>{html.escape(strip_markup_to_clean_text(shop_badge))}</span>"
+            trough_line = f"商店｜<span foreground='#E03A12'>{html.escape(strip_markup_to_clean_text(shop_badge))}</span>"
 
     elif mode == "ycjm02":
         if not show_train:
@@ -701,7 +822,7 @@ def build_badges_for_mode(
             if rest_top and scored:
                 trough_line = (
                     f"{int(state.get('round', 1)):02d}训｜"
-                    f"<span foreground='#B91C1C'>低体高危：建议退回点休息 (EV {scored[0]['score']:.0f})</span>"
+                    f"<span foreground='#F03E5A'>低体高危：建议退回点休息 (EV {scored[0]['score']:.0f})</span>"
                 )
             else:
                 trough_line = build_weekday_trough_line(
@@ -800,7 +921,11 @@ def build_badges_for_mode(
             if mode in ("weekend_main", "weekend_map") and not show_weekend:
                 if specs:
                     shop_msg = wk.get("hud_free_tip") or wk.get("hud_shop_tip") or "右上角商店有可买好货"
-                    return specs, f"商店｜<span foreground='#C2410C'>{html.escape(strip_markup_to_clean_text(shop_msg))}</span>"
+                    active_cid = extract_active_char_id(state)
+                    if active_cid is not None:
+                        for sp in specs:
+                            sp.setdefault("char_id", active_cid)
+                    return specs, f"商店｜<span foreground='#E03A12'>{html.escape(strip_markup_to_clean_text(shop_msg))}</span>"
                 return [], ""
 
             if mode == "weekend_main":
@@ -1147,7 +1272,7 @@ def build_badges_for_mode(
 
         specs.append({
             "left": f"★ {match_tag}",
-            "right": "扫完商店➔开赛" if need_shop else "直接开赛",
+            "right": "扫完商店 → 开赛" if need_shop else "直接开赛",
             "rx": tr_btn["rx"],
             "ry": float(tr_btn.get("top_edge_ry", 0.790)),
             "anchor": "bottom_center",
@@ -1184,5 +1309,10 @@ def build_badges_for_mode(
             )
             clean_s = strip_markup_to_clean_text(shop_tip_s)[:40] if shop_tip_s else "当前无必买道具，省钱备战周末扭蛋"
             trough_line = f"商店｜{clean_s}"
+
+    active_cid = extract_active_char_id(state)
+    if active_cid is not None:
+        for sp in specs:
+            sp.setdefault("char_id", active_cid)
 
     return specs, trough_line

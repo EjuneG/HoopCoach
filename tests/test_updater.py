@@ -167,6 +167,15 @@ class TestUpdaterEndToEnd(unittest.TestCase):
                 runtime_version="rt1",
                 notes="测试热更新：新增角色 9999 头像与新版代码",
             )
+            self.assertTrue(os.path.isfile(built["release_body_path"]))
+            with open(built["release_body_path"], "r", encoding="utf-8") as f:
+                rel_body = f.read()
+            self.assertIn(
+                "https://github.com/EjuneG/HoopCoach/releases/download/v0.10.2/HoopCoach-Windows-v0.10.2.zip",
+                rel_body,
+            )
+            self.assertIn("`manifest.json`", rel_body)
+            self.assertIn("测试热更新：新增角色 9999 头像与新版代码", rel_body)
 
             srv, base_url = _start_local_http_server(srv_root)
             try:
@@ -329,17 +338,34 @@ class TestUpdaterEndToEnd(unittest.TestCase):
             self.assertEqual(res.total_download_bytes, 32000000)
 
     def test_spec_covers_public_imports(self):
-        """确保壳肉分离后，公开业务模块用到的第三方/标准库均未遗漏在 bootstrap.py 中。"""
+        """确保壳肉分离后，公开业务模块用到的第三方/标准库及 PIL/tkinter 子模块均未遗漏在 bootstrap.py 与 spec 中。"""
         with open(os.path.join(ROOT_DIR, "src", "bootstrap.py"), "r", encoding="utf-8") as f:
             boot_src = f.read()
-        boot_tree = ast.parse(boot_src)
-        boot_imports = set()
-        for node in ast.walk(boot_tree):
-            if isinstance(node, ast.Import):
-                for a in node.names:
-                    boot_imports.add(a.name.split(".")[0])
-            elif isinstance(node, ast.ImportFrom) and node.module:
-                boot_imports.add(node.module.split(".")[0])
+        with open(os.path.join(ROOT_DIR, "packaging", "lqsncoach.spec"), "r", encoding="utf-8") as f:
+            spec_src = f.read()
+
+        def _collect_imports(tree: ast.AST) -> tuple[set[str], set[str]]:
+            top_mods: set[str] = set()
+            sub_mods: set[str] = set()
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for a in node.names:
+                        top_mods.add(a.name.split(".")[0])
+                        if "." in a.name and a.name.split(".")[0] in ("PIL", "tkinter"):
+                            sub_mods.add(a.name)
+                elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+                    m0 = node.module.split(".")[0]
+                    top_mods.add(m0)
+                    if m0 in ("PIL", "tkinter"):
+                        if "." in node.module:
+                            sub_mods.add(node.module)
+                        else:
+                            for a in node.names:
+                                if a.name != "*":
+                                    sub_mods.add(f"{m0}.{a.name}")
+            return top_mods, sub_mods
+
+        boot_imports, boot_subs = _collect_imports(ast.parse(boot_src))
 
         # 始终内建于 Python 解释器或 Linux 专属可选模块
         ignore = {
@@ -350,22 +376,25 @@ class TestUpdaterEndToEnd(unittest.TestCase):
         local_mods = {os.path.splitext(os.path.basename(p))[0] for p in build_update_bundle.PATCH_SRC_FILES}
 
         missing = set()
+        missing_subs_boot = set()
+        missing_subs_spec = set()
         for rel in build_update_bundle.PATCH_SRC_FILES:
             full = os.path.join(ROOT_DIR, rel)
             with open(full, "r", encoding="utf-8") as f:
                 tree = ast.parse(f.read(), rel)
-            for node in ast.walk(tree):
-                mod = None
-                if isinstance(node, ast.Import):
-                    for a in node.names:
-                        m0 = a.name.split(".")[0]
-                        if m0 not in local_mods and m0 not in ignore and m0 not in boot_imports:
-                            missing.add(m0)
-                elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
-                    m0 = node.module.split(".")[0]
-                    if m0 not in local_mods and m0 not in ignore and m0 not in boot_imports:
-                        missing.add(m0)
+            top_mods, sub_mods = _collect_imports(tree)
+            for m0 in top_mods:
+                if m0 not in local_mods and m0 not in ignore and m0 not in boot_imports:
+                    missing.add(m0)
+            for sm in sub_mods:
+                if sm not in boot_subs:
+                    missing_subs_boot.add(sm)
+                if f'"{sm}"' not in spec_src and f"'{sm}'" not in spec_src:
+                    missing_subs_spec.add(sm)
+
         self.assertEqual(missing, set(), f"以下模块未在 src/bootstrap.py 显式引入，可能导致冻结壳缺包: {missing}")
+        self.assertEqual(missing_subs_boot, set(), f"以下 PIL/tkinter 子模块未在 src/bootstrap.py 引入: {missing_subs_boot}")
+        self.assertEqual(missing_subs_spec, set(), f"以下 PIL/tkinter 子模块未在 lqsncoach.spec hiddenimports 声明: {missing_subs_spec}")
 
 
 if __name__ == "__main__":

@@ -57,6 +57,7 @@ HEADS_DIR = os.path.join(DATA_DIR, "hoopgirls", "heads")
 EQUIP_ICONS_DIR = os.path.join(DATA_DIR, "hoopgirls", "equipment_icons")
 DASHBOARD_DIR = os.path.join(BASE_DIR, "dashboard")
 DASHBOARD_DATA_DIR = os.path.join(DASHBOARD_DIR, "data")
+DOCS_DIR = os.path.join(BASE_DIR, "docs")
 
 DETAILED_RUNS_FILE = os.path.join(RUNS_DIR, "detailed_runs.json")
 NOTE_POOL_FILE = os.path.join(DATA_DIR, "note_pool.json")
@@ -77,6 +78,48 @@ STAT_NAMES = {
 }
 POS_ORDER = ["C", "PF", "SF", "SG", "PG"]
 POS_CN = {"C": "中锋", "PF": "大前", "SF": "小前", "SG": "分卫", "PG": "控卫"}
+
+# 全 38 名实装球员的拼音/首字母极速检索词（零第三方依赖）
+CHAR_PINYIN_HINTS: dict[int, str] = {
+    1001: "lingnai ln jianisi jns beikong bk",
+    1002: "longgongsi lgs xinye xy beikong bk",
+    1003: "jinjiang jj zou z beikong bk",
+    1004: "hequan hq xiangzhi xz beikong bk",
+    1005: "yalisha yls jiasimin jsm beikong bk",
+    1006: "mingyao my yicheng yc",
+    1007: "shantang st shantangdian std beikong bk",
+    1009: "kelalisi klls boluo bl yicheng yc",
+    1010: "zaolai zl qianqiu qq yicheng yc",
+    1011: "yutian yt zhuzhixiang zzx yicheng yc",
+    1012: "wangyue wy tou t yicheng yc",
+    1013: "baimugui bmg jian j yinghai yh",
+    1014: "tengsong ts jiulian jl yinghai yh",
+    1015: "lvchuan lc luchuan bumeng bm yinghai yh",
+    1016: "yusen ys liuli ll cangqi cq",
+    1017: "jiechuan jc shi s mingriye mry",
+    1018: "dudao dd daiye dy mingriye mry",
+    1019: "mingxue mx shaye sy mingriye mry",
+    1020: "zuojiujian zjj yunai yn mingriye mry",
+    1021: "qiansheng qs beiersi bes mingriye mry",
+    1022: "daoye dy xingli xl yinghai yh",
+    1023: "qingshui qs wanli wl shengfeiluosi sfls",
+    1024: "jiaben jb chunna cn shengfeiluosi sfls",
+    1025: "chuncheng cc yongyuan yy shengfeiluosi sfls",
+    1026: "sentian st lili ll beikong bk",
+    1027: "meijia mj weilai wl beikong bk",
+    1028: "wushilan wsl shiyin sy beikong bk",
+    1029: "yulaichuan ylc yusechuan ysc cou c shengfeiluosi sfls",
+    1030: "zhenqi zq huishi hs shengfeiluosi sfls",
+    1032: "xiandou xd yueqi yq cangqi cq",
+    1033: "woyun wy zhenzhou zz cangqi cq",
+    1037: "yeshang ys long l shengshan ss",
+    1038: "jiangqi jq qianhongsha qhs yeming ym",
+    1039: "linyuan ly shuli sl qinglan ql",
+    1040: "meixing mx liqi lq qinglan ql",
+    1042: "yuanye yy tong t hongmeng hm",
+    1045: "baishen bs shijiu sj shengshan ss",
+    1046: "xiya xy aodaila adl shengshan ss",
+}
 
 
 def _safe_read_json(path: str, default: Any = None) -> Any:
@@ -542,6 +585,8 @@ class DashboardEngine:
                 "last_seen": n.get("last_seen", ""),
                 "highlights": highlights,
                 "harmony_str": harmony_str,
+                "harmony_targets": {str(k): int(v) for k, v in (n.get("harmony_targets") or {}).items() if int(v) > 0},
+                "harmony_star": int(n.get("harmony_star") or 0),
                 "stat_bonuses": n.get("stat_bonuses") or {},
                 "cap_bonuses": n.get("cap_bonuses") or {},
             }
@@ -760,6 +805,223 @@ class DashboardEngine:
                 "wish_headline": eq_adv.get("wish_headline", ""),
             },
         }
+
+    def get_compatibility_data(self) -> dict:
+        """
+        返回笔记相性查询全量数据包：
+        - characters: 全 38 名已实装球员（含拼音首字母检索词、学校、位置、已拥有状态、自备最高/好友最高笔记摘要）
+        - rel_scores: 38×38 精确角色基础关系分矩阵（源自 inheritance_rules.json）
+        - rules: 档位门槛、单次触发词条区间与专属契合星级加分真值
+        - own_notes / borrowed_notes: 完整个人与好友笔记（含 harmony_targets）
+        - breeding: 黄金三角互哺圈、刷笔记枢纽榜与两步铺路反推链
+        """
+        note_pool = _safe_read_json(NOTE_POOL_FILE, {})
+        box = self.get_box()
+        own_notes = box.get("own_notes") or []
+        bor_notes = box.get("borrowed_notes") or []
+
+        best_bor_by_cid: dict[int, dict] = {}
+        for n in bor_notes:
+            aid = int(n.get("actor_id") or 0)
+            cur = best_bor_by_cid.get(aid)
+            if not cur or (n["rank"], n["score"]) > (cur["rank"], cur["score"]):
+                best_bor_by_cid[aid] = {
+                    "rank": n["rank"],
+                    "score": n["score"],
+                    "friend": n.get("friend", ""),
+                    "count": (cur["count"] if cur else 0) + 1,
+                }
+            else:
+                cur["count"] += 1
+
+        released_ids: list[int] = []
+        characters = []
+        for c in box.get("characters") or []:
+            cid = int(c["id"])
+            released_ids.append(cid)
+            raw_c = self.chars.get(cid, {})
+            bor = best_bor_by_cid.get(cid) or {}
+            rec_ids = note_advisor.get_char_rec_stat_ids(raw_c)
+            characters.append({
+                **c,
+                "en_name": raw_c.get("en_name", ""),
+                "aliases": list(raw_c.get("aliases") or []),
+                "school": raw_c.get("school", ""),
+                "pinyin": CHAR_PINYIN_HINTS.get(cid, ""),
+                "rec_stats": [int(s) for s in rec_ids],
+                "rec_stats_names": [STAT_NAMES.get(int(s), str(s)) for s in rec_ids],
+                "best_borrow_rank": int(bor.get("rank") or 0),
+                "best_borrow_score": int(bor.get("score") or 0),
+                "best_borrow_friend": bor.get("friend", ""),
+                "borrow_note_count": int(bor.get("count") or 0),
+            })
+
+        rel_matrix: dict[str, dict[str, int]] = {}
+        for cid in released_ids:
+            rmap = self.rel_scores.get(cid, {})
+            rel_matrix[str(cid)] = {
+                str(pid): (0 if pid == cid else int(rmap.get(pid, 0)))
+                for pid in released_ids
+            }
+
+        c_cfg = self.rules.get("compatibility_and_learn_times") or {}
+        harmony_levels = c_cfg.get("harmony_levels") or [
+            {"level": 1, "rank_name": "无", "min_compatibility_score": 0, "inheritance_learn_times": 1},
+            {"level": 2, "rank_name": "差", "min_compatibility_score": 1, "inheritance_learn_times": 2},
+            {"level": 3, "rank_name": "一般", "min_compatibility_score": 10, "inheritance_learn_times": 3},
+            {"level": 4, "rank_name": "良", "min_compatibility_score": 20, "inheritance_learn_times": 4},
+            {"level": 5, "rank_name": "优", "min_compatibility_score": 30, "inheritance_learn_times": 5},
+            {"level": 6, "rank_name": "极", "min_compatibility_score": 45, "inheritance_learn_times": 5},
+        ]
+        trigger_tiers = c_cfg.get("entry_trigger_count_by_compatibility") or [
+            {"required_compatibility_score": 0, "min_triggered_entries": 2, "max_triggered_entries": 4},
+            {"required_compatibility_score": 5, "min_triggered_entries": 3, "max_triggered_entries": 5},
+            {"required_compatibility_score": 10, "min_triggered_entries": 4, "max_triggered_entries": 6},
+            {"required_compatibility_score": 15, "min_triggered_entries": 4, "max_triggered_entries": 7},
+            {"required_compatibility_score": 20, "min_triggered_entries": 4, "max_triggered_entries": 8},
+            {"required_compatibility_score": 40, "min_triggered_entries": 5, "max_triggered_entries": 10},
+            {"required_compatibility_score": 60, "min_triggered_entries": 5, "max_triggered_entries": 11},
+        ]
+
+        breeding = note_advisor.compute_breeding_cycle_data(
+            self.chars, self.rules, self.rel_scores, note_pool
+        )
+        for item in breeding.get("hub_ranking") or []:
+            item["head"] = _head_url(item.get("actor_id"), self.head_map)
+        for tri in breeding.get("triangles") or []:
+            for mem in tri.get("members") or []:
+                mem["head"] = _head_url(mem.get("actor_id"), self.head_map)
+        for st in breeding.get("stepping_stones") or []:
+            st["target_head"] = _head_url(st.get("target_id"), self.head_map)
+            st["bridge_head"] = _head_url(st.get("bridge_id"), self.head_map)
+
+        return {
+            "characters": characters,
+            "rel_scores": rel_matrix,
+            "rules": {
+                "harmony_bonus_by_star": {str(k): v for k, v in note_advisor.HARMONY_BONUS_BY_STAR.items()},
+                "harmony_levels": harmony_levels,
+                "entry_triggers": [t for t in trigger_tiers if int(t.get("required_compatibility_score", 0)) <= 100],
+            },
+            "own_notes": own_notes,
+            "borrowed_notes": bor_notes,
+            "breeding": breeding,
+            "revision_warning": note_advisor.NOTE_REVISION_WARNING,
+        }
+
+    def get_plans(self) -> dict:
+        """扫描 docs/*_plan.md 与 docs/*_guide.md，汇总个人养成计划与攻略文档。"""
+        items: list[dict] = []
+        if not os.path.isdir(DOCS_DIR):
+            return {"generated_at": time.strftime("%Y-%m-%d %H:%M:%S"), "plans": items}
+
+        char_db = self.chars
+        head_map = self.head_map
+        candidates = sorted(
+            set(glob.glob(os.path.join(DOCS_DIR, "*_plan.md")))
+            | set(glob.glob(os.path.join(DOCS_DIR, "*_guide.md")))
+        )
+        for path in candidates:
+            fname = os.path.basename(path)
+            slug = os.path.splitext(fname)[0]
+            try:
+                with open(path, encoding="utf-8") as f:
+                    content = f.read()
+            except OSError:
+                continue
+
+            # 解析标题（首个 # 标题）
+            m_title = re.search(r"(?m)^#\s+(.+?)\s*$", content)
+            title = m_title.group(1).strip() if m_title else slug
+
+            # 解析可选 HTML 注释元信息（plan_tag / plan_status / plan_chars / plan_summary）
+            meta: dict[str, str] = {}
+            m_comment = re.search(r"<!--(.*?)-->", content, flags=re.S)
+            if m_comment:
+                for line in m_comment.group(1).splitlines():
+                    if ":" in line:
+                        k, v = line.split(":", 1)
+                        meta[k.strip().lower()] = v.strip()
+
+            is_plan = slug.endswith("_plan")
+            tag = meta.get("plan_tag") or ("养成计划" if is_plan else "专题攻略")
+            status = meta.get("plan_status") or ("进行中" if is_plan else "常驻参考")
+            summary = meta.get("plan_summary") or ""
+            if not summary:
+                for line in content.splitlines():
+                    s = line.strip()
+                    if s and not s.startswith("#") and not s.startswith("<!--") and not s.startswith("-->") and not s.startswith("---"):
+                        summary = re.sub(r"^[>\-\*\s]+", "", s)
+                        summary = re.sub(r"\*\*(.+?)\*\*", r"\1", summary)
+                        summary = summary[:110]
+                        break
+
+            related_chars = []
+            raw_cids = meta.get("plan_chars", "")
+            for tok in re.split(r"[,\s]+", raw_cids):
+                if tok.isdigit():
+                    cid = int(tok)
+                    cinfo = char_db.get(cid) or {}
+                    head_fn = head_map.get(cid)
+                    related_chars.append({
+                        "char_id": cid,
+                        "name": cinfo.get("short_name") or cinfo.get("show_name") or str(cid),
+                        "position": self._char_pos_code(cid) or str(cinfo.get("best_pos") or ""),
+                        "head_url": f"/assets/heads/{head_fn}" if head_fn else "",
+                    })
+
+            mtime = _file_mtime(path)
+            items.append({
+                "id": slug,
+                "filename": fname,
+                "rel_path": f"docs/{fname}",
+                "kind": "plan" if is_plan else "guide",
+                "title": title,
+                "tag": tag,
+                "status": status,
+                "summary": summary,
+                "related_chars": related_chars,
+                "updated_at": time.strftime("%Y-%m-%d %H:%M", time.localtime(mtime)) if mtime else "",
+                "mtime": mtime,
+                "markdown": content,
+            })
+
+        # *_plan.md 排在前面，其次按更新时间倒序
+        items.sort(key=lambda x: (0 if x["kind"] == "plan" else 1, -x["mtime"]))
+        return {
+            "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "plans": items,
+        }
+
+    def get_note_activation(
+        self,
+        note_id: str = "",
+        actor_id: Optional[int] = None,
+        harmony_star: int = 0,
+    ) -> dict:
+        """单本笔记/单角色反向激活真值表（100% 复用 note_advisor.evaluate_compatibility）。"""
+        note_pool = _safe_read_json(NOTE_POOL_FILE, {})
+        res = note_advisor.compute_single_note_activation_data(
+            note_id,
+            self.chars,
+            self.rules,
+            self.rel_scores,
+            note_pool,
+            actor_id=actor_id,
+            harmony_star=harmony_star,
+        )
+        if not res.get("ok"):
+            return res
+        tn = res.get("target_note") or {}
+        tn["head"] = _head_url(tn.get("actor_id"), self.head_map)
+        for key in ("own_activations", "borrow_activations"):
+            for item in res.get(key) or []:
+                item["head"] = _head_url(item.get("char_id"), self.head_map)
+                if item.get("partner"):
+                    item["partner"]["head"] = _head_url(item["partner"].get("actor_id"), self.head_map)
+        for item in res.get("static_rankings") or []:
+            item["head"] = _head_url(item.get("char_id"), self.head_map)
+        return res
 
 
 class LiveMonitor:
@@ -995,6 +1257,8 @@ def export_static_snapshot(engine: DashboardEngine) -> str:
     os.makedirs(DASHBOARD_DATA_DIR, exist_ok=True)
     overview = engine.get_overview()
     box = engine.get_box()
+    compatibility = engine.get_compatibility_data()
+    plans = engine.get_plans()
     # 静态离线模式下把图片路径改写为相对项目根目录路径，便于直接 file:// 双击预览
     def _rewrite_assets(obj: Any) -> Any:
         if isinstance(obj, str):
@@ -1009,7 +1273,12 @@ def export_static_snapshot(engine: DashboardEngine) -> str:
             return {k: _rewrite_assets(v) for k, v in obj.items()}
         return obj
 
-    payload = _rewrite_assets({"overview": overview, "box": box})
+    payload = _rewrite_assets({
+        "overview": overview,
+        "box": box,
+        "compatibility": compatibility,
+        "plans": plans,
+    })
     out_js = os.path.join(DASHBOARD_DATA_DIR, "snapshot.js")
     with open(out_js, "w", encoding="utf-8") as f:
         f.write("// Auto-generated personal snapshot (gitignored)\n")
@@ -1093,6 +1362,20 @@ def make_handler(engine: DashboardEngine, live_monitor: LiveMonitor):
                     focus = (qs.get("focus") or [""])[0]
                     self._send_json(engine.get_planner(int(cid_str), mode=mode, focus_stat=focus))
                     return
+                if path == "/api/compatibility":
+                    self._send_json(engine.get_compatibility_data())
+                    return
+                if path == "/api/plans":
+                    self._send_json(engine.get_plans())
+                    return
+                if path == "/api/compatibility/note_activation":
+                    note_id = (qs.get("note_id") or [""])[0]
+                    aid_str = (qs.get("actor_id") or [""])[0]
+                    h_str = (qs.get("harmony_star") or ["0"])[0]
+                    aid = int(aid_str) if aid_str.isdigit() else None
+                    h_star = int(h_str) if h_str.isdigit() else 0
+                    self._send_json(engine.get_note_activation(note_id=note_id, actor_id=aid, harmony_star=h_star))
+                    return
                 if path == "/api/live":
                     self._send_json(live_monitor.get_snapshot())
                     return
@@ -1137,7 +1420,7 @@ def start_background_server(
     for candidate_port in range(port, port + 20):
         try:
             server = ThreadingHTTPServer((host, candidate_port), make_handler(engine, live_monitor))
-            actual_port = candidate_port
+            actual_port = int(server.server_address[1])
             break
         except OSError:
             continue

@@ -835,6 +835,21 @@
       "desc": "进攻技卡威力提升",
       "source": "gemini_vision",
       "learned_at": "2026-11-16T15:52:38+08:00"
+    },
+    "210319": {
+      "name": "排兵布阵",
+      "rarity": "白",
+      "role_tag": "组织者",
+      "desc": "助攻后提升得分人进攻威力",
+      "source": "live_screenshot_2026-11-27"
+    },
+    "210318": {
+      "skill_id": 210318,
+      "name": "场上指挥",
+      "role_tag": "组织者",
+      "rarity": "白",
+      "desc": "传球后提升接球人属性",
+      "source": "live_screenshot_2026-11-27"
     }
   },
   "observed_log_seeds": {

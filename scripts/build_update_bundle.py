@@ -249,13 +249,14 @@ def build_all(
         }
 
     # 4. 生成轻清单 manifest.json（约 1.5 KB）
+    notes_clean = notes.strip() or f"HoopCoach {version} 更新发布"
     manifest = {
         "schema": 1,
         "app_name": app_meta["app_name"],
         "version": version,
         "runtime_version": app_meta["runtime_version"],
         "published_at": now_iso,
-        "notes": notes.strip() or f"HoopCoach {version} 更新发布",
+        "notes": notes_clean,
         "patch": {
             "filename": patch_name,
             "size": patch_size,
@@ -276,9 +277,30 @@ def build_all(
         json.dump(manifest, f, indent=2, ensure_ascii=False)
         f.write("\n")
 
+    # 5. 生成面向玩家的 GitHub Release 正文（顶部醒目直链 + 排除下方机读附件困惑）
+    win_filename = full_info.get("filename") or f"HoopCoach-Windows-{version}.zip"
+    win_url = full_info.get("url") or f"{dl_base}/{win_filename}"
+    win_size = full_info.get("size")
+    size_tag = f"（约 {win_size / (1024 * 1024):.1f} MB）" if isinstance(win_size, int) and win_size > 0 else ""
+    patch_kb = max(1, round(patch_size / 1024))
+    release_body = (
+        "## 📦 下载与安装（Windows 免装 Python）\n\n"
+        f"- **首次安装**：👉 **[点击直接下载 {win_filename}]({win_url})**{size_tag}\n"
+        "  - 下载后请**完整解压**到任意目录（不要在压缩包内直接双击），运行 `HoopCoach.exe` 即可使用。\n"
+        f"- **已有旧版**：无需手动下载！直接打开 `HoopCoach.exe`，点击顶部更新提示即可一键增量热更（约 {patch_kb} KB，保留个人配置与历史战绩）。\n\n"
+        "> 💡 **关于下方附件（Assets）的说明**：`HoopCoach-Patch-*.zip`、`manifest.json`、`assets_manifest.json` "
+        "均为软件内置自动更新器专用文件，**请勿手动下载**。\n\n"
+        "## ✨ 更新内容\n\n"
+        f"{notes_clean}\n"
+    )
+    release_body_path = os.path.join(dist_dir, "release_body.md")
+    with open(release_body_path, "w", encoding="utf-8") as f:
+        f.write(release_body)
+
     return {
         "manifest_path": manifest_path,
         "assets_manifest_path": assets_manifest_path,
+        "release_body_path": release_body_path,
         "patch_path": patch_path,
         "patch_size": patch_size,
         "patch_files": patch_files,

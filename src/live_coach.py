@@ -69,10 +69,18 @@ from platform_compat import (
 from hud_badges import (
     ACCENT_PALETTES as SHARED_ACCENT_PALETTES,
     DEFAULT_HUD_ANCHORS,
+    HUD_CHAMPION_GOLD_RGB,
+    HUD_INK_STROKE_RGBA,
+    HUD_PAPER_RGB,
+    HUD_SHADOW_RGBA,
+    HUD_SKY_BLUE_RGB,
+    HUD_TEXT_INK,
     build_badges_for_mode as shared_build_badges_for_mode,
     compute_badge_position,
     compute_game_content_box,
+    extract_active_char_id,
     resolve_badge_markups,
+    resolve_q_avatar_path,
     split_legacy_markup,
 )
 
@@ -761,14 +769,65 @@ def _get_whistle_awake_level() -> int:
     return _EQUIP_POOL_CACHE["whistle_awake"]
 
 
+# 100% 由通用模板托管、无需按角色重复落盘至 data/event_choices.json 的事件类别
+SHARED_TEMPLATE_NO_PERSIST_TYPES = frozenset({"camp_r10", "wish_r36", "skill_event"})
+
+
+def classify_shared_story_event(ev_id: str, ev_name: str, state: dict = None) -> Optional[str]:
+    """
+    将剧情事件统一归类到「通用日程/事件模板」或「角色专属心愿链」：
+    - 优先级 1：91xxxx / 910xxxx 严格识别为角色专属心愿链 ("char_wish")，绝不误判为集训/许愿；
+    - 优先级 2：全角色完全一致的固定日程三选一（R10 集训 "camp_r10"、R36 许愿 "wish_r36"）；
+    - 优先级 3：全角色统一结构的通用事件模板（角色/经理技能事件 "skill_event"、
+                加练事件 "extra_train"、器材冒头事件 "equip_burst"、球星卡日常 "card_daily"）。
+    """
+    eid_str = str(ev_id or "").strip()
+    eid_num = int(eid_str) if eid_str.isdigit() else 0
+    ename = str(ev_name or "")
+
+    # 1. 角色专属心愿剧情链（91xxxx / 910xxxx）：不同角色差异化核心，严禁与集训/许愿混淆
+    if (910000 <= eid_num <= 919999) or (9100000 <= eid_num <= 9199999):
+        return "char_wish"
+
+    # 2. R10 集训三选一（全角色固定同一天出现，条件与奖励完全一致，仅剧情文案不同）
+    if "集训" in ename or (81001 <= eid_num <= 81034) or eid_num in (5200182, 5200186):
+        return "camp_r10"
+
+    # 3. R36 许愿三选一（全角色固定同一天出现，奖励统一为 双推荐+20 / +40体 / +50金）
+    if "许愿" in ename or (81035 <= eid_num <= 81065) or eid_num in (5200190, 5200192):
+        return "wish_r36"
+
+    # 4. 角色/经理技能事件（统一 1=婉拒+10体 / 2=答应得随机比赛技能）
+    if "技能事件" in ename or (5300220 <= eid_num <= 5300299):
+        return "skill_event"
+
+    # 5. 加练事件（注意：老角色多为 1=婉拒+10体/2=陪练，20090+ 新角色部分反序，由对偶补全保序）
+    if "加练事件" in ename or ("失败" not in ename and ((15000 <= eid_num <= 15099) or (20080 <= eid_num <= 20150))):
+        return "extra_train"
+
+    # 6. 器材冒头事件（1=获得属性 / 2=获得属性上限）
+    if (31000000 <= eid_num <= 31999999) or ("一砖入魂" in ename) or ("起跳之星" in ename):
+        return "equip_burst"
+
+    # 7. 日常球星卡事件（100001..100200）
+    if 100001 <= eid_num <= 100200:
+        return "card_daily"
+
+    return None
+
+
 def _infer_event_branches(ev_id: str, ev_name: str, event_db: dict, state: dict = None) -> dict:
-    """获取或按事件 ID 段自动推导事件各选项的基础属性/精力/金币/上限收益结构。"""
+    """获取或按通用模板 / 事件 ID 段自动推导事件各选项的基础属性/精力/金币/上限收益结构。"""
     eid_num = int(ev_id) if str(ev_id).isdigit() else 0
     existing = json.loads(json.dumps(event_db.get(str(ev_id), {}).get("branches", {})))
+    shared_kind = classify_shared_story_event(str(ev_id), ev_name, state=state)
 
-    if "集训事件" in ev_name or (81001 <= eid_num <= 81034) or eid_num in (5200182, 5200186):
+    if shared_kind == "camp_r10":
         existing.setdefault("1", {"count": 0, "effect_id": 400011, "ps": -20, "coins": 0, "props": {}, "max_props": {}})
         existing["1"]["ps"] = -20
+        existing["1"]["coins"] = 0
+        existing["1"]["props"] = {}
+        existing["1"]["max_props"] = {}
         existing["1"]["label"] = "和其他学校比赛的机会"
         existing["1"]["est_stat_ev"] = 32.0
 
@@ -776,6 +835,7 @@ def _infer_event_branches(ev_id: str, ev_name: str, event_db: dict, state: dict 
         existing["2"]["ps"] = 30
         existing["2"]["coins"] = 0
         existing["2"]["props"] = {}
+        existing["2"]["max_props"] = {}
         existing["2"]["label"] = "全队出游的休息日(⚡+30体)"
 
         # 实证修正：26/26局日志证实 R36『许愿事件』为第6周周一 100% 必出固定事件（即使 R10 集训选2回+30体也必出许愿），选3不再虚增开启许愿的 chain_ev
@@ -783,9 +843,10 @@ def _infer_event_branches(ev_id: str, ev_name: str, event_db: dict, state: dict 
         existing["3"]["ps"] = 0
         existing["3"]["coins"] = 30
         existing["3"]["props"] = {}
+        existing["3"]["max_props"] = {}
         existing["3"]["label"] = "满足队友的愿望(💰+30金)"
         existing["3"].pop("chain_ev", None)
-    elif "许愿事件" in ev_name or (81035 <= eid_num <= 81065) or eid_num in (5200190, 5200192):
+    elif shared_kind == "wish_r36":
         rec_stats = get_char_rec_stats(state or {})
         rec_props = {str(st_id): 20 for st_id in rec_stats}
         rec_names_str = "/".join(STAT_NAMES.get(st_id, str(st_id)) for st_id in rec_stats)
@@ -793,17 +854,186 @@ def _infer_event_branches(ev_id: str, ev_name: str, event_db: dict, state: dict 
         existing["1"]["ps"] = 0
         existing["1"]["coins"] = 0
         existing["1"]["props"] = rec_props
+        existing["1"]["max_props"] = {}
         existing["1"].pop("est_stat_ev", None)
         existing["1"]["label"] = f"选项1(推荐属性{rec_names_str}各+20)"
 
         existing.setdefault("2", {"count": 0, "effect_id": None, "ps": 40, "coins": 0, "props": {}, "max_props": {}})
         existing["2"]["ps"] = 40
+        existing["2"]["coins"] = 0
+        existing["2"]["props"] = {}
+        existing["2"]["max_props"] = {}
         existing["2"]["label"] = "选项2(大回体⚡+40)"
 
         existing.setdefault("3", {"count": 0, "effect_id": None, "ps": 0, "coins": 50, "props": {}, "max_props": {}})
         existing["3"]["ps"] = 0
         existing["3"]["coins"] = 50
+        existing["3"]["props"] = {}
+        existing["3"]["max_props"] = {}
         existing["3"]["label"] = "选项3(金币💰+50)"
+    elif shared_kind == "skill_event":
+        is_mgr_skill = (eid_num == 5300226) or ("经理" in str(ev_name or ""))
+        existing.setdefault("1", {"count": 0, "effect_id": None, "ps": 10, "coins": 0, "props": {}, "max_props": {}})
+        existing["1"].update({
+            "ps": 10,
+            "coins": 0,
+            "props": {},
+            "max_props": {},
+            "label": "选项1(维持原计划·⚡精力+10)" if is_mgr_skill else "选项1(婉拒邀请·⚡精力+10)",
+        })
+        existing["1"].pop("est_stat_ev", None)
+
+        existing.setdefault("2", {"count": 0, "effect_id": None, "ps": 0, "coins": 0, "props": {}, "max_props": {}})
+        existing["2"].update({
+            "ps": 0,
+            "coins": 0,
+            "props": {},
+            "max_props": {},
+            "est_stat_ev": 17.5,
+            "label": "选项2(临时改练法·获得随机比赛技能)" if is_mgr_skill else "选项2(热情答应·获得随机比赛技能)",
+        })
+    elif shared_kind == "extra_train":
+        # 加练事件实测规律（18/18 角色全命中）：
+        # - ID <= 20089（15001~15046 及 20082~20088）：选项 1=婉拒加练(⚡精力+10, eff=392)，选项 2=陪同加练(💪推荐属性+10, eff=439)；
+        # - ID >= 20090（先斗/真崎/降旗/希雅等新角色）：选项 1/2 严格反序（1=陪同加练，2=婉拒加练）。
+        # 若库里已观测到任意一侧分支，优先按实测分支对称补全；两侧均未收录时按 20090 分界线自动模板化，新角色 0 接管。
+        def _is_decline(br: dict) -> bool:
+            return int(br.get("effect_id") or 0) == 392 or int(br.get("ps") or 0) >= 10
+
+        def _is_accept(br: dict) -> bool:
+            return int(br.get("effect_id") or 0) == 439 or (
+                int(br.get("ps") or 0) == 0 and (bool(br.get("props")) or float(br.get("est_stat_ev") or 0) > 0)
+            )
+
+        b1 = existing.get("1")
+        b2 = existing.get("2")
+        if not b1 and not b2 and eid_num > 0:
+            reversed_order = (eid_num >= 20090)
+            decline_key, accept_key = ("2", "1") if reversed_order else ("1", "2")
+            existing[decline_key] = {
+                "count": 0,
+                "effect_id": 392,
+                "ps": 10,
+                "coins": 0,
+                "props": {},
+                "max_props": {},
+                "label": f"选项{decline_key}(婉拒加练·⚡精力+10)",
+            }
+            existing[accept_key] = {
+                "count": 0,
+                "effect_id": 439,
+                "ps": 0,
+                "coins": 0,
+                "props": {},
+                "max_props": {},
+                "est_stat_ev": 18.0,
+                "label": f"选项{accept_key}(陪同加练·💪属性+5~10+队友成长)",
+            }
+            b1 = existing.get("1")
+            b2 = existing.get("2")
+        if b1 and not b2:
+            if _is_decline(b1):
+                existing["2"] = {
+                    "count": 0,
+                    "effect_id": 439,
+                    "ps": 0,
+                    "coins": 0,
+                    "props": {},
+                    "max_props": {},
+                    "est_stat_ev": 18.0,
+                    "label": "选项2(陪同加练·💪属性+5~10+队友成长)",
+                }
+            elif _is_accept(b1):
+                existing["2"] = {
+                    "count": 0,
+                    "effect_id": 392,
+                    "ps": 10,
+                    "coins": 0,
+                    "props": {},
+                    "max_props": {},
+                    "label": "选项2(婉拒加练·⚡精力+10)",
+                }
+        elif b2 and not b1:
+            if _is_decline(b2):
+                existing["1"] = {
+                    "count": 0,
+                    "effect_id": 439,
+                    "ps": 0,
+                    "coins": 0,
+                    "props": {},
+                    "max_props": {},
+                    "est_stat_ev": 18.0,
+                    "label": "选项1(陪同加练·💪属性+5~10+队友成长)",
+                }
+            elif _is_accept(b2):
+                existing["1"] = {
+                    "count": 0,
+                    "effect_id": 392,
+                    "ps": 10,
+                    "coins": 0,
+                    "props": {},
+                    "max_props": {},
+                    "label": "选项1(婉拒加练·⚡精力+10)",
+                }
+        for bk in ("1", "2"):
+            br = existing.get(bk)
+            if not br:
+                continue
+            if _is_decline(br):
+                br["ps"] = max(10, int(br.get("ps") or 0))
+                br.setdefault("label", f"选项{bk}(婉拒加练·⚡精力+10)")
+                if not br.get("label"):
+                    br["label"] = f"选项{bk}(婉拒加练·⚡精力+10)"
+            elif _is_accept(br):
+                if not br.get("props") and not br.get("max_props") and not br.get("est_stat_ev"):
+                    br["est_stat_ev"] = 18.0
+                if not br.get("label"):
+                    br["label"] = f"选项{bk}(陪同加练·💪属性+5~10+队友成长)"
+    elif shared_kind == "equip_burst":
+        # 器材冒头二选一（如一砖入魂 101投射 / 起跳之星 102弹跳）：1=加属性(+40)，2=加上限(+40~70)
+        stat_k = None
+        for br in existing.values():
+            for d_key in ("props", "max_props"):
+                d_map = br.get(d_key) or {}
+                if d_map:
+                    stat_k = str(next(iter(d_map.keys())))
+                    break
+            if stat_k:
+                break
+        if not stat_k:
+            if "一砖入魂" in str(ev_name or "") or str(ev_id).startswith("3100301") and eid_num <= 31003012:
+                stat_k = "101"
+            elif "起跳之星" in str(ev_name or "") or eid_num == 31003013:
+                stat_k = "102"
+        if stat_k and stat_k.isdigit():
+            st_nm = STAT_NAMES.get(int(stat_k), stat_k)
+            if "1" not in existing:
+                existing["1"] = {
+                    "count": 0,
+                    "effect_id": 1,
+                    "ps": 0,
+                    "coins": 0,
+                    "props": {stat_k: 40},
+                    "max_props": {},
+                    "label": f"选项1(获得{st_nm}属性+40)",
+                }
+            elif not existing["1"].get("label"):
+                v1 = (existing["1"].get("props") or {}).get(stat_k, 40)
+                existing["1"]["label"] = f"选项1(获得{st_nm}属性+{v1})"
+
+            if "2" not in existing:
+                existing["2"] = {
+                    "count": 0,
+                    "effect_id": 2,
+                    "ps": 0,
+                    "coins": 0,
+                    "props": {},
+                    "max_props": {stat_k: 40},
+                    "label": f"选项2(获得{st_nm}上限+40)",
+                }
+            elif not existing["2"].get("label"):
+                v2 = (existing["2"].get("max_props") or {}).get(stat_k, 40)
+                existing["2"]["label"] = f"选项2(获得{st_nm}上限+{v2})"
     elif eid_num == 70 or "70熟练度" in ev_name:
         cap_70 = 80
         existing.setdefault("1", {"count": 0, "effect_id": 41004181, "ps": 40, "coins": 0, "props": {}, "max_props": {}})
@@ -911,7 +1141,7 @@ def _infer_event_branches(ev_id: str, ev_name: str, event_db: dict, state: dict 
             "max_props": {},
             "label": "海滩自动随机奖励(⚡+20~60体 或 全六维各+10)",
         })
-    elif 100001 <= eid_num <= 100200:
+    elif shared_kind == "card_daily":
         existing.setdefault("1", {"count": 0, "effect_id": 7000, "ps": 10, "coins": 0, "props": {}, "max_props": {}})
         existing["1"]["ps"] = 10
         existing["1"].setdefault("label", "选项1(上/左·稳回精力)")
@@ -1174,11 +1404,13 @@ def evaluate_story_event(ev_id: str, ev_name: str, state: dict, strategy: dict, 
                 ev_score += cap_ev
                 eff_parts.append(f"📈{STAT_NAMES.get(kid, str(kid))}上限+{val}")
 
-        # 4. 尚未观测到具体单项但已知加属性/上限的分支期望 EV
+        # 4. 尚未观测到具体单项但已知加属性/上限/技能的分支期望 EV
         if est_stat_ev > 0 and not b_props and not b_max and not b_rand_max and not b_rand_prop:
             ev_score += est_stat_ev
             if 100001 <= (int(ev_id) if str(ev_id).isdigit() else 0) <= 100200:
                 eff_parts.append("💪单维属性+20(或上限+15)")
+            elif "技能" in label or classify_shared_story_event(str(ev_id), ev_name, state=state) == "skill_event":
+                eff_parts.append(f"🎯获得随机比赛技能(约+{est_stat_ev:.1f}EV)")
             elif b_ps < 0:
                 eff_parts.append(f"💪比赛/属性收益(约+{est_stat_ev:.0f}EV)")
             else:
@@ -4029,6 +4261,9 @@ def update_ui_state_from_line(state: dict, line: str, skill_buf: Optional[list] 
                         state["edu_state_id"] = 1
                 elif short_v == "edu_store_view":
                     state["store_open"] = False
+                    if state.get("is_beach_scene"):
+                        state["ycjm_scene"] = "ycjm01"
+                elif short_v == "edu_train_loading_view":
                     if state.get("is_beach_scene"):
                         state["ycjm_scene"] = "ycjm01"
                 elif short_v == "edu_travel_selection_info_view":
@@ -8432,9 +8667,9 @@ class BadgePillWindow:
             card_w = left_w
 
         tail_h = 6 if self._with_tail else 0
-        # 预留四周 3px 透明描边+柔和底影余量，确保圆角与底部尖角 100% 不被窗口裁剪
-        win_w = max(40, card_w + 6)
-        win_h = max(24, card_h + tail_h + 6)
+        # 预留四周透明描边 + 2px 轻硬偏移阴影余量，确保圆角与底部尖角 100% 不被窗口裁剪
+        win_w = max(40, card_w + 8)
+        win_h = max(24, card_h + tail_h + 8)
         self._card_geom = (card_w, card_h, left_w, lh, rh, tail_h, pad_l_x, slant, has_right)
         if self._gdk_display:
             self._gdk_display.error_trap_push()
@@ -8455,8 +8690,8 @@ class BadgePillWindow:
         import math
 
         card_w, card_h, left_w, lh, rh, tail_h, pad_l_x, slant, has_right = self._card_geom
-        x0, y0 = 3.0, 2.0
-        rad = min(10.5, card_h / 2.0)
+        x0, y0 = 2.5, 2.5
+        rad = min(9.5, card_h / 2.0)
         tail_w = 12.0
         tail_x = x0 + card_w * 0.5
 
@@ -8466,7 +8701,7 @@ class BadgePillWindow:
             cr.arc(ox + card_w - r, oy + r, r, -math.pi / 2, 0)
             cr.arc(ox + card_w - r, oy + card_h - r, r, 0, math.pi / 2)
             if tail_h > 0:
-                tx0 = max(ox + r + 3, min(ox + card_w - r - tail_w - 3, tail_x - tail_w / 2.0))
+                tx0 = max(ox + r + 3, min(ox + card_w - r - tail_w - 3, ox + card_w * 0.5 - tail_w / 2.0))
                 tx1 = tx0 + tail_w
                 cr.line_to(tx1, oy + card_h)
                 cr.line_to((tx0 + tx1) * 0.5, oy + card_h + tail_h)
@@ -8478,26 +8713,28 @@ class BadgePillWindow:
         pal = self.ACCENT_PALETTES.get(self.style_key, self.ACCENT_PALETTES["second"])
         g_top, g_bot, border_rgba, _, _ = pal
 
-        # 1. 柔和浅底投影
+        # 1. 轻巧 2px 硬偏移漫画贴纸阴影 (#142342)
         cr.save()
-        _card_path(x0, y0 + 2.8)
-        cr.set_source_rgba(20 / 255.0, 36 / 255.0, 58 / 255.0, 0.24)
+        _card_path(x0 + 2.0, y0 + 2.0)
+        cr.set_source_rgba(*HUD_SHADOW_RGBA)
         cr.fill()
         cr.restore()
 
-        # 2. 清爽奶白主体底板 (#F8FCFF)
+        # 2. 画纸奶白主体底板 (#F8FCFF)
         _card_path(x0, y0)
-        cr.set_source_rgba(248 / 255.0, 252 / 255.0, 255 / 255.0, 0.98)
+        cr.set_source_rgba(HUD_PAPER_RGB[0], HUD_PAPER_RGB[1], HUD_PAPER_RGB[2], 0.99)
         cr.fill_preserve()
 
-        # 3. 左侧斜切活力色块（复刻『7天 | 赢得比赛』）
+        # 3. 左侧热血斜切渐变色块 + 冠军金/天蓝斜切饰条 + 右端极淡斜向速度线
         cr.save()
         cr.clip()
         cr.new_path()
+        slant_top_x = x0 + left_w + slant * 0.5
+        slant_bot_x = x0 + left_w - slant * 0.5
         if has_right:
             cr.move_to(x0 - 2, y0 - 2)
-            cr.line_to(x0 + left_w + slant * 0.5, y0 - 2)
-            cr.line_to(x0 + left_w - slant * 0.5, y0 + card_h + tail_h + 2)
+            cr.line_to(slant_top_x, y0 - 2)
+            cr.line_to(slant_bot_x, y0 + card_h + tail_h + 2)
             cr.line_to(x0 - 2, y0 + card_h + tail_h + 2)
         else:
             cr.rectangle(x0 - 2, y0 - 2, card_w + 4, card_h + tail_h + 4)
@@ -8507,12 +8744,39 @@ class BadgePillWindow:
         grad.add_color_stop_rgb(1.0, *g_bot)
         cr.set_source(grad)
         cr.fill()
+
+        if has_right and self.style_key in ("best", "second"):
+            trim_w = 3.2 if self.style_key == "best" else 2.0
+            trim_rgb = HUD_CHAMPION_GOLD_RGB if self.style_key == "best" else HUD_SKY_BLUE_RGB
+            cr.new_path()
+            cr.move_to(slant_top_x - 0.5, y0 - 2)
+            cr.line_to(slant_top_x + trim_w, y0 - 2)
+            cr.line_to(slant_bot_x + trim_w, y0 + card_h + tail_h + 2)
+            cr.line_to(slant_bot_x - 0.5, y0 + card_h + tail_h + 2)
+            cr.close_path()
+            cr.set_source_rgba(trim_rgb[0], trim_rgb[1], trim_rgb[2], 0.96)
+            cr.fill()
+
+        if has_right:
+            slope = max(6.0, slant * 0.85)
+            right_edge = x0 + card_w
+            for offset_r, thick, alpha in ((5.5, 3.8, 0.11), (13.0, 2.4, 0.08), (19.5, 1.5, 0.055)):
+                tx_s = right_edge - offset_r + slope * 0.35
+                bx_s = right_edge - offset_r - slope * 0.65
+                cr.new_path()
+                cr.move_to(tx_s, y0 - 2)
+                cr.line_to(tx_s + thick, y0 - 2)
+                cr.line_to(bx_s + thick, y0 + card_h + 2)
+                cr.line_to(bx_s, y0 + card_h + 2)
+                cr.close_path()
+                cr.set_source_rgba(g_top[0], g_top[1], g_top[2], alpha)
+                cr.fill()
         cr.restore()
 
-        # 4. 干净外描边
+        # 4. 1.5px 深墨蓝细描边 (#142342)
         _card_path(x0, y0)
         cr.set_source_rgba(*border_rgba)
-        cr.set_line_width(2.1)
+        cr.set_line_width(1.5)
         cr.set_line_join(self.cairo.LINE_JOIN_ROUND)
         cr.stroke()
 
@@ -8530,7 +8794,8 @@ class BadgePillWindow:
             lay_r = self.PangoCairo.create_layout(cr)
             lay_r.set_font_description(fdesc)
             lay_r.set_markup(self._right_markup, -1)
-            cr.move_to(x0 + left_w + 5, y0 + (card_h - rh) * 0.5 - 0.5)
+            extra_gap = 7 if self.style_key == "best" else 5
+            cr.move_to(x0 + left_w + extra_gap, y0 + (card_h - rh) * 0.5 - 0.5)
             self.PangoCairo.show_layout(cr, lay_r)
         return True
 
@@ -8580,8 +8845,8 @@ class BadgePillWindow:
             self._font_pt = f_pt
             pw, ph = self._measure_and_update_size()
         else:
-            pw = max(40, self._card_geom[0] + 6)
-            ph = max(24, self._card_geom[1] + self._card_geom[5] + 6)
+            pw = max(40, self._card_geom[0] + 8)
+            ph = max(24, self._card_geom[1] + self._card_geom[5] + 8)
 
         tx, ty, pw, ph = compute_badge_position(
             content_rect,
@@ -8673,7 +8938,10 @@ class FloatingHUD:
         self.GdkPixbuf = GdkPixbuf
         self.GLib = GLib
         self.Pango = Pango
+        from collections import OrderedDict as _OrderedDict
         self._pixbuf_cache = {}
+        self._q_avatar_pixbuf_cache = _OrderedDict()
+        self._active_char_id = None
         self.equip_icons_data = []
         self.strategy = strategy
         self.auto_play = auto_play
@@ -8717,8 +8985,8 @@ class FloatingHUD:
         self.collapsed = False
         self.full_markup = ""
         self.tip_markup = ""
-        self.trough_markup = "<span foreground='#7dd3fc' weight='bold'>🏀</span> <span foreground='#e2e8f0' size='small'>星奈军师待命 · 进入选人或育成自动贴标</span>"
-        self.mini_markup = "<span foreground='#fbbf24' weight='bold'>🏀 星奈待命</span>"
+        self.trough_markup = "待命｜进入选人或育成自动贴标"
+        self.mini_markup = "<span foreground='#FFB703' weight='bold'>★ 星奈待命</span>"
         self.custom_offset = None          # 经典卡片模式相对游戏左上角偏移
         self.trough_custom_offset = None   # 底部深海蓝槽模式相对游戏左上角偏移
         self.manual_pos = None
@@ -8956,50 +9224,93 @@ class FloatingHUD:
             cr.close_path()
 
         if is_native_slot:
-            # 顶栏第 4 原生胶囊槽（1:1 复刻左侧『¥ 120』#DAE6EE 浅冰灰圆角胶囊 + 内部天蓝小章）
-            r = (h - 1.4) / 2.0
-            _rounded_rect_path(0.7, 0.7, max(2, w - 1.4), max(2, h - 1.4), r)
+            # 顶栏漫画贴纸胶囊（与 Windows Pillow 同源：奶白底 #F8FCFF + 1.5px #142342 描边 + 2px 硬阴影 + 速度线）
+            pw = max(4.0, w - 4.0)
+            ph = max(4.0, h - 4.0)
+            r = min(12.0, ph / 2.0)
+
+            # 1. 轻巧 2px 硬偏移阴影
+            _rounded_rect_path(3.0, 3.0, pw, ph, r)
+            cr.set_source_rgba(*HUD_SHADOW_RGBA)
+            cr.fill()
+
+            # 2. 画纸奶白主体底板 (#F8FCFF / 底槽 #F5F8FF)
+            _rounded_rect_path(1.0, 1.0, pw, ph, r)
             if self._uses_bottom_trough():
-                cr.set_source_rgba(234 / 255.0, 243 / 255.0, 250 / 255.0, 0.96)
+                cr.set_source_rgba(245 / 255.0, 248 / 255.0, 255 / 255.0, 0.98)
             else:
-                cr.set_source_rgba(216 / 255.0, 229 / 255.0, 237 / 255.0, 0.98)
+                cr.set_source_rgba(HUD_PAPER_RGB[0], HUD_PAPER_RGB[1], HUD_PAPER_RGB[2], 0.99)
             cr.fill_preserve()
-            cr.set_source_rgba(165 / 255.0, 192 / 255.0, 210 / 255.0, 0.65)
-            cr.set_line_width(1.2)
+
+            # 3. 右端极淡斜向漫画速度线
+            cr.save()
+            cr.clip()
+            slope = 7.0
+            right_edge = 1.0 + pw
+            for offset_r, thick, alpha in ((5.5, 3.6, 0.10), (13.0, 2.2, 0.075), (19.5, 1.4, 0.05)):
+                tx_s = right_edge - offset_r + slope * 0.35
+                bx_s = right_edge - offset_r - slope * 0.65
+                cr.new_path()
+                cr.move_to(tx_s, 0.0)
+                cr.line_to(tx_s + thick, 0.0)
+                cr.line_to(bx_s + thick, ph + 2.0)
+                cr.line_to(bx_s, ph + 2.0)
+                cr.close_path()
+                cr.set_source_rgba(27 / 255.0, 91 / 255.0, 255 / 255.0, alpha)
+                cr.fill()
+            cr.restore()
+
+            # 4. 1.5px 深墨蓝细描边 (#142342)
+            _rounded_rect_path(1.0, 1.0, pw, ph, r)
+            cr.set_source_rgba(*HUD_INK_STROKE_RGBA)
+            cr.set_line_width(1.5)
+            cr.set_line_join(self.cairo.LINE_JOIN_ROUND)
             cr.stroke()
 
             if self.slot_tag_label.get_visible():
                 ta = self.slot_tag_label.get_allocation()
                 tx = max(4.0, ta.x - 7.0)
-                ty = 4.0
-                tw = max(36.0, ta.width + 14.0)
-                th = max(16.0, h - 8.0)
-                _rounded_rect_path(tx, ty, tw, th, th / 2.0)
+                ty = 4.5
+                tw = max(36.0, ta.width + 15.0)
+                th = max(16.0, ph - 7.0)
+                slant_t = 6.0
+                cr.save()
+                cr.new_path()
+                t_r = min(6.5, th / 2.0)
+                cr.arc(tx + t_r, ty + t_r, t_r, math.pi, 3 * math.pi / 2)
+                cr.line_to(tx + tw, ty)
+                cr.line_to(tx + tw - slant_t, ty + th)
+                cr.arc(tx + t_r, ty + th - t_r, t_r, math.pi / 2, math.pi)
+                cr.close_path()
                 grad_t = self.cairo.LinearGradient(0, ty, 0, ty + th)
-                grad_t.add_color_stop_rgb(0.0, 68 / 255.0, 178 / 255.0, 248 / 255.0)
-                grad_t.add_color_stop_rgb(1.0, 45 / 255.0, 158 / 255.0, 236 / 255.0)
+                grad_t.add_color_stop_rgb(0.0, 27 / 255.0, 91 / 255.0, 255 / 255.0)
+                grad_t.add_color_stop_rgb(1.0, 17 / 255.0, 57 / 255.0, 166 / 255.0)
                 cr.set_source(grad_t)
                 cr.fill()
+                cr.restore()
             if self.focus_btn_label.get_visible():
                 fa = self.focus_btn_label.get_allocation()
                 if fa.width > 6:
                     fc = _normalize_focus_dict((self.hud_config or {}).get("focus"))
                     is_on = fc["stat"] is not None
                     fx = max(4.0, fa.x - 6.0)
-                    fy = 4.0
-                    fw = min(w - fx - 4.0, max(32.0, fa.width + 12.0))
-                    fh = max(16.0, h - 8.0)
-                    _rounded_rect_path(fx, fy, fw, fh, fh / 2.0)
+                    fy = 4.5
+                    fw = min(pw - fx - 3.0, max(32.0, fa.width + 12.0))
+                    fh = max(16.0, ph - 7.0)
+                    _rounded_rect_path(fx, fy, fw, fh, min(7.5, fh / 2.0))
                     if is_on:
                         grad_f = self.cairo.LinearGradient(0, fy, 0, fy + fh)
-                        grad_f.add_color_stop_rgb(0.0, 245 / 255.0, 158 / 255.0, 11 / 255.0)
-                        grad_f.add_color_stop_rgb(1.0, 217 / 255.0, 119 / 255.0, 6 / 255.0)
+                        grad_f.add_color_stop_rgb(0.0, 255 / 255.0, 81 / 255.0, 38 / 255.0)
+                        grad_f.add_color_stop_rgb(1.0, 224 / 255.0, 58 / 255.0, 18 / 255.0)
                         cr.set_source(grad_f)
-                        cr.fill()
-                    else:
-                        cr.set_source_rgba(148 / 255.0, 163 / 255.0, 184 / 255.0, 0.24)
                         cr.fill_preserve()
-                        cr.set_source_rgba(100 / 255.0, 116 / 255.0, 139 / 255.0, 0.42)
+                        cr.set_source_rgba(*HUD_INK_STROKE_RGBA)
+                        cr.set_line_width(1.1)
+                        cr.stroke()
+                    else:
+                        cr.set_source_rgba(234 / 255.0, 241 / 255.0, 255 / 255.0, 0.92)
+                        cr.fill_preserve()
+                        cr.set_source_rgba(20 / 255.0, 35 / 255.0, 66 / 255.0, 0.45)
                         cr.set_line_width(1.0)
                         cr.stroke()
             return False
@@ -9255,14 +9566,14 @@ class FloatingHUD:
             scale = max(0.84, min(1.30, gh / 1080.0))
             pt_f = round(10.8 * scale, 1)
             if is_on:
-                mk = f"<span font_desc='Noto Sans CJK SC Black {pt_f}' foreground='#FFFFFF'>🎯{html.escape(full_2)}</span>"
+                mk = f"<span font_desc='Noto Sans CJK SC Black {pt_f}' foreground='#FFFFFF'>◆ {html.escape(full_2)}</span>"
             else:
-                mk = f"<span font_desc='Noto Sans CJK SC Bold {pt_f}' foreground='#5B738A'>🎯{html.escape(short_1)}</span>"
+                mk = f"<span font_desc='Noto Sans CJK SC Bold {pt_f}' foreground='#435370'>◆ {html.escape(short_1)}</span>"
         else:
             if is_on:
-                mk = f"<span size='x-small' weight='bold' foreground='#FFFFFF'>🎯{html.escape(full_2)}</span>"
+                mk = f"<span size='x-small' weight='bold' foreground='#FFFFFF'>◆ {html.escape(full_2)}</span>"
             else:
-                mk = f"<span size='x-small' foreground='#94A3B8'>🎯{html.escape(short_1)}关</span>"
+                mk = f"<span size='x-small' foreground='#94A3B8'>◆ {html.escape(short_1)}关</span>"
         self.focus_btn_label.set_markup(mk)
         self.focus_btn_label.show()
 
@@ -9601,7 +9912,108 @@ class FloatingHUD:
                 self._pixbuf_cache[key] = None
         return self._pixbuf_cache[key]
 
+    def _build_q_avatar_pixbuf(self, char_id: Optional[int], size: int = 24):
+        """懒加载并 LRU 缓存带 1.5px #142342 描边环的 24×24 圆形 Q 版小头像，缺失时平滑降级几何星徽。"""
+        import math
+
+        sz = max(18, int(size))
+        norm_cid = None
+        if char_id is not None:
+            try:
+                v = int(char_id)
+                if v > 0:
+                    norm_cid = v
+            except (TypeError, ValueError):
+                norm_cid = None
+        key = (norm_cid, sz)
+        cached = self._q_avatar_pixbuf_cache.get(key)
+        if cached is not None:
+            self._q_avatar_pixbuf_cache.move_to_end(key)
+            return cached
+
+        pb_out = None
+        try:
+            surf = self.cairo.ImageSurface(self.cairo.FORMAT_ARGB32, sz, sz)
+            cr = self.cairo.Context(surf)
+            cx, cy = sz * 0.5, sz * 0.5
+            r_in = max(4.0, sz * 0.5 - 1.2)
+            path = resolve_q_avatar_path(norm_cid)
+            drawn_img = False
+            if path and os.path.isfile(path):
+                try:
+                    raw_pb = self.GdkPixbuf.Pixbuf.new_from_file_at_scale(path, sz, sz, False)
+                    if raw_pb is not None:
+                        cr.save()
+                        cr.arc(cx, cy, r_in, 0, 2 * math.pi)
+                        cr.clip()
+                        cr.set_source_rgb(*HUD_PAPER_RGB)
+                        cr.paint()
+                        self.Gdk.cairo_set_source_pixbuf(cr, raw_pb, 0, 0)
+                        cr.paint()
+                        cr.restore()
+                        drawn_img = True
+                except Exception:
+                    drawn_img = False
+            if not drawn_img:
+                cr.save()
+                cr.arc(cx, cy, r_in, 0, 2 * math.pi)
+                cr.clip()
+                grad = self.cairo.LinearGradient(0, 0, 0, sz)
+                grad.add_color_stop_rgb(0.0, 27 / 255.0, 91 / 255.0, 255 / 255.0)
+                grad.add_color_stop_rgb(1.0, 17 / 255.0, 57 / 255.0, 166 / 255.0)
+                cr.set_source(grad)
+                cr.paint()
+                cr.move_to(sz * 0.58, 0)
+                cr.line_to(sz, 0)
+                cr.line_to(sz * 0.72, sz)
+                cr.line_to(sz * 0.34, sz)
+                cr.close_path()
+                cr.set_source_rgba(255 / 255.0, 81 / 255.0, 38 / 255.0, 0.70)
+                cr.fill()
+                # 冠军金五角星
+                r_o, r_s = sz * 0.31, sz * 0.135
+                cr.new_path()
+                for i in range(10):
+                    ang = -math.pi * 0.5 + i * (math.pi / 5.0)
+                    rr = r_o if (i % 2 == 0) else r_s
+                    px, py = cx + rr * math.cos(ang), cy + rr * math.sin(ang)
+                    if i == 0:
+                        cr.move_to(px, py)
+                    else:
+                        cr.line_to(px, py)
+                cr.close_path()
+                cr.set_source_rgb(*HUD_CHAMPION_GOLD_RGB)
+                cr.fill()
+                cr.restore()
+            # 1.5px 深墨蓝细描边环 (#142342)
+            cr.arc(cx, cy, sz * 0.5 - 0.85, 0, 2 * math.pi)
+            cr.set_source_rgba(*HUD_INK_STROKE_RGBA)
+            cr.set_line_width(1.5)
+            cr.stroke()
+            pb_out = self.Gdk.pixbuf_get_from_surface(surf, 0, 0, sz, sz)
+        except Exception:
+            pb_out = None
+
+        if pb_out is not None:
+            self._q_avatar_pixbuf_cache[key] = pb_out
+            if len(self._q_avatar_pixbuf_cache) > 64:
+                self._q_avatar_pixbuf_cache.popitem(last=False)
+        return pb_out
+
     def _set_header_avatar_by_char(self, char_id: Optional[int]):
+        self._active_char_id = char_id
+        try:
+            is_initactor = self.diegetic_mode and (self._active_view_mode == "initactor") and bool(
+                self.equip_icons_data or self.full_markup
+            )
+            if self.diegetic_mode and not is_initactor:
+                pb = self._build_q_avatar_pixbuf(char_id, size=24)
+                if pb is not None:
+                    self.header_avatar.set_from_pixbuf(pb)
+                    self.header_avatar.show()
+                    return
+        except Exception:
+            pass
         self.header_avatar.hide()
 
     @staticmethod
@@ -9837,18 +10249,20 @@ class FloatingHUD:
         )
         self.slot_tag_label.show()
 
-        # 若 body_s 已带显式深色系 span 则直接包裹字号，否则自动着深藏青色并高亮关键数字
-        if "<span" in body_s and any(c in body_s for c in ("#253B52", "#1E88E5", "#C2410C", "#B91C1C")):
+        # 若 body_s 已带显式深色系 span 则直接包裹字号，否则自动着深墨蓝并高亮关键数字
+        if "<span" in body_s and any(
+            c in body_s for c in (HUD_TEXT_INK, "#1B5BFF", "#E03A12", "#F03E5A", "#253B52", "#1E88E5", "#C2410C", "#B91C1C")
+        ):
             body_mk = f"<span font_desc='Noto Sans CJK SC Bold {pt_body}'>{body_s}</span>"
         else:
             b_clean = self._strip_markup_to_clean_text(body_s)[:44]
             b_esc = html.escape(b_clean)
             b_esc = re.sub(
                 r"(\d+/\d+|EV\s*\d+|\+\d+)",
-                r"<span foreground='#1E88E5'>\1</span>",
+                r"<span foreground='#1B5BFF'>\1</span>",
                 b_esc,
             )
-            fg_main = "#B91C1C" if ("⚠️" in body_s or "高危" in b_clean or "空转" in b_clean) else "#253B52"
+            fg_main = "#F03E5A" if ("⚠️" in body_s or "高危" in b_clean or "空转" in b_clean) else HUD_TEXT_INK
             body_mk = f"<span font_desc='Noto Sans CJK SC Bold {pt_body}' foreground='{fg_main}'>{b_esc}</span>"
         self.header_label.set_markup(body_mk)
 
@@ -10053,6 +10467,7 @@ class FloatingHUD:
                 return
 
             self._set_scene_hidden(False)
+            self._set_header_avatar_by_char(extract_active_char_id(state))
             if not self.diegetic_mode:
                 self.hide_all_badges()
                 self._apply_current_markup()
@@ -10069,7 +10484,7 @@ class FloatingHUD:
         """渲染育成选技能三选一界面（贴身三卡角标 + 经典卡片兜底）。"""
         self._last_state = state
         self._last_skill_evals = list(skill_evals or [])
-        self._set_header_avatar_by_char(None)
+        self._set_header_avatar_by_char(extract_active_char_id(state))
         roles = sorted(get_char_role_tags(int(state.get("main_char_id") or 0)) - {"通用"})
         role_str = "/".join(roles) if roles else "通用"
         self._update_header(
@@ -10105,7 +10520,7 @@ class FloatingHUD:
     def render_story_choice(self, state: dict, ev_advice: dict):
         self._last_state = state
         self._last_story_adv = ev_advice
-        self._set_header_avatar_by_char(None)
+        self._set_header_avatar_by_char(extract_active_char_id(state))
         ev_title = html.escape(ev_advice["ev_name"])
         self._update_header(
             f"<span weight='bold' foreground='#38bdf8'>📖 {ev_title}</span>"
@@ -10154,7 +10569,7 @@ class FloatingHUD:
     def render_weekend_advice(self, state: dict, wk: dict):
         self._last_state = state
         self._last_wk_adv = wk
-        self._set_header_avatar_by_char(None)
+        self._set_header_avatar_by_char(extract_active_char_id(state))
         day_esc = html.escape(wk["day_tag"])
         has_wt = bool(wk.get("has_weekend_train") and wk.get("best_train_opt"))
         if has_wt:
@@ -10311,7 +10726,7 @@ class FloatingHUD:
         self._last_state = state
         self._last_turn_scored = list(scored or [])
         self._last_turn_extra_tip = extra_tip
-        self._set_header_avatar_by_char(None)
+        self._set_header_avatar_by_char(extract_active_char_id(state))
         self._update_header(format_hud_turn_header(state))
 
         lines = []
@@ -10385,7 +10800,7 @@ class FloatingHUD:
         self.hide_all_badges()
 
         c = adv["character"]
-        self._set_header_avatar_by_char(None)
+        self._set_header_avatar_by_char(c.get("id"))
         cname = html.escape(c.get("short_name", ""))
         pos = html.escape(c.get("best_pos", ""))
         badge_html = f"  <span size='x-small' foreground='#4ade80'>{html.escape(scan_badge)}</span>" if scan_badge else ""
@@ -10843,6 +11258,9 @@ def watch_live(strategy_name="training_flow", auto_play=False, use_gui=True):
         pending_event_learn = None
         ev_id = str(info["ev_id"])
         ev_name = info["ev_name"]
+        # R10 集训、R36 许愿、角色/经理技能事件 100% 由通用模板托管，禁止按角色重复回写脏条目
+        if classify_shared_story_event(ev_id, ev_name, state=state) in SHARED_TEMPLATE_NO_PERSIST_TYPES:
+            return
         br_idx = str(info["br_idx"])
         d_ps = state["ps"] - info["snap_ps"]
         d_gold = state.get("gold", 0) - info["snap_gold"]

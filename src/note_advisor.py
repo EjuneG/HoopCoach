@@ -1930,6 +1930,467 @@ def format_character_note_advice_hud_markup(adv: dict, scan_status_line: str = "
     return "\n".join(lines)
 
 
+def compute_breeding_cycle_data(chars: dict, rules: dict, rel_scores: dict, pool: dict) -> dict:
+    """
+    结构化计算种马/刷笔记养成循环规划数据（供作战室前端与 CLI 共用）：
+    - hub_ranking: 刷笔记枢纽角色 Top 12（下游辐射 × 当前可喂饱度 × 笔记缺口）
+    - triangles: 黄金三角互哺圈（A ⇄ B ⇄ C 天生保底 ≥32 分）
+    - stepping_stones: 卡手角色两步铺路反推链（当前纯自备 <35 分的主力）
+    兼容空池冷启动：未同步个人池时自动基于全图鉴已实装角色计算枢纽与黄金三角。
+    """
+    raw_owned_ids = [
+        int(x) for x in pool.get("owned_actors", [])
+        if int(x) in chars and chars[int(x)].get("released", True)
+    ]
+    is_empty_pool = (len(raw_owned_ids) == 0 and len(pool.get("own_notes", {})) == 0)
+    owned_ids = raw_owned_ids if raw_owned_ids else sorted(k for k, v in chars.items() if v.get("released", True))
+
+    min_rank = int(pool.get("min_kept_rank", 5))
+    active_own = [
+        n for n in pool.get("own_notes", {}).values()
+        if int(n.get("rank", 0)) >= min_rank
+    ]
+
+    best_own_by_char: dict[int, dict] = {}
+    for n in active_own:
+        aid = int(n["actor_id"])
+        val = int(n["score"]) + int(n.get("harmony_bonus", 0)) * 18
+        if aid not in best_own_by_char:
+            best_own_by_char[aid] = n
+        else:
+            old = best_own_by_char[aid]
+            old_val = int(old["score"]) + int(old.get("harmony_bonus", 0)) * 18
+            if val > old_val:
+                best_own_by_char[aid] = n
+
+    # 1. 刷笔记枢纽角色排行
+    ranking = []
+    adv_cache: dict[int, dict] = {}
+    for x in owned_ids:
+        adv_x = recommend_notes_for_character(x, chars, rules, rel_scores, pool)
+        adv_cache[x] = adv_x
+        best_2own = adv_x["pure_own_combos"][0] if adv_x["pure_own_combos"] else None
+        best_1b = adv_x["borrow_combos"][0] if adv_x["borrow_combos"] else None
+        best_gen = adv_x["generic_combos"][0] if adv_x.get("generic_combos") else None
+
+        c_own = best_2own["total_compat"] if best_2own else 0
+        c_bor = best_1b["total_compat"] if best_1b else 0
+
+        rels_to_x = sorted(
+            [(int(rel_scores.get(y, {}).get(x, 0)), y) for y in owned_ids if y != x],
+            reverse=True,
+        )
+        top8_avg = sum(r for r, _ in rels_to_x[:8]) / max(1, len(rels_to_x[:8]))
+        high_15_targets = [(r, y) for r, y in rels_to_x if r >= 15]
+
+        upgraded_targets = []
+        for r_yx, y in rels_to_x[:12]:
+            if r_yx < 14:
+                continue
+            best_other_for_y = 0
+            for aid_o, n_o in best_own_by_char.items():
+                if aid_o in (y, x):
+                    continue
+                s_o = int(n_o.get("harmony_targets", {}).get(str(y), 0))
+                v_o = int(rel_scores.get(y, {}).get(aid_o, 0)) + HARMONY_BONUS_BY_STAR.get(s_o, 0)
+                if v_o > best_other_for_y:
+                    best_other_for_y = v_o
+            new_y_compat = best_other_for_y + r_yx + 2
+            if new_y_compat >= 35:
+                upgraded_targets.append({"actor_id": y, "actor_name": chars[y]["short_name"], "rel": r_yx, "proj_compat": new_y_compat})
+
+        cur_own = best_own_by_char.get(x)
+        cur_h_star = cur_own.get("harmony_star", max(cur_own.get("harmony_targets", {}).values(), default=0)) if cur_own else 0
+        if not cur_own:
+            marginal_mult = 1.00
+            own_tag = "尚无金/红笔记"
+            own_status = "missing"
+        elif int(cur_own["score"]) < 300:
+            marginal_mult = 0.90
+            own_tag = f"现有仅{cur_own['score']}分"
+            own_status = "low"
+        elif int(cur_own["score"]) < 400:
+            marginal_mult = 0.72
+            own_tag = f"现有{cur_own['score']}分"
+            own_status = "mid"
+        else:
+            marginal_mult = 0.35
+            own_tag = f"已有{cur_own['score']}分"
+            own_status = "good"
+
+        readiness_score = max(c_own, c_bor * 0.95) if not is_empty_pool else (best_gen["total_compat"] if best_gen else 0)
+        hub_score = top8_avg * 3.2 + len(high_15_targets) * 2.5 + len(upgraded_targets) * 1.8
+        priority_score = (hub_score + readiness_score * 0.85) * marginal_mult
+
+        def _brief_combo(cb: Optional[dict]) -> Optional[dict]:
+            if not cb:
+                return None
+            return {
+                "total_compat": cb["total_compat"],
+                "rank_name": cb["rank_name"],
+                "learn_times": cb["learn_times"],
+                "n1_id": int(cb["note1"]["actor_id"]),
+                "n1_name": cb["note1"]["actor_name"],
+                "n1_score": int(cb["note1"].get("score") or 0),
+                "n2_id": int(cb["note2"]["actor_id"]),
+                "n2_name": cb["note2"]["actor_name"],
+                "n2_score": int(cb["note2"].get("score") or 0),
+                "n2_friend": cb["note2"].get("friend", ""),
+            }
+
+        ranking.append({
+            "actor_id": x,
+            "name": chars[x]["short_name"],
+            "pos": str(chars[x].get("best_pos") or "").split()[0] if chars[x].get("best_pos") else "",
+            "best_pos": chars[x].get("best_pos", ""),
+            "own_tag": own_tag,
+            "own_status": own_status,
+            "cur_own_score": int(cur_own["score"]) if cur_own else 0,
+            "cur_own_rank": int(cur_own["rank"]) if cur_own else 0,
+            "cur_h_star": int(cur_h_star),
+            "priority_score": round(priority_score, 1),
+            "top8_avg": round(top8_avg, 1),
+            "high_15_cnt": len(high_15_targets),
+            "top_targets": [{"actor_id": y, "actor_name": chars[y]["short_name"], "rel": r} for r, y in rels_to_x[:6]],
+            "best_2own": _brief_combo(best_2own),
+            "best_1b": _brief_combo(best_1b),
+            "best_generic": _brief_combo(best_gen),
+        })
+
+    ranking.sort(key=lambda r: -r["priority_score"])
+
+    # 2. 黄金三角互哺圈
+    raw_triangles = []
+    for i, a in enumerate(owned_ids):
+        for j in range(i + 1, len(owned_ids)):
+            b = owned_ids[j]
+            for k in range(j + 1, len(owned_ids)):
+                c = owned_ids[k]
+                sa = int(rel_scores.get(a, {}).get(b, 0)) + int(rel_scores.get(a, {}).get(c, 0))
+                sb = int(rel_scores.get(b, {}).get(a, 0)) + int(rel_scores.get(b, {}).get(c, 0))
+                sc = int(rel_scores.get(c, {}).get(a, 0)) + int(rel_scores.get(c, {}).get(b, 0))
+                min_s = min(sa, sb, sc)
+                avg_s = (sa + sb + sc) / 3.0
+                if min_s >= 32:
+                    raw_triangles.append((min_s, avg_s, a, b, c, sa, sb, sc))
+    raw_triangles.sort(key=lambda x: (-x[0], -x[1]))
+
+    triangles = []
+    seen_sets = []
+    for min_s, avg_s, a, b, c, sa, sb, sc in raw_triangles:
+        if sum(1 for s in seen_sets if len(s & {a, b, c}) >= 2) >= 2:
+            continue
+        seen_sets.append({a, b, c})
+        members = []
+        for mid, mcompat in ((a, sa), (b, sb), (c, sc)):
+            own_n = best_own_by_char.get(mid)
+            members.append({
+                "actor_id": mid,
+                "name": chars[mid]["short_name"],
+                "pos": str(chars[mid].get("best_pos") or "").split()[0] if chars[mid].get("best_pos") else "",
+                "compat_from_others": mcompat,
+                "has_own": own_n is not None,
+                "own_score": int(own_n["score"]) if own_n else 0,
+                "own_rank": int(own_n["rank"]) if own_n else 0,
+            })
+        missing = [m["name"] for m in members if not m["has_own"]]
+        have = [f"{m['name']}({m['own_score']})" for m in members if m["has_own"]]
+        if is_empty_pool:
+            status = "reference"
+            tip = "全图鉴高相性互哺三角（带任意专属契合即可直达 40~45+ 满词条档）"
+        elif not missing:
+            status = "complete"
+            tip = "已完全闭环，可随时互刷冲 7 阶彩！"
+        elif have:
+            status = "near"
+            tip = f"仅差 {'、'.join(missing)} 即可闭环"
+        else:
+            status = "new"
+            tip = f"待开拓圈（先用过渡笔记练出 {members[0]['name']} 启动）"
+        triangles.append({
+            "min_compat": min_s,
+            "avg_compat": round(avg_s, 1),
+            "members": members,
+            "missing": missing,
+            "have": have,
+            "status": status,
+            "tip": tip,
+        })
+        if len(triangles) >= 8:
+            break
+
+    # 3. 卡手角色两步铺路反推链（有个人自备笔记时计算）
+    stepping_stones = []
+    if best_own_by_char:
+        for target in owned_ids:
+            adv_t = adv_cache.get(target) or recommend_notes_for_character(target, chars, rules, rel_scores, pool)
+            cur_c = adv_t["pure_own_combos"][0]["total_compat"] if adv_t["pure_own_combos"] else 0
+            if cur_c >= 35:
+                continue
+            best_bridge = None
+            for bridge in owned_ids:
+                if bridge == target or bridge in best_own_by_char:
+                    continue
+                r_tb = int(rel_scores.get(target, {}).get(bridge, 0))
+                if r_tb < 15:
+                    continue
+                adv_b = adv_cache.get(bridge) or recommend_notes_for_character(bridge, chars, rules, rel_scores, pool)
+                b_own_c = adv_b["pure_own_combos"][0]["total_compat"] if adv_b["pure_own_combos"] else 0
+                if b_own_c < 34:
+                    continue
+                best_partner_c = 0
+                best_partner_id = 0
+                best_partner_name = ""
+                for aid_p, n_p in best_own_by_char.items():
+                    if aid_p in (target, bridge):
+                        continue
+                    s_p = int(n_p.get("harmony_targets", {}).get(str(target), 0))
+                    c_p = int(rel_scores.get(target, {}).get(aid_p, 0)) + HARMONY_BONUS_BY_STAR.get(s_p, 0)
+                    if c_p > best_partner_c:
+                        best_partner_c = c_p
+                        best_partner_id = aid_p
+                        best_partner_name = chars[aid_p]["short_name"]
+                proj_c_0star = best_partner_c + r_tb
+                proj_c_2star = proj_c_0star + 5
+                gain = proj_c_2star - cur_c
+                if best_bridge is None or proj_c_2star > best_bridge["proj_2star"]:
+                    best_bridge = {
+                        "target_id": target,
+                        "target_name": chars[target]["short_name"],
+                        "cur_compat": cur_c,
+                        "bridge_id": bridge,
+                        "bridge_name": chars[bridge]["short_name"],
+                        "bridge_now_compat": b_own_c,
+                        "bridge_now_n1": adv_b["pure_own_combos"][0]["note1"]["actor_name"],
+                        "bridge_now_n2": adv_b["pure_own_combos"][0]["note2"]["actor_name"],
+                        "partner_id": best_partner_id,
+                        "partner_name": best_partner_name,
+                        "r_tb": r_tb,
+                        "proj_0star": proj_c_0star,
+                        "proj_2star": proj_c_2star,
+                        "gain": gain,
+                    }
+            if best_bridge and best_bridge["proj_2star"] >= 35:
+                stepping_stones.append(best_bridge)
+        stepping_stones.sort(key=lambda x: (-x["gain"], -x["proj_2star"]))
+
+    return {
+        "is_empty_pool": is_empty_pool,
+        "owned_count": len(owned_ids),
+        "note_covered_count": len(best_own_by_char),
+        "hub_ranking": ranking[:12],
+        "triangles": triangles,
+        "stepping_stones": stepping_stones[:8],
+    }
+
+
+def compute_single_note_activation_data(
+    query: str,
+    chars: dict,
+    rules: dict,
+    rel_scores: dict,
+    pool: dict,
+    actor_id: Optional[int] = None,
+    harmony_star: int = 0,
+) -> dict:
+    """
+    结构化计算「单本真实笔记」或「指定角色假设笔记」的反向激活真值表（100% 经 evaluate_compatibility 验算）：
+    - target_note: 被反查的笔记信息（真实笔记或虚拟角色笔记）
+    - own_activations: 搭配现有自备红/金笔记的真实相性排行
+    - borrow_activations: 若为自备笔记（或虚拟角色），搭配好友高分助战笔记的排行
+    - static_rankings: 全图鉴 37 位其他已实装角色对本笔记的单卡关系贡献排行
+    """
+    q = (query or "").strip()
+    owned_ids = set(int(x) for x in pool.get("owned_actors", []))
+
+    target_note = None
+    src_tag = ""
+    is_virtual = False
+    is_target_own = True
+
+    if q:
+        all_notes = []
+        for n in pool.get("own_notes", {}).values():
+            all_notes.append(("自备", True, n))
+        for n in pool.get("borrowed_notes", {}).values():
+            all_notes.append((f"借:{n.get('friend', '助战')}", False, n))
+        matched = []
+        for tag, is_own, n in all_notes:
+            if (
+                q == str(n.get("note_id", ""))
+                or q == str(n.get("score", ""))
+                or q in str(n.get("actor_name", ""))
+                or f"{n.get('actor_name', '')}{n.get('score', '')}" == q
+            ):
+                matched.append((tag, is_own, n))
+        if matched:
+            # note_id 精确命中优先，否则按分数降序
+            matched.sort(key=lambda x: (0 if q == str(x[2].get("note_id", "")) else 1, -int(x[2].get("score", 0))))
+            src_tag, is_target_own, target_note = matched[0]
+
+    if target_note is None and actor_id is not None and int(actor_id) in chars:
+        aid = int(actor_id)
+        cinfo = chars[aid]
+        h_star = max(0, min(3, int(harmony_star or 0)))
+        ht = {str(cid): h_star for cid, c in chars.items() if cid != aid and c.get("released", True)} if h_star > 0 else {}
+        target_note = {
+            "note_id": f"virtual_{aid}_{h_star}",
+            "actor_id": aid,
+            "actor_name": cinfo.get("short_name", str(aid)),
+            "rank": 0,
+            "score": 0,
+            "entry_num": 0,
+            "friend": "",
+            "harmony_targets": ht,
+            "harmony_star": h_star,
+            "harmony_bonus": HARMONY_BONUS_BY_STAR.get(h_star, 0),
+            "stat_bonuses": {},
+            "cap_bonuses": {},
+        }
+        src_tag = f"角色推演 ({h_star}★契合)" if h_star > 0 else "角色基础推演"
+        is_virtual = True
+        is_target_own = True
+
+    if target_note is None:
+        return {"ok": False, "error": f"未找到匹配『{query or actor_id}』的笔记或角色"}
+
+    t_aid = int(target_note["actor_id"])
+    t_name = target_note.get("actor_name") or chars.get(t_aid, {}).get("short_name", str(t_aid))
+    min_rank = int(pool.get("min_kept_rank", 5))
+
+    own_partners = [
+        n for n in pool.get("own_notes", {}).values()
+        if int(n.get("rank", 0)) >= min_rank and int(n["actor_id"]) != t_aid and int(n.get("score", 0)) >= 300
+    ]
+    if not own_partners:
+        own_partners = [
+            n for n in pool.get("own_notes", {}).values()
+            if int(n["actor_id"]) != t_aid
+        ]
+    borrow_partners = [
+        n for n in pool.get("borrowed_notes", {}).values()
+        if int(n["actor_id"]) != t_aid and int(n.get("score", 0)) >= 350
+    ]
+    if not borrow_partners:
+        borrow_partners = [
+            n for n in pool.get("borrowed_notes", {}).values()
+            if int(n["actor_id"]) != t_aid
+        ]
+
+    def _fmt_act(cid: int, ev: dict) -> dict:
+        c = chars[cid]
+        p = ev["note2"]
+        return {
+            "char_id": cid,
+            "char_name": c.get("short_name", str(cid)),
+            "pos": str(c.get("best_pos") or "").split()[0] if c.get("best_pos") else "",
+            "owned": cid in owned_ids,
+            "total_compat": ev["total_compat"],
+            "rank_name": ev["rank_name"],
+            "level": ev["level"],
+            "learn_times": ev["learn_times"],
+            "trig_min": ev["trig_min"],
+            "trig_max": ev["trig_max"],
+            "expected_triggers": ev["expected_triggers"],
+            "compat_tier_note": ev.get("compat_tier_note", ""),
+            "r1": ev["r1"],
+            "s1": ev["s1"],
+            "b1": ev["b1"],
+            "r2": ev["r2"],
+            "s2": ev["s2"],
+            "b2": ev["b2"],
+            "avg_note_score": ev["avg_note_score"],
+            "partner": {
+                "note_id": str(p.get("note_id") or ""),
+                "actor_id": int(p["actor_id"]),
+                "actor_name": p.get("actor_name", ""),
+                "rank": int(p.get("rank") or 0),
+                "score": int(p.get("score") or 0),
+                "friend": p.get("friend", ""),
+            },
+        }
+
+    own_activations = []
+    if own_partners:
+        for cid, c in chars.items():
+            if cid == t_aid or not c.get("released", True):
+                continue
+            rec_stats = get_char_rec_stat_ids(c)
+            best_ev = None
+            for p_note in own_partners:
+                if int(p_note["actor_id"]) == cid:
+                    continue
+                ev = evaluate_compatibility(cid, target_note, p_note, rel_scores, rules, rec_stats)
+                if best_ev is None or (ev["total_compat"], ev["eval_score"]) > (best_ev["total_compat"], best_ev["eval_score"]):
+                    best_ev = ev
+            if best_ev and best_ev["total_compat"] >= 26:
+                own_activations.append((best_ev["total_compat"], best_ev["eval_score"], cid, best_ev))
+        own_activations.sort(key=lambda x: (-x[0], -x[1]))
+
+    bor_activations = []
+    if is_target_own and borrow_partners:
+        for cid, c in chars.items():
+            if cid == t_aid or not c.get("released", True):
+                continue
+            rec_stats = get_char_rec_stat_ids(c)
+            best_ev = None
+            for b_note in borrow_partners:
+                if int(b_note["actor_id"]) == cid:
+                    continue
+                ev = evaluate_compatibility(cid, target_note, b_note, rel_scores, rules, rec_stats)
+                if best_ev is None or (ev["total_compat"], ev["eval_score"]) > (best_ev["total_compat"], best_ev["eval_score"]):
+                    best_ev = ev
+            if best_ev and best_ev["total_compat"] >= 28:
+                bor_activations.append((best_ev["total_compat"], best_ev["eval_score"], cid, best_ev))
+        bor_activations.sort(key=lambda x: (-x[0], -x[1]))
+
+    # 全 37 人静态单卡贡献排行（含专属契合加成）
+    static_rankings = []
+    t_pos = str(chars.get(t_aid, {}).get("best_pos") or "").split()[0] if chars.get(t_aid, {}).get("best_pos") else ""
+    ht_map = target_note.get("harmony_targets") or {}
+    for cid, c in chars.items():
+        if cid == t_aid or not c.get("released", True):
+            continue
+        rel = int(rel_scores.get(cid, {}).get(t_aid, 0))
+        h_s = int(ht_map.get(str(cid), 0))
+        h_b = HARMONY_BONUS_BY_STAR.get(h_s, 0)
+        c_pos = str(c.get("best_pos") or "").split()[0] if c.get("best_pos") else ""
+        static_rankings.append({
+            "char_id": cid,
+            "char_name": c.get("short_name", str(cid)),
+            "pos": c_pos,
+            "same_pos": bool(t_pos and c_pos == t_pos),
+            "owned": cid in owned_ids,
+            "rel": rel,
+            "harmony_star": h_s,
+            "harmony_bonus": h_b,
+            "single_contrib": rel + h_b,
+        })
+    static_rankings.sort(key=lambda x: (-x["single_contrib"], -x["rel"], -int(x["owned"]), x["char_id"]))
+
+    return {
+        "ok": True,
+        "is_virtual": is_virtual,
+        "source_tag": src_tag,
+        "is_target_own": is_target_own,
+        "target_note": {
+            "note_id": str(target_note.get("note_id") or ""),
+            "actor_id": t_aid,
+            "actor_name": t_name,
+            "pos": t_pos,
+            "rank": int(target_note.get("rank") or 0),
+            "score": int(target_note.get("score") or 0),
+            "friend": target_note.get("friend", ""),
+            "harmony_targets": ht_map,
+            "harmony_str": format_harmony_targets(target_note, chars) if not is_virtual else (f"假设全角色 {target_note.get('harmony_star', 0)}★(+{target_note.get('harmony_bonus', 0)})" if target_note.get("harmony_star") else "0★ 基础关系分"),
+            "highlights": format_note_highlights(target_note) if not is_virtual else "虚拟角色单卡推演",
+        },
+        "own_activations": [_fmt_act(cid, ev) for _, _, cid, ev in own_activations[:20]],
+        "borrow_activations": [_fmt_act(cid, ev) for _, _, cid, ev in bor_activations[:15]],
+        "static_rankings": static_rankings,
+    }
+
+
 def analyze_breeding_cycle(chars: dict, rules: dict, rel_scores: dict, pool: dict) -> str:
     """
     独立战略功能：分析当前账号「下一位练哪个角色（为了刷笔记）最好」的养成循环规划器。
