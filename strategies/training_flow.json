@@ -1,0 +1,133 @@
+{
+  "name": "训练流 (Training Flow)",
+  "version": "0.10.0",
+  "description": "v0.10.0 底层实收校准版：修正 2 号弹跳副属性=106 意识双三元对称闭环与六维 1:1 等权底盘；按 4 份实机日志 1-to-1 校准队友合训全员同表情乘区；回调白圈器材期权(Δ_rb=42)引入多满彩竞争递减与单调性修正并去重彩圈人头分；周末改用单套严格凹终态体力势函数消除双重计价与赌狗药 Jensen 误差",
+  "pre_game": {
+    "note_selection": {
+      "prefer_high_note_rank": true,
+      "min_star_for_core_stat": 3,
+      "core_stat_ids": [
+        102,
+        103,
+        104,
+        106
+      ],
+      "notes": "优先选择自带 3 星主属性上限突破词条（entry_type=2，如 +146/+154 上限）且通用剧本词条（entry_type=4）数量 >= 8 的高分笔记"
+    },
+    "equipment_team_building": {
+      "whistle_3star": true,
+      "preferred_indices_hint": "核心必选/升满 3 星哨子（未满熟同框固定+2格，满100熟4破同框50%概率+3格/50%概率+2格，期望+2.5格/次，全场爆发次数无上限）"
+    }
+  },
+  "weights": {
+    "stat_base_value": {
+      "101": 1.0,
+      "102": 1.0,
+      "103": 1.0,
+      "104": 1.0,
+      "105": 1.0,
+      "106": 1.0
+    },
+    "stat_topology_notes": "实机 301/301 次 train_cmds 证实六维为双三元对称闭环：101→105→103→101 与 102→106→104→102（2号弹跳副属性为106意识，非104体能）；79局回归证实评价分与六维总和严格 1:1 等权，取消旧版 106 孤岛补偿与 104 提前刹车",
+    "stamina_104_early_decay_ratio": 0.92,
+    "isolated_106_catchup_extra_mult": 1.0,
+    "growth_rate_synergy_scale": 0.35,
+    "supactor_head_early": 19.5,
+    "supactor_head_mid_late": 11.0,
+    "supactor_gold_bonus": 0.5,
+    "supactor_rainbow_bonus": 2.0,
+    "equip_card_click_rate": 0.26,
+    "equip_rainbow_harvest_prob": 0.22,
+    "equip_rainbow_realized_delta": 42.0,
+    "equip_gold_realized_delta": 5.0,
+    "equip_option_turn_discount": 0.95,
+    "supactor_noncrit_head_scale": 1.0,
+    "equip_option_notes": "v0.10.0 校准：按超过次优按钮的条件超额期望回调 Δ_rb=42.0 / Δ_gd=5.0，引入逐回合折现(0.95)消除 cur_t=65>91 双峰倒挂，并按已满彩可暴击卡数(0/1/2/3 -> 1.00/0.88/0.76/0.65)递减竞争边际收益；彩圈底数已进面板且经队友乘区放大，supactor_rainbow_bonus 压至 2.0、gold 压至 0.5 去重",
+    "teammate_head_bonus": 0.0,
+    "teammate_3plus_synergy_bonus": 0.0,
+    "teammate_skill_mult_by_count": {
+      "0": 0.0,
+      "1": 1.15,
+      "2": 1.75,
+      "3": 2.45,
+      "4": 2.85
+    },
+    "manager_unit_bar_ev": 40.0,
+    "manager_no_whistle_0_1_bonus": 22.5,
+    "manager_no_whistle_burst_bonus": 22.5,
+    "manager_sync_2bar_save_turn_bonus": 15.0,
+    "manager_sync_3bar_save_turn_bonus": 26.0,
+    "manager_base_bonus": 54.0,
+    "manager_3star_whistle_bonus": 71.5,
+    "manager_energy_2_guaranteed_burst_bonus": 71.5,
+    "manager_capped_11_bonus": 4.0,
+    "facility_base_click_rate": 0.167,
+    "facility_harvest_bonus_mult": 2.0,
+    "facility_stamina_opp_cost": 1.05,
+    "facility_idx6_heal_ev_per_ps": 1.15,
+    "facility_max_lookahead_levels": 2,
+    "high_roll_compound_mult": 1.12,
+    "dead_turn_whistle_ev_threshold": 95.0,
+    "weekday_rest_expected_ps_gain": 75,
+    "weekday_rest_ps_unit_ev": 1.05,
+    "stamina_cost_penalty_per_ps": 0.65,
+    "cap_proximity_decay_start_ratio": 0.92,
+    "cap_overflow_multiplier": 0.25,
+    "under_cap_catchup_bonus": 1.1,
+    "manager_bar_notes": "v0.10.0：随队友合训倍率校准至实收真值(245%~384%)，同步将 manager_unit_bar_ev 回调至 40.0、同框省回合奖调至 15.0/26.0（匹配老虎机+102与3/6/9爆乘区放大），4份实机日志哨子同框保留率 95.2%（未触顶非末训 97.5%）"
+  },
+  "risk_control": {
+    "max_acceptable_fail_rate": 15,
+    "fail_rate_penalty_per_pct": 3.5,
+    "hard_reject_fail_rate": 35
+  },
+  "weekend_activity_rules": {
+    "target_stamina_for_next_week": 105,
+    "gacha_cost_default": 60,
+    "fixed_schedule_lookahead": {
+      "r06_07_to_r10_camp": "第1周周末(R06-07)：下周R08无训练，R09第1训后R10(周三)100%必出三选一『集训事件』(可选+30体或+30金)，周日保持80~90体即可免睡寝室",
+      "r20_21_to_r24_summer_camp": "第3周周末(R20-21)：下周海边合宿R24(周三)必出合宿活动自动回+20~60体(均值+25体)，且R18-21满70/100熟练的哨子必在R23(周二)弹出ID70(+40体)/ID71(+70体)三选一",
+      "r34_35_to_r36_wish": "第5周周末(R34-35)：下周一R36无训练且100%必出三选一『许愿事件』(选2回+40体 / 选3得+50金)，周末差40~55体力无需休息或买大药，直接打工/抽扭蛋并在R36选+40体",
+      "r41_42_finals_week": "第6周周末(R41-42)：第7周决赛周仅R44(周二)与R46(周四)共2次训练，保持75~85体即可0失败跑完",
+      "r48_graduation_weekend": "第7周最后周末(R48)：后续0次训练直接毕业，体力与留存金币价值归零，禁买体力药/禁睡觉/禁打工，全金币梭哈即时属性扭蛋或街机"
+    },
+    "preferred_buildings": [
+      {
+        "building_cfg_id": 6,
+        "selection_cfg_id": 17,
+        "note": "6号建筑·扭蛋机（60金三选一抽永久器材/回体/高额属性，进周末日志即可零点击透视3台机）"
+      },
+      {
+        "building_cfg_id": 3,
+        "selection_cfg_id": 6,
+        "note": "3号建筑·街机小游戏（45/65/85金三选一，中后期冲分与蹭驻留队友核心建筑）"
+      },
+      {
+        "building_cfg_id": 1,
+        "selection_cfg_id": 14,
+        "note": "1号建筑·寝室休息（0金，稳定恢复 56~70 精力，商店无体力药且低体时必选）"
+      },
+      {
+        "building_cfg_id": 1,
+        "selection_cfg_id": 13,
+        "note": "1号建筑·外出散心（0金，恢复 30 精力 + 触发驻留队友事件）"
+      },
+      {
+        "building_cfg_id": 8,
+        "selection_cfg_id": 19,
+        "note": "8号建筑·轻度打工（0精力消耗，基础赚 60+20小费=80 金币，缺钱买药/抽扭蛋或有队友时优选）"
+      },
+      {
+        "building_cfg_id": 8,
+        "selection_cfg_id": 20,
+        "note": "8号建筑·重度打工（消耗 25 精力，基础赚 110+30小费=140 金币，商店有大体力药兜底或精力充沛缺大钱时选）"
+      }
+    ],
+    "caution_buildings": [
+      {
+        "building_cfg_id": 8,
+        "note": "训练流打工以『够买商店体力药/羁绊道具 + 够抽60金扭蛋』为度，切勿在金币充裕时盲目猛点打工挤占扭蛋/街机回合"
+      }
+    ]
+  }
+}

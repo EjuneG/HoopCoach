@@ -1,0 +1,19 @@
+# Python / build caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+build/
+dist/
+
+# Local runtime config, logs, and personal run archives
+config/local_paths.json
+data/runs/
+data/note_pool.json
+data/note_visual_cache.json
+data/equip_pool.json
+data/account_snapshot.json
+data/daily_queue.json
+dashboard/data/
+*.log
+*.tmp

@@ -1,0 +1,23 @@
+{
+  "name": "扭蛋/摇奖流 (Gacha/Slot Flow - 预留模板)",
+  "version": "0.1.0",
+  "description": "围绕摇奖机（cs_select_edu_slot_machines）高频触发与联动器械构建的流派策略",
+  "weights": {
+    "stat_base_value": {"101": 1.0, "102": 1.2, "103": 1.1, "104": 1.1, "105": 1.0, "106": 1.1},
+    "supactor_head_early": 20.0,
+    "supactor_head_mid_late": 12.0,
+    "supactor_rainbow_bonus": 28.0,
+    "teammate_head_bonus": 9.0,
+    "manager_present_bonus_early_mid": 38.0,
+    "manager_present_bonus_final_turns": 10.0,
+    "stamina_cost_penalty_per_ps": 0.40,
+    "cap_proximity_decay_start_ratio": 0.92,
+    "cap_overflow_multiplier": 0.25,
+    "under_cap_catchup_bonus": 1.30
+  },
+  "risk_control": {
+    "max_acceptable_fail_rate": 15,
+    "fail_rate_penalty_per_pct": 3.5,
+    "hard_reject_fail_rate": 35
+  }
+}

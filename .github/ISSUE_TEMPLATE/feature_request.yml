@@ -1,0 +1,27 @@
+name: "💡 功能改进建议"
+description: "提出新功能点子、UI 体验优化或育成策略建议"
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        欢迎提出任何能让 **HoopCoach（星奈育成军师）** 更顺手的想法！（本仓库坚持纯只读、零侵入原则，不接受自动点击/内存修改类需求。）
+  - type: textarea
+    id: problem
+    attributes:
+      label: "你在什么育成场景下希望有这个改进？"
+      placeholder: "例如：在周末扭蛋界面 / 作战室复盘页 / 贴身角标上希望增加某个提示..."
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: "你期望的效果是什么样的？"
+      placeholder: "简述理想中的交互或展示方式"
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: "补充说明 / 截图草图（可选）"

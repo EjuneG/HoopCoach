@@ -1,0 +1,237 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+log_mirror.py — LQSNCoach 纯只读实时日志状态镜像器（零侵入、零输入模拟）
+
+与 live_coach 状态机 100% 同源：
+- 仅通过只读打开游戏明文日志（_game_data_/Documents/Logs/*.txt）恢复当前育成状态；
+- 支持大日志冷启动反向锚点快进（education.cs_start_education）与增量 poll；
+- 供实时桌面 HUD、作战室 Dashboard 及其他扩展模块共享复用。
+"""
+
+from __future__ import annotations
+
+import glob
+import os
+import re
+from collections import deque
+from typing import Optional
+
+import live_coach as lc
+
+
+class LiveLogMirror:
+    """加载最新游戏日志，快速回放到当前进度，随后支持增量 poll 与状态事件监听。"""
+
+    def __init__(self, log_dir: str):
+        self.log_dir = log_dir
+        self.log_path: Optional[str] = None
+        self.fp = None
+        self.state = lc.make_initial_state()
+        self.last_train_cmds: list = []
+        self._skill_buf = [""]
+        self._edu_buf = ""
+        self.recent_lines: deque[str] = deque(maxlen=45)
+        self.recent_events: deque[dict] = deque(maxlen=60)
+
+    def close(self) -> None:
+        if self.fp is not None:
+            try:
+                self.fp.close()
+            except Exception:
+                pass
+            self.fp = None
+
+    def _find_latest_log(self) -> Optional[str]:
+        if not self.log_dir or not os.path.isdir(self.log_dir):
+            return None
+        files = glob.glob(os.path.join(self.log_dir, "*.txt"))
+        if not files:
+            return None
+        return max(files, key=os.path.getmtime)
+
+    _FAST_SKIP_PREFIXES = (
+        "\t",
+        "UnityEngine.",
+        "XLua.",
+        "P3Client.",
+        "Animancer.",
+        "DG.Tweening.",
+        "System.",
+    )
+
+    @staticmethod
+    def _find_fast_replay_offset(path: str, min_size_bytes: int = 1_500_000) -> int:
+        """大日志冷启动加速：反向定位最后一次育成开局锚点 (education.cs_start_education)，往前留 64KB 安全余量。"""
+        try:
+            fsize = os.path.getsize(path)
+            if fsize < min_size_bytes:
+                return 0
+            anchor = b"request_call:    education.cs_start_education"
+            chunk_size = 512 * 1024
+            pos = fsize
+            tail_overlap = b""
+            with open(path, "rb") as bf:
+                while pos > 0:
+                    read_sz = min(chunk_size, pos)
+                    pos -= read_sz
+                    bf.seek(pos)
+                    buf = bf.read(read_sz) + tail_overlap
+                    idx = buf.rfind(anchor)
+                    if idx != -1:
+                        return max(0, pos + idx - 65536)
+                    tail_overlap = buf[: len(anchor) + 64]
+        except Exception:
+            return 0
+        return 0
+
+    def attach_latest(self) -> bool:
+        latest = self._find_latest_log()
+        if not latest:
+            return False
+        if self.log_path == latest and self.fp is not None:
+            return True
+        self.close()
+        self.log_path = latest
+        self.state = lc.make_initial_state()
+        self.last_train_cmds = []
+        self._skill_buf = [""]
+        self._edu_buf = ""
+        self.recent_lines.clear()
+        self.recent_events.clear()
+        start_off = self._find_fast_replay_offset(latest)
+        self.fp = open(latest, "r", encoding="utf-8", errors="ignore")
+        if start_off > 0:
+            self.fp.seek(start_off)
+            self.fp.readline()  # 对齐到完整行首
+        # 一次性快进读取历史行，精准恢复当前育成状态（快进时跳过纯 Unity/XLua 堆栈噪声行）
+        skip_pfx = self._FAST_SKIP_PREFIXES
+        for line in self.fp:
+            if not self._edu_buf and not self._skill_buf[0]:
+                if not line or line.startswith(skip_pfx) or "cs_heartbeat" in line:
+                    continue
+            self._feed_line(line, record_events=False)
+        return True
+
+    def poll(self) -> list[dict]:
+        """增量读取日志新行（并自动感知新开游戏产生的新日志文件），返回本批捕获的关键事件列表。"""
+        latest = self._find_latest_log()
+        if latest and latest != self.log_path:
+            self.attach_latest()
+        if not self.fp:
+            return []
+        batch_events: list[dict] = []
+        while True:
+            line = self.fp.readline()
+            if not line:
+                break
+            evs = self._feed_line(line, record_events=True)
+            if evs:
+                batch_events.extend(evs)
+        return batch_events
+
+    def _feed_line(self, line: str, record_events: bool = True) -> list[dict]:
+        events: list[dict] = []
+        stripped = line.strip()
+        if stripped and any(
+            k in stripped
+            for k in (
+                "[EDU_MODEL]",
+                "[UIManager]",
+                "[SceneMgr]",
+                "[SCENARIO]",
+                "request_call:    education.",
+                "dispatch:    education.",
+            )
+        ):
+            self.recent_lines.append(stripped[:220])
+
+        # 跟踪剧情加载事件 ID 与名称
+        if "[EDU_MODEL]_LoadStory:" in line:
+            sm = re.search(r"\[EDU_MODEL\]_LoadStory:\s+(\d+)\s+([^\s\t\r\n]+)", line)
+            if sm:
+                self.state["cur_story"] = (sm.group(1), sm.group(2))
+
+        # 跟踪商店购买生命周期：cs_buy_edu_item 发出后置起 store_buy_pending，
+        # 直到 [EDU_MODEL] 更新完货架且 edu_store_view 重新打开（或切离商店状态）才放行下一买
+        if "request_call:" in line and "education." in line:
+            rm_all = re.search(r"(education\.cs_[a-z0-9_]+)", line)
+            if rm_all:
+                rpc_name = rm_all.group(1)
+                if rpc_name == "education.cs_buy_edu_item":
+                    self.state["store_buy_pending"] = True
+                    bm = re.search(r"buy_num\s*=\s*(\d+),\s*store_item_id\s*=\s*(\d+)", line)
+                    if bm:
+                        self.state["last_store_buy_req"] = {
+                            "buy_num": int(bm.group(1)),
+                            "store_item_id": int(bm.group(2)),
+                        }
+                elif rpc_name in (
+                    "education.cs_train",
+                    "education.cs_decide",
+                    "education.cs_match",
+                    "education.cs_select_edu_activity",
+                    "education.cs_end_education",
+                    "education.cs_start_education",
+                    "education.cs_restore_education",
+                ):
+                    self.state["store_buy_pending"] = False
+                if record_events:
+                    events.append({"kind": "rpc", "name": rpc_name})
+
+        if "[UIManager]" in line and "CloseAll" in line:
+            self.state["store_buy_pending"] = False
+        elif "[UIManager]" in line and ("OpenUIView" in line or "CloseUIView" in line or "HideUIView" in line):
+            um = re.search(
+                r"(OpenUIView|CloseUIView|HideUIView)(?:</color>|:)?\s+(?:\d+\s+(?:(?:true|false)\s+)?)?((?:ui\.view\.|mini_game\.)[^\s,;\]]+)",
+                line,
+            )
+            if not um:
+                um = re.search(r"(OpenUIView|CloseUIView|HideUIView)(?:</color>|:)?\s+([a-zA-Z0-9_.]+)", line)
+            if um:
+                op, vn = um.group(1), um.group(2).rsplit(".", 1)[-1]
+                if vn == "edu_store_view" and op in ("OpenUIView", "CloseUIView", "HideUIView"):
+                    self.state["store_buy_pending"] = False
+                if record_events:
+                    events.append({"kind": "view_open" if op == "OpenUIView" else "view_close", "name": vn})
+        if "[EDU_MODEL]_SwitchState" in line:
+            em = re.search(r"进入状态:\s*(\d+)", line)
+            if em:
+                st_val = int(em.group(1))
+                self.state["store_buy_pending"] = False
+                if record_events:
+                    events.append({"kind": "state_id", "value": st_val})
+
+        if "[EDU_MODEL] 更新育成数据" in line:
+            self._edu_buf = line
+        elif self._edu_buf:
+            self._edu_buf += line
+            if len(self._edu_buf) > 120000:
+                self._edu_buf = ""
+
+        ui_res = lc.update_ui_state_from_line(self.state, line, self._skill_buf)
+        token_updated = False
+
+        if self._edu_buf and line.rstrip().endswith("}"):
+            em = re.search(r"\[EDU_MODEL\] 更新育成数据\s*\{(?:\n.*?\n\}|[^\n]*\})\s*$", self._edu_buf, re.S)
+            if em:
+                tok = em.group(0)
+                self._edu_buf = ""
+                lc.update_state_from_token(self.state, tok)
+                token_updated = True
+                if "edu_store_info" in tok and self.state.get("store_open") is False:
+                    self.state["store_buy_pending"] = False
+                if "train_cmds = {}" in tok:
+                    self.last_train_cmds = []
+                elif self.state.get("round_type", 1) == 1 and "train_cmds" in tok:
+                    cmds = lc.parse_train_cmd_block(tok)
+                    if len(cmds) == 6:
+                        self.last_train_cmds = cmds
+
+        if record_events and (ui_res.get("changed") or ui_res.get("skill_popup_ready") or token_updated):
+            events.append({"kind": "state_changed", "mode": ui_res.get("mode", "")})
+
+        if record_events and events:
+            for ev in events:
+                self.recent_events.append(ev)
+        return events

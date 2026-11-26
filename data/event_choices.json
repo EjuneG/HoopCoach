@@ -1,0 +1,3412 @@
+{
+  "40": {
+    "name": "怪味面包",
+    "branches": {
+      "1": {
+        "count": 5,
+        "effect_id": 395,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(稳回精力⚡+10)"
+      },
+      "2": {
+        "count": 11,
+        "effect_id": 397,
+        "ps": 30,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(🎲赌怪味面包：成功⚡+30 / 失败⚡-10，期望+15体)"
+      }
+    }
+  },
+  "70": {
+    "name": "器材加成-70熟练度",
+    "branches": {
+      "1": {
+        "count": 77,
+        "effect_id": 41004181,
+        "ps": 40,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(大回体⚡+40)"
+      },
+      "2": {
+        "count": 7,
+        "effect_id": 41004182,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(随机1项上限📈+80)",
+        "random_max_prop": 80
+      },
+      "3": {
+        "count": 35,
+        "effect_id": 41004183,
+        "ps": 0,
+        "coins": 40,
+        "props": {},
+        "max_props": {},
+        "label": "选项3(金币💰+40)"
+      }
+    }
+  },
+  "71": {
+    "name": "器材加成-100熟练度",
+    "branches": {
+      "1": {
+        "count": 76,
+        "effect_id": 41004184,
+        "ps": 70,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(超大幅回体⚡+70)"
+      },
+      "2": {
+        "count": 14,
+        "effect_id": 41004185,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(随机1项上限📈+130)",
+        "random_max_prop": 130
+      },
+      "3": {
+        "count": 26,
+        "effect_id": 41004186,
+        "ps": 0,
+        "coins": 50,
+        "props": {},
+        "max_props": {},
+        "label": "选项3(金币💰+50)"
+      }
+    }
+  },
+  "15001": {
+    "name": "澪奈加练事件",
+    "branches": {
+      "1": {
+        "count": 2,
+        "effect_id": 392,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(婉拒加练·⚡精力+10)"
+      },
+      "2": {
+        "count": 0,
+        "effect_id": 439,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(陪同加练·💪属性+5~10+队友成长)",
+        "est_stat_ev": 18.0
+      }
+    }
+  },
+  "15004": {
+    "name": "龙宫寺加练事件",
+    "branches": {
+      "1": {
+        "count": 4,
+        "effect_id": 392,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(婉拒加练·⚡精力+10)"
+      },
+      "2": {
+        "count": 0,
+        "effect_id": 439,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(陪同加练·💪属性+5~10+队友成长)",
+        "est_stat_ev": 18.0
+      }
+    }
+  },
+  "15013": {
+    "name": "亚理纱加练事件",
+    "branches": {
+      "2": {
+        "count": 1,
+        "effect_id": 439,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(陪同加练·💪属性+5~10+队友成长)",
+        "est_stat_ev": 18.0
+      },
+      "1": {
+        "count": 0,
+        "effect_id": 392,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(婉拒加练·⚡精力+10)",
+        "est_stat_ev": 0.0
+      }
+    }
+  },
+  "15019": {
+    "name": "闪堂加练事件",
+    "branches": {
+      "1": {
+        "count": 7,
+        "effect_id": 392,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(婉拒加练·⚡精力+10)"
+      },
+      "2": {
+        "count": 1,
+        "effect_id": 439,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "102": 5
+        },
+        "max_props": {},
+        "label": "选项2(陪同加练·💪属性+5~10+队友成长)"
+      }
+    }
+  },
+  "15022": {
+    "name": "皆川加练事件",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": 392,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(婉拒加练·⚡精力+10)"
+      },
+      "2": {
+        "count": 0,
+        "effect_id": 439,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(陪同加练·💪属性+5~10+队友成长)",
+        "est_stat_ev": 18.0
+      }
+    }
+  },
+  "15025": {
+    "name": "毒岛加练事件",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": 392,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(婉拒加练·⚡精力+10)"
+      },
+      "2": {
+        "count": 0,
+        "effect_id": 439,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(陪同加练·💪属性+5~10+队友成长)",
+        "est_stat_ev": 18.0
+      }
+    }
+  },
+  "15031": {
+    "name": "佐久间加练事件",
+    "branches": {
+      "1": {
+        "count": 9,
+        "effect_id": 392,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(婉拒加练·⚡精力+10)"
+      },
+      "2": {
+        "count": 2,
+        "effect_id": 439,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "102": 10
+        },
+        "max_props": {},
+        "label": "选项2(陪同加练·💪属性+5~10+队友成长)"
+      }
+    }
+  },
+  "15037": {
+    "name": "克拉莉丝加练事件",
+    "branches": {
+      "2": {
+        "count": 2,
+        "effect_id": 439,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "105": 5
+        },
+        "max_props": {},
+        "label": "选项2(陪同加练·💪属性+5~10+队友成长)",
+        "est_stat_ev": 18.0
+      },
+      "1": {
+        "count": 1,
+        "effect_id": 392,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(婉拒加练·⚡精力+10)",
+        "est_stat_ev": 0.0
+      }
+    }
+  },
+  "15038": {
+    "name": "克拉莉丝训练失败事件",
+    "branches": {
+      "2": {
+        "count": 1,
+        "effect_id": 3,
+        "ps": 20,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "15046": {
+    "name": "望月加练事件",
+    "branches": {
+      "1": {
+        "count": 7,
+        "effect_id": 392,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(婉拒加练·⚡精力+10)"
+      },
+      "2": {
+        "count": 1,
+        "effect_id": 439,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(陪同加练·💪属性+5~10+队友成长)",
+        "est_stat_ev": 18.0
+      }
+    }
+  },
+  "20087": {
+    "name": "榎本纯那加练事件",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": 392,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(婉拒加练·⚡精力+10)"
+      },
+      "2": {
+        "count": 0,
+        "effect_id": 439,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(陪同加练·💪属性+5~10+队友成长)",
+        "est_stat_ev": 18.0
+      }
+    }
+  },
+  "20088": {
+    "name": "春澄永远加练事件",
+    "branches": {
+      "2": {
+        "count": 1,
+        "effect_id": 439,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "102": 5
+        },
+        "max_props": {},
+        "label": "选项2(陪同加练·💪属性+5~10+队友成长)",
+        "est_stat_ev": 18.0
+      },
+      "1": {
+        "count": 0,
+        "effect_id": 392,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(婉拒加练·⚡精力+10)",
+        "est_stat_ev": 0.0
+      }
+    }
+  },
+  "20095": {
+    "name": "真崎加练事件",
+    "branches": {
+      "1": {
+        "count": 2,
+        "effect_id": 439,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "105": 10
+        },
+        "max_props": {},
+        "label": "选项1(陪同加练·💪属性+5~10+队友成长)"
+      },
+      "2": {
+        "count": 7,
+        "effect_id": 392,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(婉拒加练·⚡精力+10)"
+      }
+    }
+  },
+  "20098": {
+    "name": "降旗加练事件",
+    "branches": {
+      "2": {
+        "count": 1,
+        "effect_id": 392,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(婉拒加练·⚡精力+10)"
+      },
+      "1": {
+        "count": 0,
+        "effect_id": 439,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(陪同加练·💪属性+5~10+队友成长)",
+        "est_stat_ev": 18.0
+      }
+    }
+  },
+  "20103": {
+    "name": "希雅加练事件",
+    "branches": {
+      "1": {
+        "count": 2,
+        "effect_id": 439,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "102": 5
+        },
+        "max_props": {},
+        "label": "选项1(陪同加练·💪属性+5~10+队友成长)",
+        "est_stat_ev": 18.0
+      },
+      "2": {
+        "count": 11,
+        "effect_id": 392,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(婉拒加练·⚡精力+10)"
+      }
+    }
+  },
+  "81001": {
+    "name": "澪奈集训事件",
+    "branches": {
+      "3": {
+        "count": 1,
+        "effect_id": 41004170,
+        "ps": 0,
+        "coins": 30,
+        "props": {},
+        "max_props": {},
+        "label": "满足队友的愿望(开启后续许愿事件)",
+        "chain_ev": 15.0
+      },
+      "1": {
+        "count": 0,
+        "effect_id": 400011,
+        "ps": -20,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "和其他学校比赛的机会",
+        "est_stat_ev": 32.0
+      },
+      "2": {
+        "count": 2,
+        "effect_id": null,
+        "ps": 30,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "全队出游的休息日"
+      }
+    }
+  },
+  "81002": {
+    "name": "龙宫寺心叶集训事件",
+    "branches": {
+      "2": {
+        "count": 5,
+        "effect_id": null,
+        "ps": 30,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "全队出游的休息日"
+      },
+      "3": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 30,
+        "props": {},
+        "max_props": {},
+        "label": "满足队友的愿望(开启后续许愿事件)",
+        "chain_ev": 15.0
+      },
+      "1": {
+        "count": 0,
+        "effect_id": 400011,
+        "ps": -20,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "和其他学校比赛的机会",
+        "est_stat_ev": 32.0
+      }
+    }
+  },
+  "81005": {
+    "name": "亚理纱集训事件",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": 400011,
+        "ps": -20,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "和其他学校比赛的机会",
+        "est_stat_ev": 32.0
+      },
+      "2": {
+        "count": 0,
+        "effect_id": null,
+        "ps": 30,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "全队出游的休息日"
+      },
+      "3": {
+        "count": 0,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 30,
+        "props": {},
+        "max_props": {},
+        "label": "满足队友的愿望(开启后续许愿事件)",
+        "chain_ev": 15.0
+      }
+    }
+  },
+  "81007": {
+    "name": "闪堂电集训事件",
+    "branches": {
+      "2": {
+        "count": 11,
+        "effect_id": null,
+        "ps": 30,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "全队出游的休息日"
+      },
+      "3": {
+        "count": 2,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 30,
+        "props": {},
+        "max_props": {},
+        "label": "满足队友的愿望(开启后续许愿事件)",
+        "chain_ev": 15.0
+      },
+      "1": {
+        "count": 0,
+        "effect_id": 400011,
+        "ps": -20,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "和其他学校比赛的机会",
+        "est_stat_ev": 32.0
+      }
+    }
+  },
+  "81009": {
+    "name": "克拉莉丝集训事件",
+    "branches": {
+      "2": {
+        "count": 2,
+        "effect_id": null,
+        "ps": 30,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "全队出游的休息日"
+      },
+      "3": {
+        "count": 5,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 30,
+        "props": {},
+        "max_props": {},
+        "label": "满足队友的愿望(开启后续许愿事件)",
+        "chain_ev": 15.0
+      },
+      "1": {
+        "count": 0,
+        "effect_id": 400011,
+        "ps": -20,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "和其他学校比赛的机会",
+        "est_stat_ev": 32.0
+      }
+    }
+  },
+  "81011": {
+    "name": "羽田朱志香集训事件",
+    "branches": {
+      "2": {
+        "count": 3,
+        "effect_id": null,
+        "ps": 30,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "全队出游的休息日"
+      },
+      "3": {
+        "count": 2,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 30,
+        "props": {},
+        "max_props": {},
+        "label": "满足队友的愿望(开启后续许愿事件)",
+        "chain_ev": 15.0
+      },
+      "1": {
+        "count": 0,
+        "effect_id": 400011,
+        "ps": -20,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "和其他学校比赛的机会",
+        "est_stat_ev": 32.0
+      }
+    }
+  },
+  "81012": {
+    "name": "望月透集训事件",
+    "branches": {
+      "2": {
+        "count": 7,
+        "effect_id": null,
+        "ps": 30,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "全队出游的休息日"
+      },
+      "3": {
+        "count": 5,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 30,
+        "props": {},
+        "max_props": {},
+        "label": "满足队友的愿望(开启后续许愿事件)",
+        "chain_ev": 15.0
+      },
+      "1": {
+        "count": 0,
+        "effect_id": 400011,
+        "ps": -20,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "和其他学校比赛的机会",
+        "est_stat_ev": 32.0
+      }
+    }
+  },
+  "81017": {
+    "name": "皆川式集训事件",
+    "branches": {
+      "3": {
+        "count": 2,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 30,
+        "props": {},
+        "max_props": {},
+        "label": "满足队友的愿望(开启后续许愿事件)",
+        "chain_ev": 15.0
+      },
+      "1": {
+        "count": 0,
+        "effect_id": 400011,
+        "ps": -20,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "和其他学校比赛的机会",
+        "est_stat_ev": 32.0
+      },
+      "2": {
+        "count": 0,
+        "effect_id": null,
+        "ps": 30,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "全队出游的休息日"
+      }
+    }
+  },
+  "81018": {
+    "name": "毒岛黛也集训事件",
+    "branches": {
+      "2": {
+        "count": 2,
+        "effect_id": null,
+        "ps": 30,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "全队出游的休息日"
+      },
+      "1": {
+        "count": 0,
+        "effect_id": 400011,
+        "ps": -20,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "和其他学校比赛的机会",
+        "est_stat_ev": 32.0
+      },
+      "3": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 30,
+        "props": {},
+        "max_props": {},
+        "label": "满足队友的愿望(开启后续许愿事件)",
+        "chain_ev": 15.0
+      }
+    }
+  },
+  "81020": {
+    "name": "佐久间雨乃集训事件",
+    "branches": {
+      "2": {
+        "count": 15,
+        "effect_id": null,
+        "ps": 30,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "全队出游的休息日"
+      },
+      "1": {
+        "count": 0,
+        "effect_id": 400011,
+        "ps": -20,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "和其他学校比赛的机会",
+        "est_stat_ev": 32.0
+      },
+      "3": {
+        "count": 2,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 30,
+        "props": {},
+        "max_props": {},
+        "label": "满足队友的愿望(开启后续许愿事件)",
+        "chain_ev": 15.0
+      }
+    }
+  },
+  "81024": {
+    "name": "榎本纯那集训事件",
+    "branches": {
+      "3": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 30,
+        "props": {},
+        "max_props": {},
+        "label": "满足队友的愿望(开启后续许愿事件)",
+        "chain_ev": 15.0
+      },
+      "1": {
+        "count": 0,
+        "effect_id": 400011,
+        "ps": -20,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "和其他学校比赛的机会",
+        "est_stat_ev": 32.0
+      },
+      "2": {
+        "count": 0,
+        "effect_id": null,
+        "ps": 30,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "全队出游的休息日"
+      }
+    }
+  },
+  "81025": {
+    "name": "春澄永远集训事件",
+    "branches": {
+      "2": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 30,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "全队出游的休息日"
+      },
+      "3": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 30,
+        "props": {},
+        "max_props": {},
+        "label": "满足队友的愿望(开启后续许愿事件)",
+        "chain_ev": 15.0
+      },
+      "1": {
+        "count": 0,
+        "effect_id": 400011,
+        "ps": -20,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "和其他学校比赛的机会",
+        "est_stat_ev": 32.0
+      }
+    }
+  },
+  "81027": {
+    "name": "真崎辉世集训事件",
+    "branches": {
+      "2": {
+        "count": 9,
+        "effect_id": null,
+        "ps": 30,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "全队出游的休息日"
+      },
+      "3": {
+        "count": 10,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 30,
+        "props": {},
+        "max_props": {},
+        "label": "满足队友的愿望(开启后续许愿事件)",
+        "chain_ev": 15.0
+      },
+      "1": {
+        "count": 0,
+        "effect_id": 400011,
+        "ps": -20,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "和其他学校比赛的机会",
+        "est_stat_ev": 32.0
+      }
+    }
+  },
+  "81028": {
+    "name": "先斗月绮集训事件",
+    "branches": {
+      "3": {
+        "count": 2,
+        "effect_id": 400011,
+        "ps": 0,
+        "coins": 30,
+        "props": {},
+        "max_props": {},
+        "label": "满足队友的愿望(开启后续许愿事件)",
+        "chain_ev": 15.0
+      },
+      "1": {
+        "count": 0,
+        "effect_id": 400011,
+        "ps": -20,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "和其他学校比赛的机会",
+        "est_stat_ev": 32.0
+      },
+      "2": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 30,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "全队出游的休息日"
+      }
+    }
+  },
+  "81035": {
+    "name": "羽田朱志香许愿事件",
+    "branches": {
+      "2": {
+        "count": 3,
+        "effect_id": null,
+        "ps": 40,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(大回体⚡+40)"
+      },
+      "3": {
+        "count": 2,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 50,
+        "props": {},
+        "max_props": {},
+        "label": "选项3(金币💰+50)"
+      },
+      "1": {
+        "count": 0,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(两个推荐属性各+20)"
+      }
+    }
+  },
+  "81036": {
+    "name": "望月透许愿事件",
+    "branches": {
+      "2": {
+        "count": 7,
+        "effect_id": null,
+        "ps": 40,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(大回体⚡+40)"
+      },
+      "3": {
+        "count": 5,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 50,
+        "props": {},
+        "max_props": {},
+        "label": "选项3(金币💰+50)"
+      },
+      "1": {
+        "count": 0,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(两个推荐属性各+20)"
+      }
+    }
+  },
+  "81038": {
+    "name": "澪奈许愿事件",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(两个推荐属性各+20)"
+      },
+      "2": {
+        "count": 0,
+        "effect_id": null,
+        "ps": 40,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(大回体⚡+40)"
+      },
+      "3": {
+        "count": 2,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 50,
+        "props": {},
+        "max_props": {},
+        "label": "选项3(金币💰+50)"
+      }
+    }
+  },
+  "81039": {
+    "name": "龙宫寺许愿事件",
+    "branches": {
+      "2": {
+        "count": 2,
+        "effect_id": null,
+        "ps": 40,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(大回体⚡+40)"
+      },
+      "3": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 50,
+        "props": {},
+        "max_props": {},
+        "label": "选项3(金币💰+50)"
+      },
+      "1": {
+        "count": 3,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "101": 10,
+          "106": 10
+        },
+        "max_props": {},
+        "label": "选项1(两个推荐属性各+20)"
+      }
+    }
+  },
+  "81041": {
+    "name": "亚理纱许愿事件",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(两个推荐属性各+20)"
+      },
+      "2": {
+        "count": 0,
+        "effect_id": null,
+        "ps": 40,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(大回体⚡+40)"
+      },
+      "3": {
+        "count": 0,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 50,
+        "props": {},
+        "max_props": {},
+        "label": "选项3(金币💰+50)"
+      }
+    }
+  },
+  "81042": {
+    "name": "闪堂电许愿事件",
+    "branches": {
+      "2": {
+        "count": 7,
+        "effect_id": null,
+        "ps": 40,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(大回体⚡+40)"
+      },
+      "3": {
+        "count": 4,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 50,
+        "props": {},
+        "max_props": {},
+        "label": "选项3(金币💰+50)"
+      },
+      "1": {
+        "count": 2,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "102": 10,
+          "105": 10
+        },
+        "max_props": {},
+        "label": "选项1(两个推荐属性各+20)"
+      }
+    }
+  },
+  "81046": {
+    "name": "佐久间雨乃许愿事件",
+    "branches": {
+      "2": {
+        "count": 5,
+        "effect_id": null,
+        "ps": 40,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(大回体⚡+40)"
+      },
+      "3": {
+        "count": 8,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 50,
+        "props": {},
+        "max_props": {},
+        "label": "选项3(金币💰+50)"
+      },
+      "1": {
+        "count": 5,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "102": 10,
+          "104": 10
+        },
+        "max_props": {},
+        "label": "选项1(两个推荐属性各+20)"
+      }
+    }
+  },
+  "81047": {
+    "name": "毒岛黛也许愿事件",
+    "branches": {
+      "2": {
+        "count": 2,
+        "effect_id": null,
+        "ps": 40,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(大回体⚡+40)"
+      },
+      "3": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 50,
+        "props": {},
+        "max_props": {},
+        "label": "选项3(金币💰+50)"
+      },
+      "1": {
+        "count": 0,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(两个推荐属性各+20)"
+      }
+    }
+  },
+  "81048": {
+    "name": "皆川式许愿事件",
+    "branches": {
+      "2": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 40,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(大回体⚡+40)"
+      },
+      "3": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 50,
+        "props": {},
+        "max_props": {},
+        "label": "选项3(金币💰+50)"
+      },
+      "1": {
+        "count": 0,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(两个推荐属性各+20)"
+      }
+    }
+  },
+  "81050": {
+    "name": "榎本纯那许愿事件",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(两个推荐属性各+20)"
+      },
+      "2": {
+        "count": 0,
+        "effect_id": null,
+        "ps": 40,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(大回体⚡+40)"
+      },
+      "3": {
+        "count": 0,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 50,
+        "props": {},
+        "max_props": {},
+        "label": "选项3(金币💰+50)"
+      }
+    }
+  },
+  "81051": {
+    "name": "春澄永远许愿事件",
+    "branches": {
+      "2": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 40,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(大回体⚡+40)"
+      },
+      "3": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 50,
+        "props": {},
+        "max_props": {},
+        "label": "选项3(金币💰+50)"
+      },
+      "1": {
+        "count": 0,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(两个推荐属性各+20)"
+      }
+    }
+  },
+  "81053": {
+    "name": "真崎辉世许愿事件",
+    "branches": {
+      "1": {
+        "count": 4,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "105": 10,
+          "106": 10
+        },
+        "max_props": {},
+        "label": "选项1(两个推荐属性各+20)"
+      },
+      "2": {
+        "count": 7,
+        "effect_id": null,
+        "ps": 40,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(大回体⚡+40)"
+      },
+      "3": {
+        "count": 6,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 50,
+        "props": {},
+        "max_props": {},
+        "label": "选项3(金币💰+50)"
+      }
+    }
+  },
+  "81059": {
+    "name": "先斗月绮许愿事件",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(两个推荐属性各+20)"
+      },
+      "3": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 50,
+        "props": {},
+        "max_props": {},
+        "label": "选项3(金币💰+50)"
+      },
+      "2": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 40,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(大回体⚡+40)"
+      }
+    }
+  },
+  "81060": {
+    "name": "克拉莉丝许愿事件",
+    "branches": {
+      "2": {
+        "count": 3,
+        "effect_id": null,
+        "ps": 40,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(大回体⚡+40)"
+      },
+      "3": {
+        "count": 4,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 50,
+        "props": {},
+        "max_props": {},
+        "label": "选项3(金币💰+50)"
+      },
+      "1": {
+        "count": 0,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(两个推荐属性各+20)"
+      }
+    }
+  },
+  "100001": {
+    "name": "经费下发",
+    "branches": {
+      "2": {
+        "count": 3,
+        "effect_id": 7079,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(下/右·加属性或上限)",
+        "est_stat_ev": 20.0
+      },
+      "1": {
+        "count": 0,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(上/左·稳回精力)"
+      }
+    }
+  },
+  "100004": {
+    "name": "胜利的仪式",
+    "branches": {
+      "1": {
+        "count": 20,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(上/左·稳回精力)"
+      },
+      "2": {
+        "count": 8,
+        "effect_id": 7087,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "102": 20
+        },
+        "max_props": {},
+        "label": "选项2(下/右·加属性或上限)"
+      }
+    }
+  },
+  "100006": {
+    "name": "绝杀登屏",
+    "branches": {
+      "1": {
+        "count": 35,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(上/左·稳回精力)"
+      },
+      "2": {
+        "count": 4,
+        "effect_id": 7089,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "102": 20
+        },
+        "max_props": {},
+        "label": "选项2(下/右·加属性或上限)"
+      }
+    }
+  },
+  "100019": {
+    "name": "篮球队专栏",
+    "branches": {
+      "1": {
+        "count": 2,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(上/左·稳回精力)"
+      },
+      "2": {
+        "count": 0,
+        "effect_id": 7097,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(下/右·加属性或上限)",
+        "est_stat_ev": 20.0
+      }
+    }
+  },
+  "100021": {
+    "name": "专业指导",
+    "branches": {
+      "1": {
+        "count": 23,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(上/左·稳回精力)"
+      },
+      "2": {
+        "count": 6,
+        "effect_id": 7099,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "105": 20
+        },
+        "max_props": {},
+        "label": "选项2(下/右·加属性或上限)"
+      }
+    }
+  },
+  "100023": {
+    "name": "与路人的闲聊",
+    "branches": {
+      "1": {
+        "count": 26,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(上/左·稳回精力)"
+      },
+      "2": {
+        "count": 7,
+        "effect_id": 7101,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "105": 20
+        },
+        "max_props": {},
+        "label": "选项2(下/右·加属性或上限)"
+      }
+    }
+  },
+  "100033": {
+    "name": "突然的凉风",
+    "branches": {
+      "1": {
+        "count": 24,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(上/左·稳回精力)"
+      },
+      "2": {
+        "count": 3,
+        "effect_id": 7111,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "105": 20
+        },
+        "max_props": {},
+        "label": "选项2(下/右·加属性或上限)"
+      }
+    }
+  },
+  "100038": {
+    "name": "状态绝佳",
+    "branches": {
+      "1": {
+        "count": 24,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(上/左·稳回精力)"
+      },
+      "2": {
+        "count": 5,
+        "effect_id": 7116,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "104": 10
+        },
+        "max_props": {},
+        "label": "选项2(下/右·加属性或上限)"
+      }
+    }
+  },
+  "100040": {
+    "name": "恶劣天气",
+    "branches": {
+      "1": {
+        "count": 30,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(上/左·稳回精力)"
+      },
+      "2": {
+        "count": 9,
+        "effect_id": 7118,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "104": 20
+        },
+        "max_props": {},
+        "label": "选项2(下/右·加属性或上限)"
+      }
+    }
+  },
+  "100050": {
+    "name": "免费会员",
+    "branches": {
+      "1": {
+        "count": 29,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(上/左·稳回精力)"
+      },
+      "2": {
+        "count": 4,
+        "effect_id": 7128,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "104": 20
+        },
+        "max_props": {},
+        "label": "选项2(下/右·加属性或上限)"
+      }
+    }
+  },
+  "100052": {
+    "name": "广告牌出租",
+    "branches": {
+      "1": {
+        "count": 4,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(上/左·稳回精力)"
+      },
+      "2": {
+        "count": 1,
+        "effect_id": 7130,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(下/右·加属性或上限)",
+        "est_stat_ev": 20.0
+      }
+    }
+  },
+  "100055": {
+    "name": "假期特权",
+    "branches": {
+      "1": {
+        "count": 24,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(上/左·稳回精力)"
+      },
+      "2": {
+        "count": 4,
+        "effect_id": 7133,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {
+          "102": 30
+        },
+        "label": "选项2(下/右·加属性或上限)"
+      }
+    }
+  },
+  "100057": {
+    "name": "广播站支持",
+    "branches": {
+      "1": {
+        "count": 30,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(上/左·稳回精力)"
+      },
+      "2": {
+        "count": 1,
+        "effect_id": 7135,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {
+          "104": 10
+        },
+        "label": "选项2(下/右·加属性或上限)"
+      }
+    }
+  },
+  "100067": {
+    "name": "奶茶与蛋白粉",
+    "branches": {
+      "1": {
+        "count": 14,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(上/左·稳回精力)"
+      },
+      "2": {
+        "count": 3,
+        "effect_id": 7145,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {
+          "102": 30
+        },
+        "label": "选项2(下/右·加属性或上限)"
+      }
+    }
+  },
+  "100069": {
+    "name": "最后一份便当",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(上/左·稳回精力)"
+      },
+      "2": {
+        "count": 3,
+        "effect_id": 7147,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {
+          "104": 14
+        },
+        "label": "选项2(下/右·加属性或上限)"
+      }
+    }
+  },
+  "100070": {
+    "name": "狗与早饭",
+    "branches": {
+      "1": {
+        "count": 2,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(上/左·稳回精力)"
+      },
+      "2": {
+        "count": 0,
+        "effect_id": 7148,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(下/右·加属性或上限)",
+        "est_stat_ev": 20.0
+      }
+    }
+  },
+  "100072": {
+    "name": "临时替补",
+    "branches": {
+      "1": {
+        "count": 20,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(上/左·稳回精力)"
+      },
+      "2": {
+        "count": 2,
+        "effect_id": 7150,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {
+          "103": 30
+        },
+        "label": "选项2(下/右·加属性或上限)"
+      }
+    }
+  },
+  "100074": {
+    "name": "接球1v1",
+    "branches": {
+      "1": {
+        "count": 25,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(上/左·稳回精力)"
+      },
+      "2": {
+        "count": 1,
+        "effect_id": 7152,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {
+          "105": 30
+        },
+        "label": "选项2(下/右·加属性或上限)"
+      }
+    }
+  },
+  "100083": {
+    "name": "柠檬攻击",
+    "branches": {
+      "1": {
+        "count": 38,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(上/左·稳回精力)"
+      },
+      "2": {
+        "count": 4,
+        "effect_id": 7161,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {
+          "103": 30
+        },
+        "label": "选项2(下/右·加属性或上限)"
+      }
+    }
+  },
+  "100086": {
+    "name": "神秘仪式",
+    "branches": {
+      "1": {
+        "count": 4,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(上/左·稳回精力)"
+      },
+      "2": {
+        "count": 0,
+        "effect_id": 7164,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(下/右·加属性或上限)",
+        "est_stat_ev": 20.0
+      }
+    }
+  },
+  "100121": {
+    "name": "柠檬汁整蛊",
+    "branches": {
+      "1": {
+        "count": 16,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(上/左·稳回精力)"
+      },
+      "2": {
+        "count": 0,
+        "effect_id": 7199,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(下/右·加属性或上限)",
+        "est_stat_ev": 20.0
+      }
+    }
+  },
+  "100125": {
+    "name": "智械危机",
+    "branches": {
+      "1": {
+        "count": 22,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(上/左·稳回精力)"
+      },
+      "2": {
+        "count": 9,
+        "effect_id": 7200,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "102": 20
+        },
+        "max_props": {},
+        "label": "选项2(下/右·加属性或上限)"
+      }
+    }
+  },
+  "100127": {
+    "name": "疾驰的棒球",
+    "branches": {
+      "1": {
+        "count": 2,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(上/左·稳回精力)"
+      },
+      "2": {
+        "count": 3,
+        "effect_id": 7205,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(下/右·加属性或上限)",
+        "est_stat_ev": 20.0
+      }
+    }
+  },
+  "400105": {
+    "name": "理事长的神秘理疗",
+    "branches": {
+      "1": {
+        "count": 69,
+        "effect_id": 401,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(稳健回体⚡+10)"
+      },
+      "2": {
+        "count": 10,
+        "effect_id": 402,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "random_prop": 30,
+        "win_rate": 0.5,
+        "fail_ps": -10,
+        "label": "选项2(🎲50%随机1项+30/50%⚡-10)"
+      },
+      "3": {
+        "count": 22,
+        "effect_id": 405,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "random_prop": 31,
+        "win_rate": 0.5,
+        "fail_ps": -10,
+        "label": "选项3(🎲50%随机1项+31/50%⚡-10)"
+      }
+    }
+  },
+  "910011": {
+    "name": "澪奈的心事？",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": 41004170,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "910071": {
+    "name": "模拟器,启动！",
+    "branches": {
+      "1": {
+        "count": 13,
+        "effect_id": 1,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "910122": {
+    "name": "灵感补完计划？",
+    "branches": {
+      "1": {
+        "count": 12,
+        "effect_id": 1,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "910021": {
+    "name": "陌生人来访",
+    "branches": {
+      "1": {
+        "count": 4,
+        "effect_id": 1,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "910201": {
+    "name": "薛定谔的鱼",
+    "branches": {
+      "1": {
+        "count": 17,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "101": 15
+        },
+        "max_props": {},
+        "label": "选项1(同意帮忙·开启佐久间钓鱼心愿)"
+      },
+      "2": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(劝她别逞强)"
+      }
+    }
+  },
+  "910301": {
+    "name": "因为太慢就全点钓鱼力了",
+    "branches": {
+      "1": {
+        "count": 17,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "5100005": {
+    "name": "海边的波子汽水",
+    "branches": {
+      "1": {
+        "count": 23,
+        "effect_id": null,
+        "ps": 60,
+        "coins": 0,
+        "props": {
+          "101": 10,
+          "102": 10,
+          "103": 10,
+          "104": 10,
+          "105": 10,
+          "106": 10
+        },
+        "max_props": {},
+        "label": "海滩自动随机奖励(⚡+20~60体 或 全六维各+10)"
+      }
+    }
+  },
+  "5200090": {
+    "name": "平板支撑",
+    "branches": {
+      "1": {
+        "count": 12,
+        "effect_id": 1126,
+        "ps": 30,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      },
+      "2": {
+        "count": 1,
+        "effect_id": 118,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "104": 15
+        },
+        "max_props": {}
+      }
+    }
+  },
+  "5200093": {
+    "name": "记者来访",
+    "branches": {
+      "1": {
+        "count": 36,
+        "effect_id": 614,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "104": 10
+        },
+        "max_props": {},
+        "label": "选项1(稳拿💪体能+10)"
+      },
+      "2": {
+        "count": 58,
+        "effect_id": 616,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "104": 40
+        },
+        "max_props": {},
+        "label": "选项2(🎲博体能+40 / 失败-10体，期望+22体能-5体)",
+        "fail_ps": -10,
+        "win_rate": 0.5
+      }
+    }
+  },
+  "5200094": {
+    "name": "神秘的梦",
+    "branches": {
+      "1": {
+        "count": 15,
+        "effect_id": 417,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(稳回精力⚡+10)"
+      },
+      "2": {
+        "count": 5,
+        "effect_id": 419,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "random_prop": 30,
+        "win_rate": 0.5,
+        "fail_ps": -10,
+        "label": "选项2(🎲50%随机1项+30/50%⚡-10)"
+      },
+      "3": {
+        "count": 17,
+        "effect_id": 418,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "101": 10,
+          "102": 10,
+          "103": 10,
+          "104": 10,
+          "105": 10,
+          "106": 10
+        },
+        "max_props": {},
+        "win_rate": 0.55,
+        "fail_ps": -10,
+        "label": "选项3(🎲55%全六维各+10/45%⚡-10)"
+      }
+    }
+  },
+  "5200182": {
+    "name": "降旗千红纱集训事件",
+    "branches": {
+      "2": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 30,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "全队出游的休息日"
+      },
+      "3": {
+        "count": 2,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 30,
+        "props": {},
+        "max_props": {},
+        "label": "满足队友的愿望(开启后续许愿事件)",
+        "chain_ev": 15.0
+      },
+      "1": {
+        "count": 0,
+        "effect_id": 400011,
+        "ps": -20,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "和其他学校比赛的机会",
+        "est_stat_ev": 32.0
+      }
+    }
+  },
+  "5200186": {
+    "name": "希雅集训事件",
+    "branches": {
+      "2": {
+        "count": 14,
+        "effect_id": null,
+        "ps": 30,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "全队出游的休息日"
+      },
+      "3": {
+        "count": 7,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 30,
+        "props": {},
+        "max_props": {},
+        "label": "满足队友的愿望(开启后续许愿事件)",
+        "chain_ev": 15.0
+      },
+      "1": {
+        "count": 0,
+        "effect_id": 400011,
+        "ps": -20,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "和其他学校比赛的机会",
+        "est_stat_ev": 32.0
+      }
+    }
+  },
+  "5200190": {
+    "name": "降旗千红纱许愿事件",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(两个推荐属性各+20)"
+      },
+      "2": {
+        "count": 2,
+        "effect_id": null,
+        "ps": 40,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(大回体⚡+40)"
+      },
+      "3": {
+        "count": 0,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 50,
+        "props": {},
+        "max_props": {},
+        "label": "选项3(金币💰+50)"
+      }
+    }
+  },
+  "5200192": {
+    "name": "希雅许愿事件",
+    "branches": {
+      "1": {
+        "count": 5,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "102": 10,
+          "103": 10
+        },
+        "max_props": {},
+        "label": "选项1(两个推荐属性各+20)"
+      },
+      "2": {
+        "count": 10,
+        "effect_id": null,
+        "ps": 40,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(大回体⚡+40)"
+      },
+      "3": {
+        "count": 6,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 50,
+        "props": {},
+        "max_props": {},
+        "label": "选项3(金币💰+50)"
+      }
+    }
+  },
+  "5300198": {
+    "name": "训练失败",
+    "branches": {
+      "2": {
+        "count": 1,
+        "effect_id": 3,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "5300226": {
+    "name": "经理技能事件",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(维持原计划·⚡精力+10)"
+      },
+      "2": {
+        "count": 68,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "101": 18
+        },
+        "max_props": {},
+        "label": "选项2(临时改练法·获得随机比赛技能)"
+      }
+    }
+  },
+  "5300256": {
+    "name": "角色技能事件",
+    "branches": {
+      "2": {
+        "count": 12,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "5300258": {
+    "name": "角色技能事件",
+    "branches": {
+      "2": {
+        "count": 10,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "5300263": {
+    "name": "角色技能事件",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(婉拒邀请·⚡精力+10)"
+      },
+      "2": {
+        "count": 17,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "101": 18
+        },
+        "max_props": {},
+        "label": "选项2(热情答应·获得随机比赛技能)"
+      }
+    }
+  },
+  "5300266": {
+    "name": "角色技能事件",
+    "branches": {
+      "2": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "5300268": {
+    "name": "角色技能事件",
+    "branches": {
+      "2": {
+        "count": 18,
+        "effect_id": 4392,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "5300276": {
+    "name": "角色技能事件",
+    "branches": {
+      "2": {
+        "count": 20,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "9102401": {
+    "name": "我房子塌了",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "9104601": {
+    "name": "古典乐爱好者",
+    "branches": {
+      "1": {
+        "count": 19,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "81021": {
+    "name": "千圣集训事件",
+    "branches": {
+      "2": {
+        "count": 2,
+        "effect_id": null,
+        "ps": 30,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "15034": {
+    "name": "千圣加练事件",
+    "branches": {
+      "2": {
+        "count": 1,
+        "effect_id": 439,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "102": 10
+        },
+        "max_props": {}
+      },
+      "1": {
+        "count": 1,
+        "effect_id": 392,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "81044": {
+    "name": "千圣许愿事件",
+    "branches": {
+      "2": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 40,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      },
+      "3": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 50,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "20090": {
+    "name": "先斗加练事件",
+    "branches": {
+      "2": {
+        "count": 1,
+        "effect_id": 392,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "100093": {
+    "name": "惊人的速度",
+    "branches": {
+      "1": {
+        "count": 17,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      },
+      "2": {
+        "count": 2,
+        "effect_id": 7171,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {
+          "102": 30
+        }
+      }
+    }
+  },
+  "100111": {
+    "name": "庆功仪式",
+    "branches": {
+      "1": {
+        "count": 6,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      },
+      "2": {
+        "count": 1,
+        "effect_id": 7186,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {
+          "104": 30
+        }
+      }
+    }
+  },
+  "100079": {
+    "name": "饮料搭配",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "5300253": {
+    "name": "角色技能事件",
+    "branches": {
+      "1": {
+        "count": 2,
+        "effect_id": null,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(婉拒邀请·⚡精力+10)"
+      },
+      "2": {
+        "count": 5,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "est_stat_ev": 14,
+        "label": "选项2(热情答应·随机比赛技能)"
+      }
+    }
+  },
+  "100036": {
+    "name": "才艺表演",
+    "branches": {
+      "2": {
+        "count": 3,
+        "effect_id": 7114,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "104": 20
+        },
+        "max_props": {}
+      }
+    }
+  },
+  "100090": {
+    "name": "保持优雅",
+    "branches": {
+      "1": {
+        "count": 3,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "15002": {
+    "name": "澪奈训练失败事件",
+    "branches": {
+      "2": {
+        "count": 1,
+        "effect_id": 2,
+        "ps": -20,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "5300252": {
+    "name": "角色技能事件",
+    "branches": {
+      "2": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "100110": {
+    "name": "下一条鱼",
+    "branches": {
+      "1": {
+        "count": 5,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      },
+      "2": {
+        "count": 1,
+        "effect_id": 7185,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {
+          "105": 30
+        }
+      }
+    }
+  },
+  "9104607": {
+    "name": "河神的祝福",
+    "branches": {
+      "2": {
+        "count": 1,
+        "effect_id": 2,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      },
+      "1": {
+        "count": 1,
+        "effect_id": 1,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "100071": {
+    "name": "流浪猫闯入",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "5300257": {
+    "name": "角色技能事件",
+    "branches": {
+      "2": {
+        "count": 2,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "100020": {
+    "name": "营养支持",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "31003010": {
+    "name": "一砖入魂·一",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": 1,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "101": 40
+        },
+        "max_props": {}
+      }
+    }
+  },
+  "910132": {
+    "name": "提桶开干？",
+    "branches": {
+      "1": {
+        "count": 6,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "81013": {
+    "name": "百目鬼剑集训事件",
+    "branches": {
+      "3": {
+        "count": 2,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 30,
+        "props": {},
+        "max_props": {}
+      },
+      "2": {
+        "count": 4,
+        "effect_id": null,
+        "ps": 30,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "5300259": {
+    "name": "角色技能事件",
+    "branches": {
+      "2": {
+        "count": 2,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "31003011": {
+    "name": "一砖入魂·二",
+    "branches": {
+      "2": {
+        "count": 1,
+        "effect_id": 2,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {
+          "101": 70
+        }
+      }
+    }
+  },
+  "81063": {
+    "name": "百目鬼剑许愿事件",
+    "branches": {
+      "1": {
+        "count": 3,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "101": 10,
+          "102": 20
+        },
+        "max_props": {}
+      },
+      "2": {
+        "count": 2,
+        "effect_id": null,
+        "ps": 39,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "20082": {
+    "name": "百目鬼剑加练事件",
+    "branches": {
+      "2": {
+        "count": 1,
+        "effect_id": 439,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "101": 5
+        },
+        "max_props": {}
+      },
+      "1": {
+        "count": 2,
+        "effect_id": 392,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "100126": {
+    "name": "脱落的篮网",
+    "branches": {
+      "1": {
+        "count": 6,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      },
+      "2": {
+        "count": 1,
+        "effect_id": 7201,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "101": 9
+        },
+        "max_props": {}
+      }
+    }
+  },
+  "81023": {
+    "name": "清水万里集训事件",
+    "branches": {
+      "2": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 30,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "100139": {
+    "name": "训练计划是",
+    "branches": {
+      "1": {
+        "count": 11,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "81049": {
+    "name": "清水万里许愿事件",
+    "branches": {
+      "2": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 40,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "100062": {
+    "name": "平台变更",
+    "branches": {
+      "1": {
+        "count": 15,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      },
+      "2": {
+        "count": 3,
+        "effect_id": 7140,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {
+          "105": 30
+        }
+      }
+    }
+  },
+  "100028": {
+    "name": "成绩提升！",
+    "branches": {
+      "1": {
+        "count": 6,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      },
+      "2": {
+        "count": 2,
+        "effect_id": 7106,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "106": 10
+        },
+        "max_props": {}
+      }
+    }
+  },
+  "5200163": {
+    "name": "训练失败事件",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": null,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "100138": {
+    "name": "错配的Bgm",
+    "branches": {
+      "1": {
+        "count": 7,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      },
+      "2": {
+        "count": 5,
+        "effect_id": 7205,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {
+          "101": 30
+        }
+      }
+    }
+  },
+  "100045": {
+    "name": "心理辅导",
+    "branches": {
+      "1": {
+        "count": 4,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      },
+      "2": {
+        "count": 4,
+        "effect_id": 7123,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "103": 20
+        },
+        "max_props": {}
+      }
+    }
+  },
+  "100047": {
+    "name": "优质水果",
+    "branches": {
+      "1": {
+        "count": 5,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      },
+      "2": {
+        "count": 1,
+        "effect_id": 7125,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "103": 20
+        },
+        "max_props": {}
+      }
+    }
+  },
+  "100039": {
+    "name": "额外指导",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "100064": {
+    "name": "网购失误",
+    "branches": {
+      "1": {
+        "count": 9,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      },
+      "2": {
+        "count": 4,
+        "effect_id": 7142,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {
+          "101": 30
+        }
+      }
+    }
+  },
+  "100108": {
+    "name": "素材储备",
+    "branches": {
+      "1": {
+        "count": 4,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "100116": {
+    "name": "钥匙遗失",
+    "branches": {
+      "1": {
+        "count": 6,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      },
+      "2": {
+        "count": 4,
+        "effect_id": 7191,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {
+          "102": 30
+        }
+      }
+    }
+  },
+  "100118": {
+    "name": "篮球事故",
+    "branches": {
+      "1": {
+        "count": 8,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "100094": {
+    "name": "死神之名",
+    "branches": {
+      "1": {
+        "count": 10,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "100030": {
+    "name": "合宿延长",
+    "branches": {
+      "1": {
+        "count": 9,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "910092": {
+    "name": "她的苦恼",
+    "branches": {
+      "1": {
+        "count": 2,
+        "effect_id": 1,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "910093": {
+    "name": "不肯落后",
+    "branches": {
+      "1": {
+        "count": 2,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "910094": {
+    "name": "寻找神秘人",
+    "branches": {
+      "1": {
+        "count": 2,
+        "effect_id": null,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "100096": {
+    "name": "海边玩乐",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "15043": {
+    "name": "羽田加练事件",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": 392,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "100002": {
+    "name": "游戏厅高手",
+    "branches": {
+      "2": {
+        "count": 2,
+        "effect_id": 7085,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "102": 20
+        },
+        "max_props": {}
+      },
+      "1": {
+        "count": 1,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "31003013": {
+    "name": "起跳之星·一",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": 1,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "102": 40
+        },
+        "max_props": {},
+        "label": "选项1(获得属性)"
+      },
+      "2": {
+        "count": 0,
+        "effect_id": 2,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {
+          "102": 40
+        },
+        "label": "选项2(获得属性上限)"
+      }
+    }
+  },
+  "100080": {
+    "name": "慷慨解囊",
+    "branches": {
+      "2": {
+        "count": 1,
+        "effect_id": 7158,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {
+          "101": 30
+        }
+      }
+    }
+  },
+  "15032": {
+    "name": "佐久间训练失败事件",
+    "branches": {
+      "1": {
+        "count": 5,
+        "effect_id": null,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项1(劝她不要勉强·稳健恢复)"
+      },
+      "2": {
+        "count": 1,
+        "effect_id": null,
+        "ps": -10,
+        "coins": 0,
+        "props": {},
+        "max_props": {},
+        "label": "选项2(带她单独训练·高风险)"
+      }
+    }
+  },
+  "100109": {
+    "name": "最快的第一步",
+    "branches": {
+      "1": {
+        "count": 2,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "100011": {
+    "name": "神秘的旧书",
+    "branches": {
+      "2": {
+        "count": 1,
+        "effect_id": 7094,
+        "ps": 0,
+        "coins": 0,
+        "props": {
+          "101": 20
+        },
+        "max_props": {}
+      }
+    }
+  },
+  "100054": {
+    "name": "球队宣传",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": 7000,
+        "ps": 10,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  },
+  "910112": {
+    "name": "迟迟未愈的中二病",
+    "branches": {
+      "1": {
+        "count": 1,
+        "effect_id": 1,
+        "ps": 0,
+        "coins": 0,
+        "props": {},
+        "max_props": {}
+      }
+    }
+  }
+}

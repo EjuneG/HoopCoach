@@ -1,0 +1,870 @@
+{
+  "version": 1,
+  "updated_at": "2026-11-26T16:18:49+08:00",
+  "notes": "《篮球少女：飞跃巅峰》育成选技能真值库（白技/通用技/传承专属技）。严禁将 supactor_card_id 当作器材专属金技硬绑。",
+  "skills": {
+    "200101": {
+      "skill_id": 200101,
+      "name": "斗志昂扬",
+      "role_tag": "得分手",
+      "rarity": "金",
+      "desc": "扣篮命中后，中幅提升 自身 防守属性(受澪奈体能影响)，持续2分钟。",
+      "source": "characters.json:1001(澪奈)",
+      "owner_char_id": 1001
+    },
+    "200201": {
+      "skill_id": 200201,
+      "name": "篮板追击者",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "我方中锋和大前 抢篮板时，小幅提升弹跳属性(受龙宫寺投射影响)，持续2分钟。",
+      "source": "characters.json:1002(龙宫寺)",
+      "owner_char_id": 1002
+    },
+    "200301": {
+      "skill_id": 200301,
+      "name": "稳健投手",
+      "role_tag": "得分手",
+      "rarity": "金",
+      "desc": "中幅提升 自身 中投威力(受近江意识影响)。",
+      "source": "characters.json:1003(近江)",
+      "owner_char_id": 1003
+    },
+    "200401": {
+      "skill_id": 200401,
+      "name": "月之潮汐",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "我方任意队友上篮时，有概率小幅提升 该队友 抗干扰能力（受和泉意识影响），持续2分钟。",
+      "source": "characters.json:1004(和泉)",
+      "owner_char_id": 1004
+    },
+    "200501": {
+      "skill_id": 200501,
+      "name": "猛攻的心得",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "比赛结束前3分钟，自身速卡威力中幅提升(受亚里莎意识影响)。",
+      "source": "characters.json:1005(亚理纱)",
+      "owner_char_id": 1005
+    },
+    "200601": {
+      "skill_id": 200601,
+      "name": "避实击虚",
+      "role_tag": "防守者",
+      "rarity": "金",
+      "desc": "挡拆成功后，大幅提升 洺瑶和持球队友的克制加深 (受洺瑶弹跳影响)，持续2分钟。",
+      "source": "characters.json:1006(洺瑶)",
+      "owner_char_id": 1006
+    },
+    "200701": {
+      "skill_id": 200701,
+      "name": "雷鸣领域",
+      "role_tag": "得分手",
+      "rarity": "金",
+      "desc": "比赛开始时，闪堂电获得一张专属突破卡【瞬雷】：威力＝运控×100%＋弹跳×20%。使用【瞬雷】后，每3分钟可再次使用",
+      "source": "characters.json:1007(闪堂)",
+      "owner_char_id": 1007
+    },
+    "200801": {
+      "skill_id": 200801,
+      "name": "节奏射手",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "我方任意球员三分出手后，仓理 清良获得10点能量，最多获得5次",
+      "source": "characters.json:1008(仓理)",
+      "owner_char_id": 1008
+    },
+    "200901": {
+      "skill_id": 200901,
+      "name": "见缝插针",
+      "role_tag": "组织者",
+      "rarity": "金",
+      "desc": "传球成功时，小幅提升 接球者的 投射属性(受克拉丽丝意识影响)，持续2分钟。",
+      "source": "characters.json:1009(克拉丽丝)",
+      "owner_char_id": 1009
+    },
+    "201001": {
+      "skill_id": 201001,
+      "name": "坚守阵地",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "我方任意球员造成干扰时，中幅提升早濑千秋的防守篮板能力(受早濑防守影响)，持续2分钟。",
+      "source": "characters.json:1010(早濑)",
+      "owner_char_id": 1010
+    },
+    "201101": {
+      "skill_id": 201101,
+      "name": "红莲爆炎阵",
+      "role_tag": "得分手",
+      "rarity": "金",
+      "desc": "中幅提升 自身 后撤步和横撤步威力（受羽田投射影响）",
+      "source": "characters.json:1011(羽田)",
+      "owner_char_id": 1011
+    },
+    "201201": {
+      "skill_id": 201201,
+      "name": "明镜止水",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "比赛结束前5分钟，获得强化：比赛越接近结束，实力越强",
+      "source": "characters.json:1012(望月)",
+      "owner_char_id": 1012
+    },
+    "201301": {
+      "skill_id": 201301,
+      "name": "无情终结者",
+      "role_tag": "得分手",
+      "rarity": "金",
+      "desc": "中投命中后，小幅吸取对位球员耐力(受百目鬼弹跳影响)。(最多触发3次)",
+      "source": "characters.json:1013(百目鬼)",
+      "owner_char_id": 1013
+    },
+    "201401": {
+      "skill_id": 201401,
+      "name": "共鸣之心",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "我方任意球员三分命中后，中幅提升 滕松玖怜 防守属性（受藤松投射影响），持续2分钟",
+      "source": "characters.json:1014(藤松)",
+      "owner_char_id": 1014
+    },
+    "201501": {
+      "skill_id": 201501,
+      "name": "陷阱制造者",
+      "role_tag": "防守者",
+      "rarity": "金",
+      "desc": "挡拆成功后，中幅降低被挡防守人意识属性(受绿川弹跳影响)，持续2分钟。",
+      "source": "characters.json:1015(绿川)",
+      "owner_char_id": 1015
+    },
+    "201601": {
+      "skill_id": 201601,
+      "name": "稳定音符",
+      "role_tag": "得分手",
+      "rarity": "金",
+      "desc": "我方任意球员中投命中后，中幅提升 自身 防守篮板能力（受雨森意识影响），持续2分钟",
+      "source": "characters.json:1016(雨森)",
+      "owner_char_id": 1016
+    },
+    "201701": {
+      "skill_id": 201701,
+      "name": "后发制人",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "对位球员使用速卡时，小幅提升自身防守成功率（受皆川弹跳影响），持续2分钟。",
+      "source": "characters.json:1017(皆川)",
+      "owner_char_id": 1017
+    },
+    "201801": {
+      "skill_id": 201801,
+      "name": "不屈之心",
+      "role_tag": "得分手",
+      "rarity": "金",
+      "desc": "接到队友传球时，中幅提升 自身 中投抗干扰能力（受毒岛体能影响），持续2分钟。",
+      "source": "characters.json:1018(毒岛)",
+      "owner_char_id": 1018
+    },
+    "201901": {
+      "skill_id": 201901,
+      "name": "球队的心脏",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "我方任意队友回复耐力时，小幅提升 该队友 意识属性（受名雪体能影响），持续2分钟",
+      "source": "characters.json:1019(名雪)",
+      "owner_char_id": 1019
+    },
+    "202001": {
+      "skill_id": 202001,
+      "name": "无限起跳",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "我方任意队友上篮或扣篮命中后，中幅提升 佐久间雨乃 弹跳属性（受佐久间体能影响），持续2分钟",
+      "source": "characters.json:1020(佐久间)",
+      "owner_char_id": 1020
+    },
+    "202101": {
+      "skill_id": 202101,
+      "name": "空战指挥官",
+      "role_tag": "篮板手",
+      "rarity": "金",
+      "desc": "抢到篮板时，我方分卫和小前投射属性中幅提升(受千圣体能影响)，持续2分钟",
+      "source": "characters.json:1021(千圣)",
+      "owner_char_id": 1021
+    },
+    "202201": {
+      "skill_id": 202201,
+      "name": "以刚破柔",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "中幅提升 我方大前和中锋 背打和突破威力(受稻叶防守影响)",
+      "source": "characters.json:1022(稻叶)",
+      "owner_char_id": 1022
+    },
+    "202301": {
+      "skill_id": 202301,
+      "name": "节奏掌控者",
+      "role_tag": "组织者",
+      "rarity": "金",
+      "desc": "传球成功时，中幅提升接球队友 上篮和扣篮抗干扰能力（受清水意识影响），持续2分钟。",
+      "source": "characters.json:1023(清水)",
+      "owner_char_id": 1023
+    },
+    "202401": {
+      "skill_id": 202401,
+      "name": "王牌的余裕",
+      "role_tag": "得分手",
+      "rarity": "金",
+      "desc": "上篮或扣篮命中后，中幅提升自身篮板能力(受榎本体能影响)，持续2分钟。",
+      "source": "characters.json:1024(榎本)",
+      "owner_char_id": 1024
+    },
+    "202501": {
+      "skill_id": 202501,
+      "name": "骑士冲锋",
+      "role_tag": "组织者",
+      "rarity": "金",
+      "desc": "小幅提升自身进攻篮板能力(受春澄体能影响)。",
+      "source": "characters.json:1025(春澄)",
+      "owner_char_id": 1025
+    },
+    "202601": {
+      "skill_id": 202601,
+      "name": "全神贯注",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "小幅提升自身意识属性",
+      "source": "characters.json:1026(森田)",
+      "owner_char_id": 1026
+    },
+    "202701": {
+      "skill_id": 202701,
+      "name": "轻装上阵",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "小幅提升自身弹跳属性",
+      "source": "characters.json:1027(美伽)",
+      "owner_char_id": 1027
+    },
+    "202801": {
+      "skill_id": 202801,
+      "name": "坚石的架式",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "小幅提升自身防守属性",
+      "source": "characters.json:1028(五十岚)",
+      "owner_char_id": 1028
+    },
+    "202901": {
+      "skill_id": 202901,
+      "name": "铁血执行者",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "我方任意队友突破成功后，中幅提升 羽濑川凑 的上篮威力(受羽濑川防守影响)，持续2分钟。",
+      "source": "characters.json:1029(羽濑川)",
+      "owner_char_id": 1029
+    },
+    "203001": {
+      "skill_id": 203001,
+      "name": "节奏之星",
+      "role_tag": "得分手",
+      "rarity": "金",
+      "desc": "突破成功后，小幅提升自身投射和弹跳属性(受真崎意识影响)，持续2分钟。",
+      "source": "characters.json:1030(真崎)",
+      "owner_char_id": 1030
+    },
+    "203101": {
+      "skill_id": 203101,
+      "name": "先读",
+      "role_tag": "得分手",
+      "rarity": "金",
+      "desc": "阵野美羽投篮得分后，小幅提升 自身看破概率（受阵野意识影响），持续2分钟。",
+      "source": "characters.json:1031(阵野)",
+      "owner_char_id": 1031
+    },
+    "203201": {
+      "skill_id": 203201,
+      "name": "强力马达",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "我方任意球员中投得分时，中幅提升 先斗月绮 运控属性（受先斗投射影响），持续2分钟。",
+      "source": "characters.json:1032(先斗)",
+      "owner_char_id": 1032
+    },
+    "203301": {
+      "skill_id": 203301,
+      "name": "妖刀摄魂",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "我方任意队友突破成功后，卧云真昼中投威力中幅提升(受卧云投射影响)，持续2分钟。",
+      "source": "characters.json:1033(卧云)",
+      "owner_char_id": 1033
+    },
+    "203401": {
+      "skill_id": 203401,
+      "name": "冷血狙击手",
+      "role_tag": "防守者",
+      "rarity": "金",
+      "desc": "任意被我方球员【盖帽】或【抢断】的对方球员，获得弱化【胆怯】，持续1分钟。 【胆怯】：内线干扰程度降低，最多叠加2层",
+      "source": "characters.json:1034(六道)",
+      "owner_char_id": 1034
+    },
+    "203501": {
+      "skill_id": 203501,
+      "name": "大基本功",
+      "role_tag": "篮板手",
+      "rarity": "金",
+      "desc": "抢到防守篮板时，为当前能量最低的队友回复10点能量",
+      "source": "characters.json:1035(出羽)",
+      "owner_char_id": 1035
+    },
+    "203601": {
+      "skill_id": 203601,
+      "name": "维度跃迁",
+      "role_tag": "防守者",
+      "rarity": "金",
+      "desc": "盖帽后，大幅提升 自身 抗干扰能力 (受和歌弹跳影响)，持续2分钟。",
+      "source": "characters.json:1036(和歌)",
+      "owner_char_id": 1036
+    },
+    "203701": {
+      "skill_id": 203701,
+      "name": "火力全开",
+      "role_tag": "得分手",
+      "rarity": "金",
+      "desc": "三分命中后，下次中投命中率中幅提高，可叠加",
+      "source": "characters.json:1037(野上)",
+      "owner_char_id": 1037
+    },
+    "203705": {
+      "skill_id": 203705,
+      "name": "火力全开",
+      "role_tag": "得分手",
+      "rarity": "金",
+      "desc": "三分命中后，下次中投命中率中幅提高，可叠加",
+      "source": "characters.json:1037(野上)",
+      "owner_char_id": 1037
+    },
+    "203801": {
+      "skill_id": 203801,
+      "name": "游刃有余",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "我方任意球员空位出手命中后，有概率中幅提升该队友体能属性(受降旗防守影响)，持续2分钟。",
+      "source": "characters.json:1038(降旗)",
+      "owner_char_id": 1038
+    },
+    "203901": {
+      "skill_id": 203901,
+      "name": "风暴眼",
+      "role_tag": "防守者",
+      "rarity": "金",
+      "desc": "防守回合看破对方时，中幅提升自身抢断和盯防威力(受林原意识影响)，持续2分钟。",
+      "source": "characters.json:1039(林原)",
+      "owner_char_id": 1039
+    },
+    "204001": {
+      "skill_id": 204001,
+      "name": "自动上弦",
+      "role_tag": "防守者",
+      "rarity": "金",
+      "desc": "成功防守后，中幅提升自身投射属性（受美星意识影响），持续2分钟。",
+      "source": "characters.json:1040(美星)",
+      "owner_char_id": 1040
+    },
+    "204101": {
+      "skill_id": 204101,
+      "name": "猛兽本能",
+      "role_tag": "得分手",
+      "rarity": "金",
+      "desc": "岚山吟子上篮或扣篮时，中幅提升自身力竭抵抗能力（受岚山运控影响），持续2分钟。",
+      "source": "characters.json:1041(岚山)",
+      "owner_char_id": 1041
+    },
+    "204201": {
+      "skill_id": 204201,
+      "name": "稳定光晕",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "使用技卡时，小幅提升我方中锋和大前三分威力(受远野体能影响)，持续2分钟。",
+      "source": "characters.json:1042(远野)",
+      "owner_char_id": 1042
+    },
+    "204501": {
+      "skill_id": 204501,
+      "name": "统帅的意志",
+      "role_tag": "组织者",
+      "rarity": "金",
+      "desc": "自身发动突破分球的倾向和成功率中幅提升。白神时久传球成功时，小幅提升 接球人 进攻威力(受白神防守影响)，持续2分钟。",
+      "source": "characters.json:1045(白神)",
+      "owner_char_id": 1045
+    },
+    "204601": {
+      "skill_id": 204601,
+      "name": "华彩领舞者",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "我方任意球员空位出手命中后，希雅·奥黛拉 回复10点能量（最多触发5次）。",
+      "source": "characters.json:1046(希雅)",
+      "owner_char_id": 1046
+    },
+    "210028": {
+      "skill_id": 210028,
+      "name": "稳步精进",
+      "role_tag": "得分手",
+      "rarity": "白",
+      "desc": "进攻技卡+威力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-17T00:50:54+08:00"
+    },
+    "210029": {
+      "skill_id": 210029,
+      "name": "步步为营",
+      "role_tag": "组织者",
+      "rarity": "白",
+      "desc": "助攻后回复得分人耐力",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-24T16:12:33+08:00"
+    },
+    "210030": {
+      "skill_id": 210030,
+      "name": "力量优势",
+      "role_tag": "得分手",
+      "rarity": "白",
+      "desc": "进攻力卡威力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-17T19:40:57+08:00"
+    },
+    "210054": {
+      "skill_id": 210054,
+      "name": "稳步精进",
+      "role_tag": "得分手",
+      "rarity": "白",
+      "desc": "进攻技卡威力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-26T16:18:49+08:00"
+    },
+    "210078": {
+      "skill_id": 210078,
+      "name": "节奏掌控",
+      "role_tag": "组织者",
+      "rarity": "金",
+      "desc": "助攻后回复得分人耐力",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-26T16:09:48+08:00"
+    },
+    "210152": {
+      "skill_id": 210152,
+      "name": "三分强抗干扰",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "三分时，中幅提升抗干扰",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-26T16:09:48+08:00"
+    },
+    "210222": {
+      "skill_id": 210222,
+      "name": "稳步精进",
+      "role_tag": "得分手",
+      "rarity": "金",
+      "desc": "进攻技卡威力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-18T02:11:38+08:00"
+    },
+    "210223": {
+      "skill_id": 210223,
+      "name": "稳步精进",
+      "role_tag": "得分手",
+      "rarity": "蓝",
+      "desc": "进攻技卡威力提升",
+      "source": "live_screenshot:2026-11-22"
+    },
+    "210225": {
+      "skill_id": 210225,
+      "name": "转体扣篮",
+      "role_tag": "通用",
+      "rarity": "白",
+      "desc": "弹跳*70% + 投射*30%",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-17T00:24:41+08:00"
+    },
+    "210229": {
+      "skill_id": 210229,
+      "name": "稳步精进",
+      "role_tag": "得分手",
+      "rarity": "白",
+      "desc": "进攻技卡威力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-19T01:13:25+08:00"
+    },
+    "210235": {
+      "skill_id": 210235,
+      "name": "步步为营",
+      "role_tag": "组织者",
+      "rarity": "白",
+      "desc": "助攻后回复得分人耐力",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-17T17:57:56+08:00"
+    },
+    "210237": {
+      "skill_id": 210237,
+      "name": "前期加持",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "比赛前期提升自己两项推荐属性",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-24T03:00:53+08:00"
+    },
+    "210239": {
+      "skill_id": 210239,
+      "name": "后段稳定",
+      "role_tag": "通用",
+      "rarity": "白",
+      "desc": "下半场干扰和抗干扰能力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-16T17:05:44+08:00"
+    },
+    "210266": {
+      "skill_id": 210266,
+      "name": "千锤百炼",
+      "role_tag": "得分手",
+      "rarity": "金",
+      "desc": "进攻技卡+威力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-19T01:29:21+08:00"
+    },
+    "210281": {
+      "skill_id": 210281,
+      "name": "力量优势",
+      "role_tag": "得分手",
+      "rarity": "白",
+      "desc": "进攻力卡威力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-26T00:41:20+08:00"
+    },
+    "210286": {
+      "skill_id": 210286,
+      "name": "前期加持",
+      "role_tag": "通用",
+      "rarity": "白",
+      "desc": "前期能力强化（实机截图及笔记视觉缓存核实）",
+      "source": "verified_screenshot"
+    },
+    "210287": {
+      "skill_id": 210287,
+      "name": "力量优势",
+      "role_tag": "得分手",
+      "rarity": "白",
+      "desc": "得分手力量优势强化（实机截图核实）",
+      "source": "verified_screenshot"
+    },
+    "210288": {
+      "skill_id": 210288,
+      "name": "技术优势",
+      "role_tag": "得分手",
+      "rarity": "白",
+      "desc": "进攻技卡✦威力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-19T01:36:43+08:00"
+    },
+    "210289": {
+      "skill_id": 210289,
+      "name": "看破擅长",
+      "role_tag": "通用",
+      "rarity": "白",
+      "desc": "看破概率提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-18T14:55:10+08:00"
+    },
+    "210290": {
+      "skill_id": 210290,
+      "name": "前期加持",
+      "role_tag": "通用",
+      "rarity": "白",
+      "desc": "比赛前期提升自己两项推荐属性",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-25T02:21:34+08:00"
+    },
+    "210291": {
+      "skill_id": 210291,
+      "name": "力量优势",
+      "role_tag": "得分手",
+      "rarity": "白",
+      "desc": "进攻力卡威力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-16T15:49:52+08:00"
+    },
+    "210292": {
+      "skill_id": 210292,
+      "name": "速度优势",
+      "role_tag": "得分手",
+      "rarity": "白",
+      "desc": "进攻速卡威力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-26T00:15:15+08:00"
+    },
+    "210296": {
+      "skill_id": 210296,
+      "name": "远投擅长",
+      "role_tag": "得分手",
+      "rarity": "白",
+      "desc": "远距离进攻威力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-17T16:38:58+08:00"
+    },
+    "210299": {
+      "skill_id": 210299,
+      "name": "后段稳定",
+      "role_tag": "通用",
+      "rarity": "白",
+      "desc": "下半场干扰和抗干扰能力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-16T17:01:56+08:00"
+    },
+    "210307": {
+      "skill_id": 210307,
+      "name": "二次手感",
+      "role_tag": "篮板手",
+      "rarity": "白",
+      "desc": "补篮补扣威力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-17T00:19:22+08:00"
+    },
+    "210308": {
+      "skill_id": 210308,
+      "name": "快速启动",
+      "role_tag": "通用",
+      "rarity": "蓝",
+      "desc": "速卡威力提升",
+      "source": "agent_vision"
+    },
+    "210321": {
+      "skill_id": 210321,
+      "name": "后段稳定",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "下半场干扰和抗干扰能力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-16T16:51:14+08:00"
+    },
+    "210325": {
+      "skill_id": 210325,
+      "name": "灵巧背打",
+      "role_tag": "通用",
+      "rarity": "蓝",
+      "desc": "行为卡：运控*70% + 投射*30%",
+      "source": "live_screenshot:2026-11-22"
+    },
+    "210330": {
+      "skill_id": 210330,
+      "name": "千锤百炼",
+      "role_tag": "得分手",
+      "rarity": "金",
+      "desc": "进攻技卡威力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-18T02:05:34+08:00"
+    },
+    "210346": {
+      "skill_id": 210346,
+      "name": "二次终结者",
+      "role_tag": "篮板手",
+      "rarity": "金",
+      "desc": "补篮补扣威力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-20T17:32:33+08:00"
+    },
+    "210347": {
+      "skill_id": 210347,
+      "name": "无惧重围",
+      "role_tag": "得分手",
+      "rarity": "金",
+      "desc": "获得转身上篮动作 中距离抗干扰能力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-25T19:08:05+08:00"
+    },
+    "210360": {
+      "skill_id": 210360,
+      "name": "节奏掌控",
+      "role_tag": "组织者",
+      "rarity": "金",
+      "desc": "助攻后回复得分人耐力",
+      "source": "verified_screenshot"
+    },
+    "210371": {
+      "skill_id": 210371,
+      "name": "看破提升",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "看破概率提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-16T15:30:33+08:00"
+    },
+    "210372": {
+      "skill_id": 210372,
+      "name": "稳步精进",
+      "role_tag": "得分手",
+      "rarity": "白",
+      "desc": "进攻技卡威力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-24T02:10:37+08:00"
+    },
+    "210376": {
+      "skill_id": 210376,
+      "name": "看破擅长",
+      "role_tag": "通用",
+      "rarity": "白",
+      "desc": "看破概率提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-16T17:05:44+08:00"
+    },
+    "210377": {
+      "skill_id": 210377,
+      "name": "速度强势",
+      "role_tag": "得分手",
+      "rarity": "白",
+      "desc": "进攻速卡威力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-16T15:30:33+08:00"
+    },
+    "210382": {
+      "skill_id": 210382,
+      "name": "千锤百炼",
+      "role_tag": "得分手",
+      "rarity": "金",
+      "desc": "进攻技卡+威力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-18T15:38:24+08:00"
+    },
+    "210384": {
+      "skill_id": 210384,
+      "name": "无惧重围",
+      "role_tag": "得分手",
+      "rarity": "白",
+      "desc": "获得转身上篮动作+\n中距离抗干扰能力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-19T01:01:15+08:00"
+    },
+    "210386": {
+      "skill_id": 210386,
+      "name": "无惧重围",
+      "role_tag": "得分手",
+      "rarity": "金",
+      "desc": "获得转身上篮动作+\n中距离抗干扰能力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-17T00:48:44+08:00"
+    },
+    "210396": {
+      "skill_id": 210396,
+      "name": "力量优势",
+      "role_tag": "得分手",
+      "rarity": "白",
+      "desc": "进攻力卡威力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-17T00:37:28+08:00"
+    },
+    "210406": {
+      "skill_id": 210406,
+      "name": "终局稳阵",
+      "role_tag": "通用",
+      "rarity": "白",
+      "desc": "比赛终盘干扰和抗干扰能力提升",
+      "source": "verified_screenshot"
+    },
+    "210408": {
+      "skill_id": 210408,
+      "name": "后段稳定",
+      "role_tag": "通用",
+      "rarity": "白",
+      "desc": "下半场干扰和抗干扰能力提升",
+      "source": "verified_screenshot"
+    },
+    "210413": {
+      "skill_id": 210413,
+      "name": "速度优势",
+      "role_tag": "得分手",
+      "rarity": "白",
+      "desc": "得分手速度优势强化（实机截图核实）",
+      "source": "verified_screenshot"
+    },
+    "210416": {
+      "skill_id": 210416,
+      "name": "终局磐石",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "比赛终盘干扰和抗干扰能力提升",
+      "source": "verified_screenshot"
+    },
+    "210418": {
+      "skill_id": 210418,
+      "name": "后段稳固",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "下半场干扰和抗干扰能力提升",
+      "source": "verified_screenshot"
+    },
+    "210421": {
+      "skill_id": 210421,
+      "name": "看破提升",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "看破概率提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-17T17:42:48+08:00"
+    },
+    "210423": {
+      "skill_id": 210423,
+      "name": "前期赋能",
+      "role_tag": "通用",
+      "rarity": "金",
+      "desc": "比赛前期提升自己两项推荐属性",
+      "source": "verified_screenshot"
+    },
+    "210426": {
+      "skill_id": 210426,
+      "name": "速度强势",
+      "role_tag": "得分手",
+      "rarity": "金",
+      "desc": "进攻速卡威力提升",
+      "source": "live_screenshot:2026-11-22"
+    },
+    "210427": {
+      "skill_id": 210427,
+      "name": "千锤百炼",
+      "role_tag": "得分手",
+      "rarity": "金",
+      "desc": "进攻技卡威力提升",
+      "source": "gemini_vision",
+      "learned_at": "2026-11-16T15:52:38+08:00"
+    }
+  },
+  "observed_log_seeds": {
+    "description": "从最新5份日志 SwitchState 22 与 entry_type=6 提取的未视觉确认 210xxx 候选 ID（首次弹窗将由 gemini-api 自动识别入库到 skills）",
+    "unknown_210xxx_ids": [
+      210233,
+      210311,
+      210335,
+      210379,
+      210381
+    ],
+    "note_id_to_skill_ids": {
+      "730075730629616": [
+        210287
+      ],
+      "735573283643268": [
+        210335
+      ],
+      "746018651470591": [
+        210029
+      ],
+      "749317184734474": [
+        210381
+      ],
+      "768008876275350": [
+        210311
+      ],
+      "777354732134452": [
+        210325
+      ]
+    }
+  }
+}

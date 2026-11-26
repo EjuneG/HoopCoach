@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark light" />
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("lqsn_dash_theme_v1");
+        if (t === "light" || t === "dark") {
+          document.documentElement.setAttribute("data-theme", t);
+        }
+      } catch (_) {}
+    })();
+  </script>
+  <title>LQSNCoach · 私人作战室</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%235b8cff'/><text x='16' y='21' text-anchor='middle' font-size='16' fill='white'>🏀</text></svg>" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-dot" aria-hidden="true"></span>
+        <span class="brand-title">LQSNCoach</span>
+        <span class="brand-tag">私人作战室</span>
+      </div>
+
+      <nav class="main-nav" role="tablist" aria-label="主视图导航">
+        <button class="nav-btn active" data-view="overview" role="tab" aria-selected="true" type="button">总览</button>
+        <button class="nav-btn" data-view="runs" role="tab" aria-selected="false" type="button">单局复盘</button>
+        <button class="nav-btn" data-view="box" role="tab" aria-selected="false" type="button">笔记与配装</button>
+        <button class="nav-btn" data-view="live" role="tab" aria-selected="false" type="button">
+          <span class="live-indicator" id="nav-live-dot"></span>实时监控
+        </button>
+      </nav>
+
+      <div class="topbar-actions">
+        <span class="conn-badge" id="conn-badge">连接中…</span>
+        <button id="btn-refresh-all" class="icon-btn" type="button" title="重新加载本地归档与快照">↻</button>
+        <button id="btn-theme" class="icon-btn" type="button" title="切换深色/浅色主题">☀</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- ==================== 视图 1：总览 ==================== -->
+    <section id="view-overview" class="view-panel active">
+      <div class="kpi-grid" id="overview-kpis"></div>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title">5 位置破万底座</h2>
+            <p class="panel-sub">决定满级 10 级托管的同位置预估上限（×0.97），点击卡片直达对应纪录局复盘</p>
+          </div>
+          <span class="pill" id="pos-10k-summary">—</span>
+        </div>
+        <div class="pos-grid" id="overview-positions"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title">历史育成评分走势</h2>
+            <p class="panel-sub">悬停查看明细，点击任意节点跳入单局深度复盘</p>
+          </div>
+          <div class="head-controls">
+            <select id="trend-char-filter" class="ctrl-select">
+              <option value="">全部主力</option>
+            </select>
+            <div class="seg" id="trend-range-seg">
+              <button type="button" class="seg-btn active" data-limit="0">全部</button>
+              <button type="button" class="seg-btn" data-limit="30">近 30 局</button>
+              <button type="button" class="seg-btn" data-limit="15">近 15 局</button>
+            </div>
+          </div>
+        </div>
+        <div class="chart-wrap" id="trend-chart-wrap">
+          <div id="trend-chart"></div>
+          <div id="trend-tooltip" class="chart-tooltip hidden"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title">当前冲分目标与瓶颈雷达</h2>
+            <p class="panel-sub">同步自 config/training_goal.yaml 与 daily_queue.json，点击目标直接打开实盘配对</p>
+          </div>
+          <span class="panel-sub" id="overview-updated"></span>
+        </div>
+        <div id="overview-warnings"></div>
+        <div class="goal-grid" id="overview-bottlenecks"></div>
+      </section>
+    </section>
+
+    <!-- ==================== 视图 2：单局复盘 ==================== -->
+    <section id="view-runs" class="view-panel">
+      <div class="runs-layout">
+        <aside class="panel runs-sidebar">
+          <div class="sidebar-filters">
+            <input id="run-search" class="ctrl-input" type="search" placeholder="搜主力、阵容或日期…" />
+            <div class="filter-inline">
+              <select id="run-char-filter" class="ctrl-select grow">
+                <option value="">全部角色</option>
+              </select>
+              <label class="chk-pill">
+                <input type="checkbox" id="run-only-10k" />
+                <span>破万</span>
+              </label>
+            </div>
+            <div class="compare-bar" id="compare-bar">
+              <span class="hint" id="compare-hint">勾选 2 局可开启左右对比</span>
+              <button id="btn-clear-compare" class="link-btn hidden" type="button">清空对比</button>
+            </div>
+          </div>
+          <div class="runs-list" id="runs-list"></div>
+        </aside>
+
+        <div class="runs-main" id="runs-detail-area">
+          <div class="panel empty-state">从左侧选择一局战绩开始复盘</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 视图 3：我的笔记库 & 实盘配装 ==================== -->
+    <section id="view-box" class="view-panel">
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title">实盘开局配对器</h2>
+            <p class="panel-sub">直接读取你本地抓到的自备笔记、好友可借笔记与 7 张自有 SSR 真实练度（调用 note_advisor / equipment_advisor 真值）</p>
+          </div>
+          <div class="head-controls">
+            <select id="planner-char-select" class="ctrl-select"></select>
+            <div class="seg" id="planner-mode-seg">
+              <button type="button" class="seg-btn active" data-mode="score">冲评分</button>
+              <button type="button" class="seg-btn" data-mode="pvp_22">PVP 2+2</button>
+              <button type="button" class="seg-btn" data-mode="pvp_31">PVP 3+1</button>
+            </div>
+            <select id="planner-focus-select" class="ctrl-select">
+              <option value="">无偏科</option>
+              <option value="投射">偏投射</option>
+              <option value="弹跳">偏弹跳</option>
+              <option value="防守">偏防守</option>
+              <option value="体能">偏体能</option>
+              <option value="运控">偏运控</option>
+              <option value="意识">偏意识</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="planner-char-banner" class="char-banner"></div>
+
+        <div class="planner-grid">
+          <div class="planner-col">
+            <div class="sub-head">
+              <h3 class="sub-title">真实笔记配对</h3>
+              <div class="seg" id="planner-note-tab">
+                <button type="button" class="seg-btn active" data-ntab="borrow">含好友借用</button>
+                <button type="button" class="seg-btn" data-ntab="own">纯自备</button>
+                <button type="button" class="seg-btn" data-ntab="breeder">同位种马</button>
+              </div>
+            </div>
+            <div id="planner-notes-body"></div>
+          </div>
+
+          <div class="planner-col">
+            <div class="sub-head">
+              <h3 class="sub-title">器材配装方案</h3>
+              <div class="seg" id="planner-equip-tab">
+                <button type="button" class="seg-btn active" data-etab="owned">实盘 4+借1</button>
+                <button type="button" class="seg-btn" data-etab="bis">理论顶配</button>
+              </div>
+            </div>
+            <div id="planner-equips-body"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div class="seg" id="box-sub-seg">
+            <button type="button" class="seg-btn active" data-btab="gap">主力彩笔记缺口墙</button>
+            <button type="button" class="seg-btn" data-btab="own_notes">我的自备笔记</button>
+            <button type="button" class="seg-btn" data-btab="bor_notes">好友可借笔记</button>
+            <button type="button" class="seg-btn" data-btab="equips">我的 SSR 器材池</button>
+          </div>
+          <div class="head-controls">
+            <input id="box-search" class="ctrl-input" type="search" placeholder="筛选角色、好友或词条…" />
+          </div>
+        </div>
+        <div id="box-sub-body"></div>
+      </section>
+    </section>
+
+    <!-- ==================== 视图 4：后台挂机实时监控 ==================== -->
+    <section id="view-live" class="view-panel">
+      <section class="panel live-header-panel">
+        <div class="live-status-row">
+          <div class="live-status-left">
+            <span class="status-dot" id="live-status-dot"></span>
+            <div>
+              <div class="live-status-title" id="live-status-label">正在连接实时日志…</div>
+              <div class="panel-sub" id="live-status-meta">—</div>
+            </div>
+          </div>
+          <div class="head-controls">
+            <div class="proc-badges" id="live-proc-badges"></div>
+            <div class="seg" id="live-poll-seg">
+              <button type="button" class="seg-btn active" data-ms="2500">2.5s</button>
+              <button type="button" class="seg-btn" data-ms="5000">5s</button>
+              <button type="button" class="seg-btn" data-ms="0">暂停</button>
+            </div>
+            <button id="btn-live-now" class="action-btn" type="button">立即刷新</button>
+          </div>
+        </div>
+      </section>
+
+      <div id="live-main-body"></div>
+    </section>
+  </main>
+
+  <script src="data/snapshot.js" defer></script>
+  <script src="js/app.js" defer></script>
+</body>
+</html>

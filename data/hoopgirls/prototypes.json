@@ -1,0 +1,117 @@
+{
+ "1001": {
+  "prototype": "勒布朗·詹姆斯",
+  "prototype_en": "LeBron James",
+  "confidence": "A"
+ },
+ "1002": {
+  "prototype": "凯文·乐福",
+  "prototype_en": "Kevin Love",
+  "confidence": "B"
+ },
+ "1006": {
+  "prototype": "姚明",
+  "prototype_en": "Yao Ming",
+  "confidence": "A"
+ },
+ "1007": {
+  "prototype": "德怀恩·韦德",
+  "prototype_en": "Dwyane Wade",
+  "confidence": "B"
+ },
+ "1008": {
+  "prototype": "斯蒂芬·库里",
+  "prototype_en": "Stephen Curry",
+  "confidence": "A"
+ },
+ "1011": {
+  "prototype": "詹姆斯·哈登",
+  "prototype_en": "James Harden",
+  "confidence": "B"
+ },
+ "1012": {
+  "prototype": "特雷西·麦克格雷迪",
+  "prototype_en": "Tracy McGrady",
+  "confidence": "B"
+ },
+ "1013": {
+  "prototype": "凯文·杜兰特",
+  "prototype_en": "Kevin Durant",
+  "confidence": "A"
+ },
+ "1014": {
+  "prototype": "克莱·汤普森",
+  "prototype_en": "Klay Thompson",
+  "confidence": "B"
+ },
+ "1015": {
+  "prototype": "德雷蒙德·格林",
+  "prototype_en": "Draymond Green",
+  "confidence": "B"
+ },
+ "1019": {
+  "prototype": "史蒂夫·纳什",
+  "prototype_en": "Steve Nash",
+  "confidence": "B"
+ },
+ "1020": {
+  "prototype": "阿玛雷·斯塔德迈尔",
+  "prototype_en": "Amar'e Stoudemire",
+  "confidence": "B"
+ },
+ "1021": {
+  "prototype": "查尔斯·巴克利",
+  "prototype_en": "Charles Barkley",
+  "confidence": "B"
+ },
+ "1022": {
+  "prototype": "安德烈·伊戈达拉",
+  "prototype_en": "Andre Iguodala",
+  "confidence": "B"
+ },
+ "1033": {
+  "prototype": "马努·吉诺比利",
+  "prototype_en": "Manu Ginóbili",
+  "confidence": "B"
+ },
+ "1034": {
+  "prototype": "科怀·伦纳德",
+  "prototype_en": "Kawhi Leonard",
+  "confidence": "B"
+ },
+ "1035": {
+  "prototype": "蒂姆·邓肯",
+  "prototype_en": "Tim Duncan",
+  "confidence": "B"
+ },
+ "1037": {
+  "prototype": "德克·诺维茨基",
+  "prototype_en": "Dirk Nowitzki",
+  "confidence": "A"
+ },
+ "1038": {
+  "prototype": "库珀·弗拉格",
+  "prototype_en": "Cooper Flagg",
+  "confidence": "B"
+ },
+ "1039": {
+  "prototype": "朱·霍勒迪",
+  "prototype_en": "Jrue Holiday",
+  "confidence": "B"
+ },
+ "1042": {
+  "prototype": "卡尔-安东尼·唐斯",
+  "prototype_en": "Karl-Anthony Towns",
+  "confidence": "B"
+ },
+ "1045": {
+  "prototype": "约翰·斯托克顿",
+  "prototype_en": "John Stockton",
+  "confidence": "A"
+ },
+ "1046": {
+  "prototype": "哈基姆·奥拉朱旺",
+  "prototype_en": "Hakeem Olajuwon",
+  "confidence": "A"
+ }
+}

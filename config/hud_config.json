@@ -1,0 +1,17 @@
+{
+  "diegetic_mode": true,
+  "recommendations": {
+    "train": true,
+    "story": true,
+    "weekend": true,
+    "shop": true,
+    "skill": true,
+    "note": true,
+    "secondary": true
+  },
+  "focus": {
+    "stat": null,
+    "bonus": 1.15,
+    "last_stat": 101
+  }
+}

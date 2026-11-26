@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="《篮球少女：飞跃巅峰》笔记因子传承库、相性计算器、器材图鉴与球员资料库。">
+  <meta name="theme-color" content="#17233b">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <title>飞跃巅峰 · 笔记传承库</title>
+  <link rel="stylesheet" href="styles.css?v=65">
+  <link rel="stylesheet" href="trades.css?v=5">
+  <link rel="stylesheet" href="matches.css?v=46">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">跳至主要内容</a>
+  <svg class="svg-defs" aria-hidden="true">
+    <defs>
+      <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4H6.5A2.5 2.5 0 0 0 4 6.5v13Z"/><path d="M4 19.5V6.5M8 7h8M8 11h6"/></symbol>
+      <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+      <symbol id="i-card" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h4M7 12h10M7 16h7"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+      <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+      <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v2M22 12h-2M12 22v-2M2 12h2"/></symbol>
+      <symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+      <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 5h16l-6 7v6l-4 2v-8L4 5Z"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+      <symbol id="i-ball" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3.5 9.5c5 0 9 4 9 11M20.5 9.5c-5 0-9 4-9 11M6 5c3 3 9 3 12 0M6 19c3-3 9-3 12 0"/></symbol>
+      <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M17.5 19H7a5 5 0 1 1 1.4-9.8A6 6 0 0 1 20 12a3.5 3.5 0 0 1-2.5 7Z"/><path d="m9 14 2 2 4-4"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+      <symbol id="i-hand" viewBox="0 0 24 24"><path d="M8 11V5a2 2 0 0 1 4 0v6M12 11V4a2 2 0 0 1 4 0v7M16 11V6a2 2 0 0 1 4 0v8a7 7 0 0 1-7 7h-1a7 7 0 0 1-6.3-4L3 12a2 2 0 0 1 3.4-2L8 13"/></symbol>
+      <symbol id="i-forum" viewBox="0 0 24 24"><path d="M6 17.2 4 20.5v-3.4A8 8 0 1 1 8.4 19.1L6 17.2Z"/><path d="M8 10h8M8 13.5h5"/></symbol>
+      <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"/><path d="M5.2 19.2a6.8 6.8 0 0 1 13.6 0"/></symbol>
+    </defs>
+  </svg>
+
+  <div class="nav-backdrop" id="nav-backdrop" hidden aria-hidden="true"></div>
+  <header class="topbar">
+    <a class="brand" href="#notes" data-route="notes" aria-label="飞跃巅峰笔记库首页">
+      <span class="brand-mark"><svg><use href="#i-ball"></use></svg></span>
+      <span class="brand-copy"><strong>飞跃巅峰</strong><small>HOOP GIRLS ARCHIVE</small></span>
+    </a>
+    <nav class="main-nav" id="main-nav" aria-label="主导航">
+      <button class="nav-item active" data-route="notes" aria-current="page"><svg><use href="#i-book"></use></svg><span>笔记图鉴</span></button>
+      <button class="nav-item" data-route="community"><svg><use href="#i-share"></use></svg><span>玩家共享</span><span class="nav-new">NEW</span></button>
+      <button class="nav-item" data-route="trades"><svg><use href="#i-card"></use></svg><span>卡册换卡</span><span class="nav-new">NEW</span></button>
+      <button class="nav-item" data-route="forum"><svg><use href="#i-forum"></use></svg><span>讨论区</span><span class="nav-new">NEW</span></button>
+      <button class="nav-item" data-route="matches"><svg><use href="#i-ball"></use></svg><span>赛季信息</span></button>
+      <button class="nav-item" data-route="compatibility"><svg><use href="#i-users"></use></svg><span>相性计算</span></button>
+      <button class="nav-item" data-route="equipment"><svg><use href="#i-card"></use></svg><span>器材库</span></button>
+      <button class="nav-item" data-route="characters"><svg><use href="#i-target"></use></svg><span>球员库</span></button>
+      <button class="nav-item" data-route="guides"><svg><use href="#i-info"></use></svg><span>攻略合集</span><span class="nav-new">NEW</span></button>
+    </nav>
+    <div class="data-badge" id="data-badge"><span class="status-dot"></span><span>数据载入中</span></div>
+    <div class="account-slot">
+      <button class="button subtle account-login" type="button" id="auth-open" aria-haspopup="dialog" aria-controls="auth-dialog" aria-expanded="false">
+        <svg aria-hidden="true"><use href="#i-user"></use></svg><span>登录</span>
+      </button>
+      <div class="account-signed" id="auth-signed" hidden>
+        <span class="account-mark" id="auth-mark" aria-hidden="true"></span>
+        <span class="account-name" id="auth-name"></span>
+        <button class="button ghost compact-button account-bind" type="button" id="auth-bind" hidden aria-haspopup="dialog" aria-controls="auth-dialog" aria-expanded="false">绑定邮箱</button>
+        <button class="button ghost compact-button" type="button" id="auth-logout">退出</button>
+      </div>
+    </div>
+    <button class="icon-button mobile-menu" id="mobile-menu" aria-label="展开导航" aria-expanded="false" aria-controls="main-nav"><svg><use href="#i-menu"></use></svg></button>
+  </header>
+
+  <main id="main-content">
+    <div class="loading-screen" id="loading-screen" role="status">
+      <div class="loader-ball"><svg><use href="#i-ball"></use></svg></div>
+      <strong>正在整理球队笔记</strong>
+      <span>加载笔记、器材与球员资料…</span>
+    </div>
+    <div class="error-screen" id="error-screen" hidden>
+      <svg><use href="#i-info"></use></svg>
+      <h1>数据暂时无法读取</h1>
+      <p id="error-message">请通过本地 HTTP 服务打开网站后重试。</p>
+      <button class="button primary" id="retry-load">重新加载</button>
+    </div>
+
+    <div id="app-content" hidden>
+      <section class="app-view active" id="view-notes" data-view="notes">
+        <div class="hero shell">
+          <div class="hero-copy">
+            <div class="eyebrow"><span>01</span> NOTEBOOK DATABASE</div>
+            <h1>把每一次传承，<br>写进<span>制胜笔记。</span></h1>
+            <p>《篮球少女：飞跃巅峰》非官方玩家资料库。检索全部因子词条、比较星级效果，用真实关系分找到更适合主力的笔记组合。</p>
+            <div class="hero-actions">
+              <button class="button primary" data-route="compatibility">开始相性试算<svg><use href="#i-arrow"></use></svg></button>
+              <button class="button ghost" data-scroll="note-catalog">浏览词条</button>
+            </div>
+            <dl class="hero-stats">
+              <div><dt id="hero-note-count">141</dt><dd>笔记词条</dd></div>
+              <div><dt>9</dt><dd>因子分类</dd></div>
+              <div><dt>7</dt><dd>笔记品质</dd></div>
+            </dl>
+          </div>
+          <div class="hero-visual" aria-hidden="true">
+            <div class="court-ring ring-one"></div><div class="court-ring ring-two"></div>
+            <span class="hero-number">23</span>
+            <img id="hero-character" alt="" width="360" height="480">
+            <div class="floating-note">
+              <div class="floating-note-top"><span>传承笔记</span><span class="stars">★★★</span></div>
+              <strong>投射</strong>
+              <p>属性因子 · 三星效果</p>
+              <div class="floating-effect" id="hero-factor-value">投射 +12～22</div>
+            </div>
+            <div class="hero-stamp">HG<br><small>ARCHIVE</small></div>
+          </div>
+        </div>
+
+        <div class="nav-marquee shell" aria-label="快捷导航">
+          <div class="nav-marquee-track">
+            <div class="nav-marquee-group">
+              <button class="nav-tile" data-route="notes"><span class="nav-tile-icon"><svg><use href="#i-book"></use></svg></span><strong>笔记图鉴</strong><span>因子词条检索</span></button>
+              <button class="nav-tile" data-route="community"><span class="nav-tile-icon"><svg><use href="#i-share"></use></svg></span><strong>玩家共享</strong><span>笔记与器材共享</span></button>
+              <button class="nav-tile" data-route="forum"><span class="nav-tile-icon"><svg><use href="#i-forum"></use></svg></span><strong>讨论区</strong><span>和教练们聊聊</span></button>
+              <button class="nav-tile" data-route="matches"><span class="nav-tile-icon"><svg><use href="#i-ball"></use></svg></span><strong>赛季信息</strong><span>比赛分享与赛程</span></button>
+              <button class="nav-tile" data-route="compatibility"><span class="nav-tile-icon"><svg><use href="#i-users"></use></svg></span><strong>相性计算</strong><span>笔记相性试算</span></button>
+              <button class="nav-tile" data-route="equipment"><span class="nav-tile-icon"><svg><use href="#i-card"></use></svg></span><strong>器材库</strong><span>73 件器材图鉴</span></button>
+              <button class="nav-tile" data-route="characters"><span class="nav-tile-icon"><svg><use href="#i-target"></use></svg></span><strong>球员库</strong><span>38 名球员资料</span></button>
+              <button class="nav-tile" data-route="guides"><span class="nav-tile-icon"><svg><use href="#i-info"></use></svg></span><strong>攻略合集</strong><span>新手到进阶整合攻略</span></button>
+            </div>
+            <div class="nav-marquee-group" aria-hidden="true">
+              <button class="nav-tile" tabindex="-1" data-route="notes"><span class="nav-tile-icon"><svg><use href="#i-book"></use></svg></span><strong>笔记图鉴</strong><span>因子词条检索</span></button>
+              <button class="nav-tile" tabindex="-1" data-route="community"><span class="nav-tile-icon"><svg><use href="#i-share"></use></svg></span><strong>玩家共享</strong><span>笔记与器材共享</span></button>
+              <button class="nav-tile" tabindex="-1" data-route="forum"><span class="nav-tile-icon"><svg><use href="#i-forum"></use></svg></span><strong>讨论区</strong><span>和教练们聊聊</span></button>
+              <button class="nav-tile" tabindex="-1" data-route="matches"><span class="nav-tile-icon"><svg><use href="#i-ball"></use></svg></span><strong>赛季信息</strong><span>比赛分享与赛程</span></button>
+              <button class="nav-tile" tabindex="-1" data-route="compatibility"><span class="nav-tile-icon"><svg><use href="#i-users"></use></svg></span><strong>相性计算</strong><span>笔记相性试算</span></button>
+              <button class="nav-tile" tabindex="-1" data-route="equipment"><span class="nav-tile-icon"><svg><use href="#i-card"></use></svg></span><strong>器材库</strong><span>73 件器材图鉴</span></button>
+              <button class="nav-tile" tabindex="-1" data-route="characters"><span class="nav-tile-icon"><svg><use href="#i-target"></use></svg></span><strong>球员库</strong><span>38 名球员资料</span></button>
+              <button class="nav-tile" tabindex="-1" data-route="guides"><span class="nav-tile-icon"><svg><use href="#i-info"></use></svg></span><strong>攻略合集</strong><span>新手到进阶整合攻略</span></button>
+            </div>
+          </div>
+        </div>
+
+
+        <div class="shell catalog-section" id="note-catalog">
+          <div class="section-heading">
+            <div><div class="eyebrow"><span>IDX</span> FACTOR INDEX</div><h2>笔记词条</h2><p>按因子类型与星级效果精确检索。</p></div>
+            <button class="button subtle" id="toggle-quality"><svg><use href="#i-info"></use></svg>品质规则</button>
+          </div>
+
+          <div class="quality-panel" id="quality-panel" hidden>
+            <div class="quality-intro"><h3>笔记品质与词条数量</h3><p>品质越高，可记录的词条越多。以下是游戏内的笔记品质规则。</p></div>
+            <div class="quality-grid" id="quality-grid"></div>
+            <p class="quality-note" id="quality-note" hidden></p>
+          </div>
+
+          <div class="filter-panel">
+            <label class="search-box"><svg><use href="#i-search"></use></svg><input id="note-search" type="search" aria-label="搜索笔记词条" placeholder="搜索词条名称、效果或 ID" autocomplete="off"><span class="key-hint">/</span></label>
+            <div class="filter-row" id="note-type-filters" aria-label="因子类型筛选"></div>
+            <div class="filter-selects">
+              <label>排序方式<select id="note-sort"><option value="type">按因子分类</option><option value="id">按词条 ID</option><option value="name">按名称</option></select></label>
+            </div>
+          </div>
+          <div class="result-toolbar">
+            <p id="note-result-count">正在统计…</p>
+          </div>
+          <div class="note-grid" id="note-grid"></div>
+          <div class="empty-state" id="note-empty" hidden><svg><use href="#i-search"></use></svg><h3>没有匹配的词条</h3><p>试试减少筛选条件或更换关键词。</p><button class="button subtle" id="clear-note-filters">清空筛选</button></div>
+          <button class="button load-more" id="note-load-more" hidden>加载更多词条<svg><use href="#i-chevron"></use></svg></button>
+        </div>
+      </section>
+
+      <section class="app-view" id="view-community" data-view="community" hidden>
+        <div class="shell page-head community-head">
+          <div>
+            <div class="eyebrow"><span>02</span> PLAYER EXCHANGE</div>
+            <h1>玩家共享库</h1>
+            <p>留下你的名字，分享可借出的笔记与器材；也能找到其他玩家正在共享的配置。</p>
+          </div>
+          <dl class="page-stats community-head-stats">
+            <div><dt id="community-note-count">—</dt><dd>笔记</dd></div>
+            <div><dt id="community-equipment-count">—</dt><dd>器材</dd></div>
+            <div><dt id="community-total">—</dt><dd>共享内容</dd></div>
+          </dl>
+        </div>
+
+        <div class="shell community-section">
+          <section class="player-pass" aria-label="玩家名片">
+            <div class="player-avatar" id="player-avatar" aria-hidden="true">?</div>
+            <div class="player-pass-copy">
+              <span class="step-label">MY TRAINER CARD</span>
+              <h2 id="player-pass-title">先留下你的名字</h2>
+              <p>这个署名会显示在你发布的共享内容上，只保存在当前浏览器，不需要注册。</p>
+            </div>
+            <div class="player-name-control">
+              <label for="player-name-input">玩家名</label>
+              <div class="name-input-row">
+                <input id="player-name-input" type="text" maxlength="20" placeholder="输入 1～20 个字符" autocomplete="nickname">
+                <button class="button primary compact-button" id="player-name-save">保存名字</button>
+              </div>
+            </div>
+            <div class="cloud-state" id="community-cloud-status"><span class="status-dot"></span><span>正在连接共享库</span></div>
+          </section>
+
+          <div class="community-toolbar">
+            <div>
+              <div class="eyebrow"><span>LIVE</span> COMMUNITY BOARD</div>
+              <h2>正在共享</h2>
+              <p>记下玩家名，直接在游戏里借用。</p>
+            </div>
+            <div class="publish-stack">
+              <p class="auth-gate" data-auth-gate="share" hidden>
+                <svg aria-hidden="true"><use href="#i-info"></use></svg>
+                <span>请先登录后再分享。</span>
+                <button type="button" class="text-button auth-gate-login" data-auth-open>去登录</button>
+              </p>
+              <div class="publish-actions">
+                <button class="button subtle" id="publish-note-button"><svg><use href="#i-book"></use></svg>发布共享笔记</button>
+                <button class="button primary" id="publish-equipment-button"><svg><use href="#i-card"></use></svg>发布共享器材</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="filter-panel community-filters">
+            <label class="search-box"><svg><use href="#i-search"></use></svg><input id="community-search" type="search" aria-label="搜索共享内容" placeholder="搜索玩家、笔记、器材或因子" autocomplete="off"></label>
+            <div class="filter-row" id="community-type-filters" aria-label="共享类型筛选">
+              <button class="filter-chip active" data-community-type="all">全部共享</button>
+              <button class="filter-chip" data-community-type="note">笔记</button>
+              <button class="filter-chip" data-community-type="equipment">器材</button>
+            </div>
+            <div class="filter-selects">
+              <label>排序方式<select id="community-sort"><option value="new">最近发布</option></select></label>
+              <button class="text-button community-refresh" id="community-refresh"><svg><use href="#i-reset"></use></svg>刷新共享库</button>
+            </div>
+          </div>
+
+          <div class="result-toolbar">
+            <p id="community-result-count">正在从云端读取…</p>
+            <span class="cloud-secure-note"><svg><use href="#i-cloud"></use></svg>共享内容由云端持久保存</span>
+          </div>
+          <div class="community-grid" id="community-grid" aria-live="polite"></div>
+          <div class="cloud-empty-state" id="community-empty" hidden>
+            <div class="empty-ball"><svg><use href="#i-share"></use></svg></div>
+            <h3 id="community-empty-title">共享库还是空的</h3>
+            <p id="community-empty-copy">发布第一本共享笔记或第一张器材卡，其他玩家就能在这里找到你。</p>
+            <p class="auth-gate" data-auth-gate="share-empty" hidden>
+              <svg aria-hidden="true"><use href="#i-info"></use></svg>
+              <span>请先登录后再分享。</span>
+              <button type="button" class="text-button auth-gate-login" data-auth-open>去登录</button>
+            </p>
+            <button class="button primary" id="community-empty-publish"><svg><use href="#i-plus"></use></svg>发布第一条共享</button>
+          </div>
+          <div class="cloud-empty-state cloud-error-state" id="community-error" hidden>
+            <div class="empty-ball"><svg><use href="#i-cloud"></use></svg></div>
+            <h3>共享库暂时没有连上</h3>
+            <p id="community-error-copy">请检查网络后重试。公共图鉴部分仍可正常使用。</p>
+            <button class="button subtle" id="community-error-retry">重新连接</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="app-view" id="view-compatibility" data-view="compatibility" hidden>
+        <div class="shell page-head">
+          <div><div class="eyebrow"><span>05</span> HARMONY CALCULATOR</div><h1>相性试算</h1><p>选择主力与两名笔记角色，加入契合度词条加成，实时计算传承评级。</p></div>
+          <div class="page-head-art"><svg><use href="#i-users"></use></svg></div>
+        </div>
+        <div class="shell compat-layout">
+          <section class="panel calculator-panel">
+            <div class="panel-title"><div><span class="step-label">STEP 01</span><h2>组建传承组合</h2></div><button class="text-button" id="compat-reset"><svg><use href="#i-reset"></use></svg>重置</button></div>
+            <div class="core-select-wrap">
+              <img id="compat-core-image" alt="当前主力头像" width="72" height="72">
+              <label><span>主力球员</span><select id="compat-core"></select></label>
+              <span class="position-tag" id="compat-core-position"></span>
+            </div>
+            <div class="owner-selects" id="owner-selects"></div>
+            <p class="form-note"><svg><use href="#i-info"></use></svg>契合度词条按每本笔记独立计入；主力与自身笔记的关系分为 0。</p>
+            <div class="calculator-actions"><button class="button primary" id="compat-recommend"><svg><use href="#i-target"></use></svg>填入高关系组合</button><span>不含契合词条加成</span></div>
+          </section>
+          <aside class="panel compat-result-panel" id="compat-result" aria-live="polite"></aside>
+        </div>
+        <div class="shell compat-bottom">
+          <section class="panel relationship-panel">
+            <div class="panel-title"><div><span class="step-label">STEP 02</span><h2>关系分速查</h2><p>按当前主力排序，点击角色即可加入空笔记位。</p></div><label class="mini-search"><svg><use href="#i-search"></use></svg><input id="relationship-search" type="search" aria-label="搜索关系球员" placeholder="搜索球员"></label></div>
+            <div class="relationship-list" id="relationship-list"></div>
+          </section>
+          <section class="panel level-panel">
+            <div class="panel-title"><div><span class="step-label">RULES</span><h2>评级与传承次数</h2></div></div>
+            <div class="level-table" id="harmony-level-table"></div>
+            <div class="formula-box"><span>总相性分</span><strong>两名笔记角色关系分 + 契合词条加分</strong><small>契合词条：1★ +2 / 2★ +5 / 3★ +10</small></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="app-view" id="view-equipment" data-view="equipment" hidden>
+        <div class="shell page-head equipment-head">
+          <div><div class="eyebrow"><span>06</span> EQUIPMENT ARCHIVE</div><h1>器材库</h1><p>查看器材卡面、擅长训练、等级面板与成长词条。</p></div>
+          <dl class="page-stats"><div><dt id="equipment-total">75</dt><dd>全部器材</dd></div><div><dt id="equipment-ssr">—</dt><dd>SSR</dd></div></dl>
+        </div>
+        <div class="shell catalog-section compact">
+          <div class="filter-panel">
+            <label class="search-box"><svg><use href="#i-search"></use></svg><input id="equipment-search" type="search" aria-label="搜索器材" placeholder="搜索器材名称、效果或 ID" autocomplete="off"></label>
+            <div class="filter-row" id="rarity-filters" aria-label="稀有度筛选"><button class="filter-chip active" data-rarity="all">全部稀有度</button><button class="filter-chip" data-rarity="SSR">SSR</button><button class="filter-chip" data-rarity="SR">SR</button><button class="filter-chip" data-rarity="R">R</button></div>
+            <div class="filter-selects"><label>擅长训练<select id="equipment-training"><option value="all">全部方向</option><option value="投射">投射</option><option value="弹跳">弹跳</option><option value="防守">防守</option><option value="体能">体能</option><option value="运控">运控</option><option value="意识">意识</option><option value="协助">协助 / 全能</option></select></label></div>
+          </div>
+          <div class="result-toolbar"><p id="equipment-result-count">正在统计…</p><span class="toolbar-tip">点击卡片查看任意等级面板</span></div>
+          <div class="equipment-grid" id="equipment-grid"></div>
+          <div class="empty-state" id="equipment-empty" hidden><svg><use href="#i-search"></use></svg><h3>没有匹配的器材</h3><p>试试其他稀有度、训练方向或关键词。</p><button class="button subtle" id="clear-equipment-filters">清空筛选</button></div>
+          <button class="button load-more" id="equipment-load-more" hidden>加载更多器材<svg><use href="#i-chevron"></use></svg></button>
+        </div>
+      </section>
+
+      <section class="app-view" id="view-characters" data-view="characters" hidden>
+        <div class="shell page-head character-head">
+          <div><div class="eyebrow"><span>07</span> PLAYER ROSTER</div><h1>球员库</h1><p>查询位置适性、六维潜力、核心天赋与角色羁绊。</p></div>
+          <div class="roster-lineup" id="roster-lineup" aria-hidden="true"></div>
+        </div>
+        <div class="shell catalog-section compact">
+          <div class="filter-panel">
+            <label class="search-box"><svg><use href="#i-search"></use></svg><input id="character-search" type="search" aria-label="搜索球员" placeholder="搜索姓名、学校、位置或称号" autocomplete="off"></label>
+            <div class="filter-row" id="position-filters" aria-label="位置筛选"><button class="filter-chip active" data-position="all">全部位置</button><button class="filter-chip" data-position="PG">PG 控卫</button><button class="filter-chip" data-position="SG">SG 分卫</button><button class="filter-chip" data-position="SF">SF 小前</button><button class="filter-chip" data-position="PF">PF 大前</button><button class="filter-chip" data-position="C">C 中锋</button></div>
+            <div class="filter-selects"><label>学校<select id="character-school"><option value="all">全部学校</option></select></label><label>稀有度<select id="character-quality"><option value="all">全部稀有度</option><option value="SSR">SSR</option><option value="SR">SR</option><option value="R">R</option></select></label><label>球风<select id="character-style"><option value="all">全部球风</option><option value="技巧">技巧</option><option value="速度">速度</option><option value="力量">力量</option><option value="球商">球商</option><option value="全能">全能</option><option value="辅助">辅助</option></select></label><label>排序<select id="character-sort"><option value="rarity">稀有度</option><option value="style">球风</option><option value="attr-投射">六维·投射</option><option value="attr-弹跳">六维·弹跳</option><option value="attr-运控">六维·运控</option><option value="attr-体能">六维·体能</option><option value="attr-防守">六维·防守</option><option value="attr-意识">六维·意识</option></select></label></div>
+          </div>
+          <div class="result-toolbar"><p id="character-result-count">正在统计…</p><span class="toolbar-tip">点击角色查看完整资料</span></div>
+          <div class="character-grid" id="character-grid"></div>
+          <div class="empty-state" id="character-empty" hidden><svg><use href="#i-search"></use></svg><h3>没有匹配的球员</h3><p>试试其他学校、位置或关键词。</p><button class="button subtle" id="clear-character-filters">清空筛选</button></div>
+        </div>
+      </section>
+
+      <section class="app-view" id="view-matches" data-view="matches" hidden>
+        <div class="shell page-head matches-head">
+          <div>
+            <div class="eyebrow"><span>04</span> SEASON GUIDE</div>
+            <h1>赛季信息</h1>
+            <p>对照立冬杯的赛期、一轮到决赛的时间窗、难度组别，以及风格和体系。用来赛前定策略。</p>
+          </div>
+          <dl class="page-stats">
+            <div><dt id="season-cup-name">立冬杯</dt><dd>当前杯赛</dd></div>
+            <div><dt id="season-phase">—</dt><dd>当前阶段</dd></div>
+          </dl>
+        </div>
+        <div class="shell matches-section" id="season-guide" aria-live="polite">
+          <p class="matches-status" id="season-status" role="status">正在读取赛季资料…</p>
+        </div>
+      </section>
+
+      <section class="app-view" id="view-guides" data-view="guides" hidden>
+        <div class="shell page-head">
+          <div><div class="eyebrow"><span>08</span> STRATEGY GUIDES</div><h1>攻略合集</h1><p>整合自 TapTap 攻略站、高手游等玩家攻略：新手开局、资源获取、四大流派、训练育成、笔记、器材与比赛，一站看完。</p></div>
+        </div>
+        <div class="shell catalog-section compact">
+          <div id="guides-content"><p class="guides-loading">正在加载攻略…</p></div>
+        </div>
+      </section>
+
+
+      <section class="app-view" id="view-trades" data-view="trades" hidden>
+        <div class="shell page-head forum-head">
+          <div><div class="eyebrow"><span>TRADE</span> CARD EXCHANGE</div><h1>卡册换卡</h1><p>晒出多余卡片，找到想要的卡片。交换请在游戏内与发布者联系。</p></div>
+        </div>
+        <div class="shell trade-section">
+          <div class="trade-layout">
+            <form class="trade-panel" id="trade-form">
+              <h2>发布换卡信息</h2><p>按角色和编号选择多余卡片与想要的卡片。登录后可以发布或撤回自己的信息。</p>
+              <label for="trade-have">我有的卡片 *</label><textarea id="trade-have" maxlength="2000" required placeholder="例如：卡片 A，卡片 B"></textarea>
+              <label for="trade-want">想换的卡片 *</label><textarea id="trade-want" maxlength="2000" required placeholder="例如：卡片 C，卡片 D"></textarea>
+              <label for="trade-note">补充说明</label><textarea id="trade-note" maxlength="300" placeholder="版本、数量或其他交换条件（选填）"></textarea>
+              <button class="button primary" type="submit" id="trade-submit">发布换卡信息</button>
+              <p id="trade-status" role="status" aria-live="polite"></p>
+            </form>
+            <div>
+              <div class="trade-matches" id="trade-matches" role="status" aria-live="polite" hidden></div>
+              <div class="trade-toolbar"><form class="trade-search" id="trade-search"><input id="trade-query" type="search" maxlength="40" aria-label="搜索卡片名称" placeholder="搜索我有或想换的卡片"><button class="button subtle" type="submit">搜索</button></form><button class="text-button" type="button" id="trade-refresh">刷新</button></div>
+              <p id="trade-count" class="toolbar-tip">正在读取…</p>
+              <div class="trade-list" id="trade-list" aria-live="polite"></div>
+              <div class="trade-pager"><button class="button subtle" id="trade-prev" type="button">上一页</button><span id="trade-page">第 1 页</span><button class="button subtle" id="trade-next" type="button">下一页</button></div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="app-view" id="view-forum" data-view="forum" hidden>
+        <div class="shell page-head forum-head">
+          <div>
+            <div class="eyebrow"><span>03</span> LOCKER ROOM</div>
+            <h1>讨论区</h1>
+            <p>训练、比赛、升训，把场上的问题和打法留在这里。</p>
+          </div>
+          <dl class="page-stats">
+            <div><dt id="forum-total">—</dt><dd>帖子</dd></div>
+            <div><dt id="forum-page-count">—</dt><dd>本页</dd></div>
+          </dl>
+        </div>
+
+        <div class="shell forum-section">
+          <section class="player-pass" id="forum-player-pass" aria-label="玩家名片">
+            <div class="player-avatar" id="forum-player-avatar" aria-hidden="true">?</div>
+            <div class="player-pass-copy">
+              <span class="step-label">MY TRAINER CARD</span>
+              <h2 id="forum-player-pass-title">先留下你的名字</h2>
+              <p>这个署名会显示在帖子和回复上，只保存在当前浏览器，与共享库共用。</p>
+            </div>
+            <div class="player-name-control">
+              <label for="forum-player-name-input">玩家名</label>
+              <div class="name-input-row">
+                <input id="forum-player-name-input" type="text" maxlength="20" placeholder="输入 1～20 个字符" autocomplete="nickname">
+                <button class="button primary compact-button" type="button" id="forum-player-name-save">保存名字</button>
+              </div>
+            </div>
+            <div class="cloud-state" id="forum-cloud-status"><span class="status-dot"></span><span>正在连接讨论区</span></div>
+          </section>
+
+          <div id="forum-list-view">
+            <div class="community-toolbar forum-toolbar">
+              <div>
+                <div class="eyebrow"><span>BOARD</span> FORUM</div>
+                <h2>最新讨论</h2>
+                <p>按分类翻看大家正在聊的话题。</p>
+              </div>
+              <div class="publish-stack">
+                <p class="auth-gate" data-auth-gate="forum" hidden>
+                  <svg aria-hidden="true"><use href="#i-info"></use></svg>
+                  <span>请先登录后再发帖。</span>
+                  <button type="button" class="text-button auth-gate-login" data-auth-open>去登录</button>
+                </p>
+                <div class="publish-actions">
+                  <button class="button primary" type="button" id="forum-compose"><svg><use href="#i-plus"></use></svg>发帖</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="filter-panel forum-filters">
+              <div class="forum-filter-bar">
+                <div class="filter-row" id="forum-category-filters" role="group" aria-label="讨论分类">
+                  <button class="filter-chip active" type="button" data-forum-category="all" aria-pressed="true">全部</button>
+                  <button class="filter-chip" type="button" data-forum-category="training" aria-pressed="false">训练</button>
+                  <button class="filter-chip" type="button" data-forum-category="match" aria-pressed="false">比赛</button>
+                  <button class="filter-chip" type="button" data-forum-category="training_up" aria-pressed="false">升训</button>
+                </div>
+                <button class="text-button forum-refresh" type="button" id="forum-refresh"><svg><use href="#i-reset"></use></svg>刷新讨论</button>
+              </div>
+            </div>
+
+            <div class="result-toolbar">
+              <p id="forum-result-count">正在读取讨论…</p>
+              <span class="cloud-secure-note" id="forum-mode-note" hidden>演示数据</span>
+            </div>
+            <div class="forum-list" id="forum-list" aria-live="polite"></div>
+            <div class="cloud-empty-state" id="forum-empty" hidden>
+              <div class="empty-ball"><svg><use href="#i-forum"></use></svg></div>
+              <h3 id="forum-empty-title">讨论区还是空的</h3>
+              <p id="forum-empty-copy">写下你正在练的、刚打完的，或卡在升训的问题。</p>
+              <p class="auth-gate" data-auth-gate="forum-empty" hidden>
+                <svg aria-hidden="true"><use href="#i-info"></use></svg>
+                <span>请先登录后再发帖。</span>
+                <button type="button" class="text-button auth-gate-login" data-auth-open>去登录</button>
+              </p>
+              <button class="button primary" type="button" id="forum-empty-compose"><svg><use href="#i-plus"></use></svg>发第一帖</button>
+            </div>
+            <div class="cloud-empty-state cloud-error-state" id="forum-error" hidden>
+              <div class="empty-ball"><svg><use href="#i-cloud"></use></svg></div>
+              <h3>讨论区暂时没有连上</h3>
+              <p id="forum-error-copy">请检查网络后重试。</p>
+              <button class="button subtle" type="button" id="forum-error-retry">重新连接</button>
+            </div>
+            <nav class="forum-pager" id="forum-pager" aria-label="帖子分页" hidden>
+              <button class="button subtle" type="button" id="forum-prev">上一页</button>
+              <span id="forum-page-label">第 1 / 1 页</span>
+              <button class="button subtle" type="button" id="forum-next">下一页</button>
+            </nav>
+          </div>
+
+          <div id="forum-post-view" hidden>
+            <a class="text-button forum-back" href="#forum"><svg class="forum-back-icon" aria-hidden="true"><use href="#i-chevron"></use></svg>返回讨论列表</a>
+            <!-- 回帖「请先登录」由 auth.js 插到 #forum-reply-form 前；未登录时显示，不改回复接口字段。 -->
+            <div id="forum-post-body" aria-live="polite"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="footer" id="footer" hidden><div class="shell"><span>HOOP GIRLS ARCHIVE</span><p>非官方粉丝资料库，与游戏开发商无关。资料整理自《篮球少女：飞跃巅峰》客户端数据，更新于 2026-11-01。</p><span>NOTEBOOK / EQUIPMENT / ROSTER</span></div></footer>
+
+  <dialog class="detail-dialog" id="detail-dialog" aria-labelledby="dialog-title">
+    <div class="dialog-shell"><button class="dialog-close icon-button" id="dialog-close" aria-label="关闭详情"><svg><use href="#i-close"></use></svg></button><div id="dialog-content"></div></div>
+  </dialog>
+  <dialog class="auth-dialog" id="auth-dialog" aria-labelledby="auth-dialog-title" aria-describedby="auth-dialog-note">
+    <button class="icon-button auth-close" type="button" id="auth-close" aria-label="关闭登录"><svg aria-hidden="true"><use href="#i-close"></use></svg></button>
+    <div class="auth-dialog-shell">
+      <div class="auth-hero">
+        <div class="dialog-heading"><svg aria-hidden="true"><use href="#i-user"></use></svg><span id="auth-kicker">账号登录</span></div>
+        <h2 id="auth-dialog-title">登录</h2>
+        <p id="auth-dialog-note">登录后就可以发帖、分享笔记和比赛。</p>
+      </div>
+      <div class="auth-body">
+        <div class="auth-tabs" id="auth-tabs" role="tablist" aria-label="登录或注册">
+          <button type="button" role="tab" id="auth-tab-login" aria-controls="auth-form" aria-selected="true">登录</button>
+          <button type="button" role="tab" id="auth-tab-register" aria-controls="auth-form" aria-selected="false" tabindex="-1">注册</button>
+        </div>
+        <form id="auth-form" method="post" action="#auth-local" novalidate role="tabpanel" aria-labelledby="auth-tab-login">
+          <div class="auth-field">
+            <label for="auth-username" id="auth-username-label">用户名</label>
+            <input id="auth-username" name="username" type="text" maxlength="20" autocomplete="username" autocapitalize="off" spellcheck="false" data-hint-id="auth-username-hint" aria-errormessage="auth-error">
+            <small id="auth-username-hint">1～20 个字符</small>
+          </div>
+          <div class="auth-field">
+            <label for="auth-password" id="auth-password-label">密码</label>
+            <input id="auth-password" name="password" type="password" maxlength="72" autocomplete="current-password" spellcheck="false" data-hint-id="auth-password-hint" aria-errormessage="auth-error">
+            <small id="auth-password-hint">8～72 个字符</small>
+          </div>
+          <div class="auth-field" id="auth-confirm-field" hidden>
+            <label for="auth-password-confirm" id="auth-confirm-label">确认密码</label>
+            <input id="auth-password-confirm" name="password_confirm" type="password" maxlength="72" autocomplete="new-password" spellcheck="false" disabled data-hint-id="auth-confirm-hint" aria-errormessage="auth-error">
+            <small id="auth-confirm-hint">再输入一次密码</small>
+          </div>
+          <!-- 注册与登录同一张表单，但不拆成「先注册再验证」两步。验证码只交给 /api/auth/register，不走 verify。 -->
+          <div id="auth-register-extra" hidden>
+            <div class="auth-field">
+              <label for="auth-register-email" id="auth-register-email-label">邮箱</label>
+              <input id="auth-register-email" name="email" type="email" maxlength="254" autocomplete="email" inputmode="email" autocapitalize="off" spellcheck="false" data-hint-id="auth-register-email-hint" aria-errormessage="auth-error">
+              <small id="auth-register-email-hint">用来接收注册验证码</small>
+            </div>
+            <div class="auth-field">
+              <span class="auth-turnstile-label" id="auth-register-turnstile-label">人机验证</span>
+              <div id="auth-register-turnstile-slot" class="auth-turnstile-slot"></div>
+            </div>
+            <div class="auth-field" id="auth-register-code-field" hidden>
+              <label for="auth-register-code" id="auth-register-code-label">验证码</label>
+              <input id="auth-register-code" class="auth-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" spellcheck="false" data-hint-id="auth-register-code-hint" aria-errormessage="auth-error">
+              <small id="auth-register-code-hint">6 位数字，10 分钟内有效</small>
+            </div>
+            <p class="auth-email-status" id="auth-register-status" role="status" hidden></p>
+          </div>
+          <p class="share-form-error" id="auth-error" role="alert" tabindex="-1" hidden></p>
+          <div class="auth-actions">
+            <button type="button" class="button ghost" id="auth-cancel">取消</button>
+            <button type="button" class="button ghost" id="auth-register-send" hidden>发送验证码</button>
+            <button type="submit" class="button primary" id="auth-submit">登录</button>
+          </div>
+        </form>
+        <div class="auth-links" id="auth-email-switch">
+          <button type="button" class="button ghost auth-email-entry" id="auth-email-open">邮箱验证码登录</button>
+          <button type="button" class="text-button auth-reset-entry" id="auth-reset-open">忘记密码</button>
+        </div>
+        <form id="auth-email-form" method="post" action="#auth-email" novalidate hidden>
+          <div class="auth-field">
+            <label for="auth-email" id="auth-email-label">邮箱</label>
+            <input id="auth-email" name="email" type="email" maxlength="254" autocomplete="email" inputmode="email" autocapitalize="off" spellcheck="false" data-hint-id="auth-email-hint" aria-errormessage="auth-email-error">
+            <small id="auth-email-hint">用来接收 6 位验证码</small>
+          </div>
+          <div class="auth-field">
+            <span class="auth-turnstile-label" id="auth-turnstile-label">人机验证</span>
+            <!-- data-action 必须是 email-request。site key 由 auth.js 写入；令牌放进 JSON 的 turnstile_token，不要在浏览器调用 siteverify。 -->
+            <div id="auth-email-turnstile-slot" class="auth-turnstile-slot">
+              <div id="auth-turnstile" class="auth-turnstile" data-action="email-request" role="group" aria-labelledby="auth-turnstile-label" tabindex="-1"></div>
+            </div>
+          </div>
+          <div class="auth-field" id="auth-code-field" hidden>
+            <label for="auth-code" id="auth-code-label">验证码</label>
+            <input id="auth-code" class="auth-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" spellcheck="false" data-hint-id="auth-code-hint" aria-errormessage="auth-email-error">
+            <small id="auth-code-hint">6 位数字，10 分钟内有效</small>
+          </div>
+          <p class="auth-email-status" id="auth-email-status" role="status" hidden></p>
+          <p class="share-form-error" id="auth-email-error" role="alert" tabindex="-1" hidden></p>
+          <div class="auth-actions">
+            <button type="button" class="button ghost" id="auth-email-back">返回</button>
+            <button type="submit" class="button primary" id="auth-email-send">发送验证码</button>
+            <button type="submit" class="button primary" id="auth-email-verify" hidden>验证并登录</button>
+          </div>
+        </form>
+        <form id="auth-reset-form" method="post" action="#auth-reset" novalidate hidden>
+          <div class="auth-field">
+            <label for="auth-reset-email" id="auth-reset-email-label">邮箱</label>
+            <input id="auth-reset-email" name="email" type="email" maxlength="254" autocomplete="email" inputmode="email" autocapitalize="off" spellcheck="false" data-hint-id="auth-reset-email-hint" aria-errormessage="auth-reset-error">
+            <small id="auth-reset-email-hint">填写账号绑定的邮箱</small>
+          </div>
+          <div class="auth-field">
+            <label for="auth-reset-password" id="auth-reset-password-label">新密码</label>
+            <input id="auth-reset-password" name="new_password" type="password" maxlength="72" autocomplete="new-password" spellcheck="false" data-hint-id="auth-reset-password-hint" aria-errormessage="auth-reset-error">
+            <small id="auth-reset-password-hint">8～72 个字符</small>
+          </div>
+          <div class="auth-field">
+            <label for="auth-reset-password-confirm" id="auth-reset-confirm-label">确认新密码</label>
+            <input id="auth-reset-password-confirm" name="new_password_confirm" type="password" maxlength="72" autocomplete="new-password" spellcheck="false" data-hint-id="auth-reset-confirm-hint" aria-errormessage="auth-reset-error">
+            <small id="auth-reset-confirm-hint">再输入一次新密码</small>
+          </div>
+          <div class="auth-field">
+            <span class="auth-turnstile-label" id="auth-reset-turnstile-label">人机验证</span>
+            <div id="auth-reset-turnstile-slot" class="auth-turnstile-slot"></div>
+          </div>
+          <div class="auth-field" id="auth-reset-code-field" hidden>
+            <label for="auth-reset-code" id="auth-reset-code-label">验证码</label>
+            <input id="auth-reset-code" class="auth-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" spellcheck="false" data-hint-id="auth-reset-code-hint" aria-errormessage="auth-reset-error">
+            <small id="auth-reset-code-hint">6 位数字，10 分钟内有效</small>
+          </div>
+          <p class="auth-email-status" id="auth-reset-status" role="status" hidden></p>
+          <p class="share-form-error" id="auth-reset-error" role="alert" tabindex="-1" hidden></p>
+          <div class="auth-actions">
+            <button type="button" class="button ghost" id="auth-reset-back">返回</button>
+            <button type="submit" class="button primary" id="auth-reset-send">发送验证码</button>
+            <button type="submit" class="button primary" id="auth-reset-submit" hidden>重置密码</button>
+          </div>
+        </form>
+        <p class="auth-footnote" id="auth-footnote">登录会保持一段时间，退出后需要重新登录。</p>
+      </div>
+    </div>
+  </dialog>
+  <template id="auth-gate-template">
+    <p class="auth-gate" data-auth-gate hidden>
+      <svg aria-hidden="true"><use href="#i-info"></use></svg>
+      <span data-auth-gate-text></span>
+      <button type="button" class="text-button auth-gate-login" data-auth-open>去登录</button>
+    </p>
+  </template>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="app.js?v=62" defer></script>
+  <script src="community.js?v=51" defer></script>
+  <script src="forum.js?v=49" defer></script>
+  <script src="trades.js?v=4" defer></script>
+  <script src="trade-enhancements.js?v=5" defer></script>
+  <script src="matches.js?v=52" defer></script>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <script src="auth.js?v=48" defer></script>
+  <script src="extras.js?v=55" defer></script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"a9b0bd0b6826474d8427f73792521ca2","r":1,"spa":2}' crossorigin="anonymous"></script>
+</body>
+</html>

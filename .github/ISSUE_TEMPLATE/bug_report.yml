@@ -1,0 +1,38 @@
+name: "🐛 Bug 反馈 / 角标位置偏移"
+description: "汇报运行异常、悬浮窗/角标显示问题、EV 计算疑问或分辨率适配偏移"
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢帮 **HoopCoach（星奈育成军师）** 变得更好！
+        如果你是在桌面小控制台里点击 **「🐛 反馈 Bug / 提改进建议」** 跳转过来的，下方信息已经帮你自动填好啦～
+  - type: dropdown
+    id: category
+    attributes:
+      label: "问题类型"
+      options:
+        - "🐛 功能异常 / 闪退 / 未识别日志"
+        - "📐 贴身角标位置偏移 / 分辨率或带鱼屏适配"
+        - "🧮 回合 EV 评分 / 商店 / 周末建议疑问"
+        - "🌐 本地作战室网页显示异常"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: "发生了什么？如何复现？"
+      placeholder: "请简述你在哪个界面（平日训练 / 周末 / 扭蛋 / 商店 / 选技能等）遇到了什么问题..."
+    validations:
+      required: true
+  - type: textarea
+    id: env_info
+    attributes:
+      label: "脱敏环境与窗口信息（可粘贴控制台自动生成内容）"
+      placeholder: "版本、Windows 版本、分辨率/DPI、游戏窗口模式（全屏/无边框/窗口）、HUD 模式（贴身角标/紧凑浮窗）"
+  - type: textarea
+    id: attachments
+    attributes:
+      label: "截图或脱敏诊断包（可选）"
+      description: "可直接把控制台导出的 `hoopcoach_diag_*.zip` 或游戏画面截图拖进此框上传（诊断包已自动脱敏本机路径与用户名）。"
