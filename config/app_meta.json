@@ -1,5 +1,7 @@
 {
   "app_name": "HoopCoach",
-  "version": "v0.10.1",
-  "github_repo": "EjuneG/HoopCoach"
+  "version": "v0.10.2",
+  "runtime_version": "rt1",
+  "github_repo": "EjuneG/HoopCoach",
+  "custom_mirrors": []
 }

@@ -708,7 +708,8 @@ def format_equip_advice_hud_markup(core_id: int, focus_stat: Any = _UNSET) -> tu
     lines = []
 
     icon_items = []
-    if rec["owned_loadout"] and len(rec["owned_loadout"]) >= 2:
+    used_owned = bool(rec["owned_loadout"] and len(rec["owned_loadout"]) >= 2)
+    if used_owned:
         for item in rec["owned_loadout"]:
             eq = item["equip"]
             icon_items.append({
@@ -740,10 +741,17 @@ def format_equip_advice_hud_markup(core_id: int, focus_stat: Any = _UNSET) -> tu
                 "is_borrow": (eq["id"] == 11004),
             })
 
-    own_pat = rec.get("owned_pattern") or {}
-    if own_pat.get("tag"):
-        pat_col = "#34d399" if own_pat.get("archetype") in ("pvp_22", "pvp_31") else "#94a3b8"
-        lines.append(f"<span size='small' foreground='{pat_col}'>阵型：{html.escape(own_pat['tag'])}</span>")
+    if used_owned:
+        active_pat = rec.get("owned_pattern") or {}
+        if active_pat.get("tag"):
+            pat_col = "#34d399" if active_pat.get("archetype") in ("pvp_22", "pvp_31") else "#94a3b8"
+            lines.append(f"<span size='small' foreground='{pat_col}'>阵型：{html.escape(active_pat['tag'])}</span>")
+    else:
+        bis_pat = rec.get("bis_pattern") or {}
+        pat_suffix = f" · 阵型：{html.escape(bis_pat['tag'])}" if bis_pat.get("tag") else ""
+        lines.append(
+            f"<span size='small' foreground='#7dd3fc'>🎒 通用毕业 5 卡推荐（暂未同步个人器材池）{pat_suffix}</span>"
+        )
 
     if rec["wish_headline"]:
         wh_short = re.sub(r"（.*?）", "", rec["wish_headline"]).replace("星愿标签组合：首选", "星愿：").strip()

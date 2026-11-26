@@ -170,15 +170,18 @@ class TestV010EVCore(unittest.TestCase):
         self.assertLessEqual(w["supactor_rainbow_bonus"], 3.0)
         self.assertLessEqual(w["supactor_gold_bonus"], 1.5)
 
-        # 单调性检验：同等 rem_after 下，cur_t=0..91 严格不减，杜绝 cur_t=65 > cur_t=91 倒挂，且无 58 EV 虚高
-        for rem in (24, 18, 12, 6):
+        # 单调性检验：同等 rem_after 下，cur_t=0..91 严格不减，杜绝 cur_t=65 > cur_t=91 倒挂，且区间合理（前期有存在感、峰值<=45 EV）
+        for rem in (28, 24, 18, 12, 6):
             evs = [lc.calc_equip_trammel_option_ev(ct, 13, rem, w)["ev"] for ct in (0, 13, 26, 39, 52, 65, 78, 91)]
             for i in range(len(evs) - 1):
                 self.assertLessEqual(
                     evs[i], evs[i + 1],
                     f"rem={rem} 处发生单调性倒挂: {list(zip((0,13,26,39,52,65,78,91), evs))}",
                 )
-            self.assertLessEqual(max(evs), 35.0, f"单张白圈期权不应虚高超过 35 EV: {evs}")
+            self.assertLessEqual(max(evs), 45.0, f"单张白圈期权不应虚高超过 45 EV: {evs}")
+        # 前期开局 rem=28 时，0 熟暴击卡应回弹至合理起步区间 (>=12 EV)，避免被 0.95 折现误杀
+        ev_early_0 = lc.calc_equip_trammel_option_ev(0, 13, 28, w)["ev"]
+        self.assertGreaterEqual(ev_early_0, 12.0)
 
         # 多满彩卡竞争边际递减：already_maxed_crit_cnt = 0 > 1 > 2 > 3
         c0 = lc.calc_equip_trammel_option_ev(65, 13, 20, w, already_maxed_crit_cnt=0)["ev"]
@@ -402,6 +405,54 @@ class TestV010EVCore(unittest.TestCase):
             md = f.read()
         self.assertIn("双三元对称闭环", md)
         self.assertIn("102→106→104→102", md)
+
+    # ------------------------------------------------------------------
+    # 9. 周五→周六百目鬼加训低体风险校准 + 残局末 4 训经理 0→1 变现率校准
+    # ------------------------------------------------------------------
+    def test_9_friday_saturday_risk_and_endgame_manager_retention(self):
+        # 复现 W6 周五 (ER=40, ps=68, gold=266, 经理 0/3, 剩余 5 训, 商店有 70 金神之庇佑 1131)：
+        # #1 投射(1彩爆+希雅, +43/+17, ps=-23 -> 45体) 应稳压 #6 意识(单站经理, +21/+9, ps=+5)
+        st = _make_base_state(exp_round=40, round_no=31, ps=68, gold=266)
+        st["main_char_id"] = 1011
+        st["teammate_char_ids"] = [1046, 1012, 1007, 1013]
+        st["props"] = {101: 1796, 102: 1105, 103: 1257, 104: 1022, 105: 1564, 106: 935}
+        st["prop_max"] = {101: 2304, 102: 1745, 103: 1670, 104: 1640, 105: 2285, 106: 1670}
+        st["growth_rates"] = {101: 500, 102: 0, 103: 0, 104: 0, 105: 400, 106: 0}
+        st["mgr_energy"] = 0
+        st["mgr_explosive"] = 15
+        st["whistle_awake_level"] = 3
+        st["whistle_break_level"] = 4
+        st["supactor_trammel"] = {11004: 100}
+        st["focus_levels"] = {1: 2, 2: 3, 3: 2, 4: 2, 5: 2, 6: 3}
+        st["train_counts"] = {1: 2, 2: 1, 3: 3, 4: 0, 5: 3, 6: 3}
+        st["train_up_need"] = {1: 4, 2: 5, 3: 4, 4: 4, 5: 4, 6: 5}
+        st["store_items"] = [{"id": 1131, "num": 1, "price": 70}]
+
+        cmd_shoot = _make_cmd(
+            1, {101: 43, 105: 17},
+            sup_cards=[{"card_id": 1, "val": 2}], sup_count=1, rainbow_count=1,
+            mate_ids=[1046], mate_count=1, is_manager=False, ps=-23, fail_rate=0,
+        )
+        cmd_iq = _make_cmd(
+            6, {106: 21, 104: 9},
+            sup_cards=[], sup_count=0, rainbow_count=0,
+            mate_ids=[], mate_count=0, is_manager=True, ps=5, fail_rate=0,
+        )
+        scored = lc.score_training_turn(st, [cmd_shoot, cmd_iq], self.strategy)
+        self.assertEqual(scored[0]["idx"], 1, f"W6周五彩爆+希雅应胜过单经理意识: {scored}")
+        self.assertGreater(scored[0]["score"] - scored[1]["score"], 5.0)
+
+        # 即使商店没有任何药水/神之庇佑，45体对应风险也仅 ~11 EV（非旧版虚高 -56 EV），投射依然应胜出
+        st_empty = lc.clone_state_snapshot(st)
+        st_empty["store_items"] = []
+        scored_empty = lc.score_training_turn(st_empty, [cmd_shoot, cmd_iq], self.strategy)
+        self.assertEqual(scored_empty[0]["idx"], 1, f"无神之庇佑时 45 体风险校准后投射仍应胜出: {scored_empty}")
+
+        # 极低体 (next_ps_est=28, 无药无庇佑) 时周六加训风险仍应显著扣分 (>45 EV)
+        st_low = lc.clone_state_snapshot(st_empty)
+        st_low["ps"] = 51  # 51 - 23 = 28
+        sc_low_shoot = next(x for x in lc.score_training_turn(st_low, [cmd_shoot, cmd_iq], self.strategy) if x["idx"] == 1)
+        self.assertIn("周六加训低体风险", sc_low_shoot["reasons"])
 
 
 if __name__ == "__main__":

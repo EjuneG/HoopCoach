@@ -208,7 +208,8 @@
       .map((w) => `<div class="warn-banner">⚠️ ${esc(w)}</div>`)
       .join("");
 
-    $("overview-bottlenecks").innerHTML = (ov.bottlenecks || []).slice(0, 6).map((b) => {
+    const bList = (ov.bottlenecks || []).slice(0, 6);
+    $("overview-bottlenecks").innerHTML = bList.length ? bList.map((b) => {
       const pct = b.target_rank ? Math.min(100, Math.round((b.current_best_rank / b.target_rank) * 100)) : 0;
       return `
         <div class="goal-card" data-cid="${b.char_id || ""}">
@@ -232,7 +233,7 @@
           <div class="goal-note">${esc(b.primary_bottleneck || b.advice || "")}</div>
         </div>
       `;
-    }).join("");
+    }).join("") : '<div class="empty-state">暂未配置养成队列或同步历史战绩。可先在桌面控制台点击「🔄 扫描历史战绩」，或切换到「角色 Box &amp; 配装规划」查看全角色通用笔记/器材方案。</div>';
 
     document.querySelectorAll(".goal-card[data-cid]").forEach((el) => {
       el.addEventListener("click", () => {
@@ -781,12 +782,16 @@
     if (tab === "breeder") {
       const ab = p.notes.auto_breeders || {};
       const owned = ab.same_pos_owned || [];
-      host.innerHTML = owned.length ? `
+      const fallbackAll = ab.same_pos_all || [];
+      const rows = owned.length ? owned : fallbackAll;
+      const isAllFallback = !owned.length && fallbackAll.length > 0;
+      host.innerHTML = rows.length ? `
+        ${isAllFallback ? '<div class="panel-sub" style="margin-bottom:8px">💡 暂未同步个人角色池，以下展示全图鉴原生同位置高相性种马推荐</div>' : ""}
         <div class="table-wrap">
           <table class="data-table">
-            <thead><tr><th>同位置种马（已拥有）</th><th>双边关系分</th><th>现有自备最高</th><th>主练</th></tr></thead>
+            <thead><tr><th>${isAllFallback ? "同位置种马（全图鉴）" : "同位置种马（已拥有）"}</th><th>双边关系分</th><th>现有自备最高</th><th>主练</th></tr></thead>
             <tbody>
-              ${owned.slice(0, 8).map((x) => `
+              ${rows.slice(0, 8).map((x) => `
                 <tr>
                   <td style="display:flex;align-items:center;gap:8px">${avatarHtml(x.head, x.actor_name, "avatar-sm")}<strong>${esc(x.actor_name)}</strong></td>
                   <td class="badge-blue" style="font-weight:700">${x.rel_to_core} / ${x.rel_from_core}</td>
@@ -801,7 +806,12 @@
       return;
     }
 
-    const combos = tab === "own" ? (p.notes.pure_own_combos || []) : (p.notes.borrow_combos || []);
+    let combos = tab === "own" ? (p.notes.pure_own_combos || []) : (p.notes.borrow_combos || []);
+    let isGenericFallback = false;
+    if (!combos.length && (p.notes.generic_combos || []).length) {
+      combos = p.notes.generic_combos;
+      isGenericFallback = true;
+    }
     if (!combos.length) {
       host.innerHTML = '<div class="empty-state">当前笔记池暂无可用配对</div>';
       return;
@@ -813,26 +823,29 @@
         <div class="note-mini-body">
           <div class="note-mini-title">
             <span>${esc(n.actor_name)}</span>
-            <span class="badge ${n.rank >= 7 ? "badge-purple" : ""}">${n.rank}阶 ${n.score}</span>
+            ${n.rank ? `<span class="badge ${n.rank >= 7 ? "badge-purple" : ""}">${n.rank}阶 ${n.score}</span>` : '<span class="badge">通用搭档</span>'}
             ${n.friend ? `<span class="badge badge-gold">借:${esc(n.friend)}</span>` : `<span class="badge">${tag}</span>`}
           </div>
-          <div class="note-mini-sub">相性 ${n.rel}${n.harmony_bonus ? `+${n.harmony_bonus}` : ""} · ${esc(n.highlights || "无高亮词条")}</div>
+          <div class="note-mini-sub">相性 ${n.rel}${n.harmony_bonus ? `+${n.harmony_bonus}` : ""}${n.highlights ? ` · ${esc(n.highlights)}` : (isGenericFallback ? " · 基础关系分（带对应专属契合更高）" : " · 无高亮词条")}</div>
         </div>
       </div>
     `;
 
-    host.innerHTML = `<div class="combo-list">${combos.slice(0, 5).map((cb, idx) => `
+    const bannerHtml = isGenericFallback
+      ? '<div class="panel-sub" style="margin-bottom:8px">💡 暂未同步个人笔记池，以下基于全角色关系矩阵给出通用最高契合双搭档参考（优先挑选带对应主属性上限词条的高分笔记）</div>'
+      : "";
+    host.innerHTML = bannerHtml + `<div class="combo-list">${combos.slice(0, 5).map((cb, idx) => `
       <div class="combo-card">
         <div class="combo-head">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <span class="badge ${idx === 0 ? "badge-green" : "badge-blue"}">#${idx + 1} 契合 ${cb.total_compat} (${esc(cb.rank_name)})</span>
             <span class="badge">${cb.learn_times}次学 · 期望 ${cb.expected_triggers} 词条</span>
           </div>
-          <span class="panel-sub" style="margin:0">均分 ${cb.avg_note_score} · 匹配上限 +${cb.matched_cap_gain}</span>
+          <span class="panel-sub" style="margin:0">${isGenericFallback ? "全图鉴 0★ 基准相性" : `均分 ${cb.avg_note_score} · 匹配上限 +${cb.matched_cap_gain}`}</span>
         </div>
         <div class="combo-pair">
-          ${renderMiniNote(cb.note1, "自备")}
-          ${renderMiniNote(cb.note2, tab === "own" ? "自备" : "借用")}
+          ${renderMiniNote(cb.note1, isGenericFallback ? "搭档1" : "自备")}
+          ${renderMiniNote(cb.note2, isGenericFallback ? "搭档2" : (tab === "own" ? "自备" : "借用"))}
         </div>
       </div>
     `).join("")}</div>`;
@@ -845,7 +858,12 @@
     const isOwned = state.plannerEquipTab === "owned";
     let list = eq.owned_loadout || [];
     let pat = eq.owned_pattern || {};
-    if (!isOwned) {
+    let ownedEmptyFallback = false;
+    if (isOwned && list.length <= 1 && (eq.bis_loadout || []).length) {
+      list = eq.bis_loadout;
+      pat = eq.bis_pattern || {};
+      ownedEmptyFallback = true;
+    } else if (!isOwned) {
       if (state.plannerMode === "pvp_22") {
         list = eq.pvp_22_loadout || eq.bis_loadout || [];
         pat = eq.pvp_22_pattern || {};
@@ -859,8 +877,11 @@
     }
 
     const host = $("planner-equips-body");
+    const fallbackHint = ownedEmptyFallback
+      ? '<div class="panel-sub" style="margin-bottom:8px">💡 暂未同步个人自有器材池，以下自动展示全图鉴通用毕业 5 卡方案作为参考</div>'
+      : "";
     const patHtml = pat && pat.tag ? `<div style="margin-bottom:10px"><span class="badge badge-blue">${esc(pat.tag)}</span></div>` : "";
-    host.innerHTML = patHtml + `<div class="equip-loadout-list">${list.map((it) => `
+    host.innerHTML = fallbackHint + patHtml + `<div class="equip-loadout-list">${list.map((it) => `
       <div class="equip-row-card ${it.is_borrow ? "borrow" : ""}">
         ${equipIcoHtml(it.icon, it.name)}
         <div class="equip-row-info">
@@ -884,13 +905,23 @@
     const kw = state.boxSearch.trim().toLowerCase();
 
     if (tab === "gap") {
-      const owned = box.characters.filter((c) => c.owned && (!kw || `${c.short_name} ${c.show_name} ${c.pos}`.toLowerCase().includes(kw)));
-      host.innerHTML = POS_ORDER.map((pos) => {
-        const items = owned.filter((c) => c.pos === pos).sort((a, b) => b.best_rank - a.best_rank);
+      const hasOwnedAny = box.characters.some((c) => c.owned);
+      const visibleChars = box.characters.filter(
+        (c) => (hasOwnedAny ? c.owned : true) && (!kw || `${c.short_name} ${c.show_name} ${c.pos}`.toLowerCase().includes(kw))
+      );
+      if (!visibleChars.length) {
+        host.innerHTML = '<div class="empty-state">未找到匹配的角色</div>';
+        return;
+      }
+      const headHint = !hasOwnedAny
+        ? '<div class="panel-sub" style="margin-bottom:10px">💡 暂未同步个人角色与笔记池，以下展示全图鉴角色；点击任意角色即可在上方查看通用笔记与毕业器材配装</div>'
+        : "";
+      host.innerHTML = headHint + POS_ORDER.map((pos) => {
+        const items = visibleChars.filter((c) => c.pos === pos).sort((a, b) => b.best_rank - a.best_rank);
         if (!items.length) return "";
         return `
           <div class="gap-pos-group">
-            <div class="gap-pos-label">${POS_LABEL[pos]}（${items.filter((x) => x.has_rainbow_note).length}/${items.length} 有 7 阶彩笔记）</div>
+            <div class="gap-pos-label">${POS_LABEL[pos]}（${hasOwnedAny ? `${items.filter((x) => x.has_rainbow_note).length}/${items.length} 有 7 阶彩笔记` : `共 ${items.length} 人`}）</div>
             <div class="gap-grid">
               ${items.map((c) => `
                 <div class="gap-card ${c.has_rainbow_note ? "has-rainbow" : c.own_note_count ? "" : "no-note"}" data-cid="${c.id}">
@@ -899,7 +930,7 @@
                     <div style="font-weight:600;font-size:13px">${esc(c.short_name)}</div>
                     <div style="font-size:11px;color:var(--text-muted)">
                       ${c.has_rainbow_note ? `<span style="color:var(--purple);font-weight:600">7阶彩 ${c.best_own_note_score}</span>` :
-                        c.best_own_note_rank ? `${c.best_own_note_rank}阶 ${c.best_own_note_score}` : "无自备笔记"}
+                        c.best_own_note_rank ? `${c.best_own_note_rank}阶 ${c.best_own_note_score}` : "点击查通用配装"}
                     </div>
                     <div style="font-size:11px;color:var(--text-dim)">最高分 ${c.best_rank || "—"}</div>
                   </div>
@@ -924,6 +955,10 @@
     if (tab === "own_notes" || tab === "bor_notes") {
       const src = tab === "own_notes" ? box.own_notes : box.borrowed_notes;
       const filtered = src.filter((n) => !kw || `${n.actor_name} ${n.friend} ${n.highlights} ${n.rank}阶 ${n.score}`.toLowerCase().includes(kw));
+      if (!filtered.length) {
+        host.innerHTML = `<div class="empty-state">${src.length ? "当前搜索无匹配笔记" : "暂未同步个人笔记数据；上方「配装规划器」已自动提供全角色通用高相性双搭档参考"}</div>`;
+        return;
+      }
       host.innerHTML = `
         <div class="table-wrap">
           <table class="data-table">
@@ -952,6 +987,10 @@
       const allEq = [...(box.owned_equips || []), ...(box.borrowed_equips || [])].filter(
         (e) => !kw || `${e.name} ${e.preferred_training} ${e.skill_name} ${e.community_tier}`.toLowerCase().includes(kw)
       );
+      if (!allEq.length) {
+        host.innerHTML = '<div class="empty-state">暂未同步个人器材池；可在上方「配装规划器」直接查看任意角色的全图鉴毕业 5 卡与 PVP 阵型方案</div>';
+        return;
+      }
       host.innerHTML = `
         <div class="equip-loadout-list">
           ${allEq.map((e) => `

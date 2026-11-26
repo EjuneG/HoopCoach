@@ -2066,17 +2066,17 @@ def calc_equip_trammel_option_ev(
     fractional_step: bool = False,
 ) -> dict:
     """
-    可暴击器材「本次合训 +13(+20) 熟练度」或「商店/扭蛋 +gain 熟练度」的彩圈/金圈期权价值（v0.10.0）：
-    - 按「超过次优按钮的条件超额期望」校准 Δ_rb=42.0 / Δ_gd=5.0；
-    - 引入逐回合时间折现 turn_disc=0.95，消除 cur_t=65 > cur_t=91 的双峰倒挂，确保越接近满彩单调不减；
+    可暴击器材「本次合训 +13(+20) 熟练度」或「商店/扭蛋 +gain 熟练度」的彩圈/金圈期权价值（v0.10.1）：
+    - 按新队友乘区实测单彩爆净超额温和校准 Δ_rb=56.0 / Δ_gd=3.5；
+    - 采用轻度风险折现 turn_disc=0.98，兼顾 cur_t=0..91 严格单调与前期 0~39 熟器材合理起步估值；
     - 引入 already_maxed_crit_cnt 多满彩卡竞争边际递减（0/1/2/3 张 -> 1.00 / 0.88 / 0.76 / 0.65）；
     - fractional_step=True 供商店/扭蛋非 13 整数倍熟练度道具平滑插值对齐同口径期权模型。
     """
     q = min(0.95, max(0.05, float(w.get("equip_card_click_rate", 0.26))))
     p = float(w.get("equip_rainbow_harvest_prob", 0.22))
-    delta_rb = float(w.get("equip_rainbow_realized_delta", 42.0))
-    delta_gd = float(w.get("equip_gold_realized_delta", 5.0))
-    turn_disc = min(1.0, max(0.80, float(w.get("equip_option_turn_discount", 0.95))))
+    delta_rb = float(w.get("equip_rainbow_realized_delta", 56.0))
+    delta_gd = float(w.get("equip_gold_realized_delta", 3.5))
+    turn_disc = min(1.0, max(0.80, float(w.get("equip_option_turn_discount", 0.98))))
     step = max(1, int(step_tram))
     rem = max(0, int(rem_after))
     cur = int(cur_t)
@@ -2921,12 +2921,12 @@ def score_training_turn(state: dict, cmds: list, strategy: dict):
                     return 0.0
                 if rem_t >= 5:
                     return b * bar_ev
-                # 末 1~4 训留存 1 格 / 2 格的毕业变现期望系数
+                # 末 1~4 训留存 1 格 / 2 格的毕业变现期望系数（按剩余训数内再遇经理/哨子同框凑满 3 格的概率校准）
                 reten_tbl = {
-                    1: (0.30, 0.72),
-                    2: (0.58, 0.86),
-                    3: (0.80, 0.94),
-                    4: (0.92, 0.98),
+                    1: (0.18, 0.65),
+                    2: (0.42, 0.82),
+                    3: (0.62, 0.92),
+                    4: (0.78, 0.97),
                 }
                 r1, r2 = reten_tbl.get(rem_t, (1.0, 1.0))
                 return (1.0 * r1 * bar_ev) if b == 1 else (2.0 * r2 * bar_ev)
@@ -3014,25 +3014,30 @@ def score_training_turn(state: dict, cmds: list, strategy: dict):
                 if not has_safe_pot:
                     hud_tags.append(f"破{lineup_ps_thresh}体被动")
             # 百目鬼周六加训前瞻（纯 EV 计价，绝不写死硬拦）：
-            # 若周五训完后带进周六的体力落入失败率区间，计入周六百目鬼加训(约320EV、超普通外出约160EV)的预期失败/放弃损失；
-            # 若商店此刻有买得起的稳定精力药，则损失封顶为「买药把周六拉回0%失败的金币机会成本」，周五遇 EV400 大爆照样无脑练！
-            if is_fri_before_sat_dm and next_ps_est < 58:
-                # 估算周六百目鬼加训(耗体-5~-6，失败率水位比平时略宽松但低体依然会红)的预期失败率
+            # 实机 19 组低体周六加训样本证实：周六加训耗体 -80%(-4~-6体)，49+体基本 0% 失败，43~48体均值仅 ~7% 失败；
+            # 且放弃周六加训改外出/6号意识的净机会成本约为 ~160 EV（非归零 280 EV）。
+            # 若商店此刻有买得起的稳定精力药或神之庇佑(1131/1132/1133，2~4天锁0%失败)，风险封顶为对应金币机会成本。
+            if is_fri_before_sat_dm and next_ps_est < 49:
                 if next_ps_est <= 25:
-                    sat_fail_p = 0.65
+                    sat_fail_p = 0.55
                 elif next_ps_est <= 35:
-                    sat_fail_p = 0.40
-                elif next_ps_est <= 45:
-                    sat_fail_p = 0.20
+                    sat_fail_p = 0.35
+                elif next_ps_est <= 42:
+                    sat_fail_p = 0.18
                 else:
-                    sat_fail_p = 0.08
-                sat_risk_ev = min(150.0, 280.0 * sat_fail_p)
-                if has_safe_pot:
-                    cheapest_pot = min(safe_pots_avail, key=lambda it: it["price"])
+                    sat_fail_p = 0.07
+                sat_risk_ev = min(95.0, 160.0 * sat_fail_p)
+                safe_shields_avail = [
+                    it for it in state.get("store_items", [])
+                    if it["id"] in (1131, 1132, 1133) and it["num"] > 0 and state.get("gold", 0) >= it["price"]
+                ]
+                sat_mitigators = safe_pots_avail + safe_shields_avail
+                if sat_mitigators:
+                    cheapest_mit = min(sat_mitigators, key=lambda it: it["price"])
                     g_now = float(state.get("gold", 0) or 0)
-                    pot_opp = max(12.0, calc_keep_gold_ev(g_now, state) - calc_keep_gold_ev(max(0.0, g_now - cheapest_pot["price"]), state))
-                    sat_risk_ev = min(sat_risk_ev, pot_opp)
-                if sat_risk_ev >= 10.0:
+                    mit_opp = max(8.0, calc_keep_gold_ev(g_now, state) - calc_keep_gold_ev(max(0.0, g_now - cheapest_mit["price"]), state))
+                    sat_risk_ev = min(sat_risk_ev, mit_opp)
+                if sat_risk_ev >= 8.0:
                     score -= sat_risk_ev
                     reasons.append(f"周六加训低体风险-{sat_risk_ev:.0f}")
                     if sat_risk_ev >= 45.0:
@@ -7945,6 +7950,7 @@ def get_default_hud_config() -> dict:
     """返回默认 HUD 推荐开关与专项特化配置（默认关闭专项偏科，不改变任何原有评分）。"""
     return {
         "diegetic_mode": True,
+        "auto_check_updates": True,
         "recommendations": {key: True for key, *_ in HUD_RECOMMENDATION_SPECS},
         "focus": {
             "stat": None,
@@ -7964,6 +7970,8 @@ def load_hud_config() -> dict:
             if isinstance(disk, dict):
                 if "diegetic_mode" in disk:
                     cfg["diegetic_mode"] = bool(disk["diegetic_mode"])
+                if "auto_check_updates" in disk:
+                    cfg["auto_check_updates"] = bool(disk["auto_check_updates"])
                 recs = disk.get("recommendations", disk)
                 if isinstance(recs, dict):
                     for key, *_ in HUD_RECOMMENDATION_SPECS:
@@ -7982,6 +7990,8 @@ def save_hud_config(cfg: dict) -> dict:
     normalized = get_default_hud_config()
     if isinstance(cfg, dict) and "diegetic_mode" in cfg:
         normalized["diegetic_mode"] = bool(cfg["diegetic_mode"])
+    if isinstance(cfg, dict) and "auto_check_updates" in cfg:
+        normalized["auto_check_updates"] = bool(cfg["auto_check_updates"])
     recs = cfg.get("recommendations", cfg) if isinstance(cfg, dict) else {}
     if isinstance(recs, dict):
         for key, *_ in HUD_RECOMMENDATION_SPECS:

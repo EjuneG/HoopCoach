@@ -1717,14 +1717,55 @@ def recommend_notes_for_character(core_id: int, chars: dict, rules: dict, rel_sc
 
     auto_breeders = recommend_auto_train_breeders(core_id, chars, rel_scores, pool, top_k=5)
 
+    # 4. 全图鉴通用高相性双搭档参考（严格经 evaluate_compatibility 实算，供空笔记池冷启动优雅降级与规划器参考）
+    is_empty_pool = (len(own_list) == 0 and len(borrow_list) == 0)
+    generic_combos = []
+    released_partners = []
+    for cid, cinfo in chars.items():
+        if int(cid) == int(core_id):
+            continue
+        if not cinfo.get("released", True):
+            continue
+        r_score = int(rel_map.get(int(cid), 0))
+        released_partners.append((r_score, int(cid), cinfo))
+    released_partners.sort(key=lambda x: (-x[0], x[1]))
+    top_partners = released_partners[:10]
+    for i in range(len(top_partners)):
+        _r1, cid1, cinfo1 = top_partners[i]
+        v_n1 = {
+            "actor_id": cid1,
+            "actor_name": cinfo1.get("short_name") or str(cid1),
+            "rank": 0,
+            "score": 0,
+            "harmony_targets": {},
+            "cap_bonuses": {},
+            "stat_bonuses": {},
+        }
+        for j in range(i + 1, len(top_partners)):
+            _r2, cid2, cinfo2 = top_partners[j]
+            v_n2 = {
+                "actor_id": cid2,
+                "actor_name": cinfo2.get("short_name") or str(cid2),
+                "rank": 0,
+                "score": 0,
+                "harmony_targets": {},
+                "cap_bonuses": {},
+                "stat_bonuses": {},
+            }
+            ev = evaluate_compatibility(core_id, v_n1, v_n2, rel_scores, rules, rec_stats)
+            generic_combos.append(ev)
+    generic_combos.sort(key=lambda x: (-x["total_compat"], -x["eval_score"], x["note1"]["actor_id"], x["note2"]["actor_id"]))
+
     return {
         "character": char_obj,
         "rec_stats": rec_stats,
         "rec_stats_str": "/".join(STAT_NAMES.get(int(s), str(s)) for s in rec_stats),
         "own_count": len(own_list),
         "borrow_count": len(borrow_list),
+        "is_empty_pool": is_empty_pool,
         "borrow_combos": borrow_combos[:4],
         "pure_own_combos": pure_own_combos[:4],
+        "generic_combos": generic_combos[:5],
         "scout_targets": scout_targets,
         "auto_breeders": auto_breeders,
         "revision_warning": NOTE_REVISION_WARNING,
@@ -1847,6 +1888,28 @@ def format_character_note_advice_hud_markup(adv: dict, scan_status_line: str = "
         lines.append(
             f"<span weight='bold' foreground='#fbbf24'>💎 自备 {cb['total_compat']}分·{html.escape(cb['rank_name'])}</span>  "
             f"<span foreground='#cbd5e1'><b>{html.escape(n1['actor_name'])}</b>({n1['score']}) + <b>{html.escape(n2['actor_name'])}</b>({n2['score']})</span>"
+        )
+
+    if not lines:
+        gen_combos = adv.get("generic_combos") or []
+        if gen_combos:
+            cb0 = gen_combos[0]
+            n1, n2 = cb0["note1"], cb0["note2"]
+            lines.append(
+                f"<span weight='bold' foreground='#4ade80'>🌐 通用推荐 {cb0['total_compat']}分·{html.escape(cb0['rank_name'])}</span>  "
+                f"<span foreground='#f8fafc'><b>{html.escape(n1['actor_name'])}</b> + <b>{html.escape(n2['actor_name'])}</b></span>"
+                f"<span size='small' foreground='#94a3b8'> (基础关系分，带专属契合更高)</span>"
+            )
+            if len(gen_combos) > 1:
+                cb1 = gen_combos[1]
+                m1, m2 = cb1["note1"], cb1["note2"]
+                lines.append(
+                    f"<span weight='bold' foreground='#38bdf8'>🥈 备选搭档 {cb1['total_compat']}分·{html.escape(cb1['rank_name'])}</span>  "
+                    f"<span foreground='#cbd5e1'><b>{html.escape(m1['actor_name'])}</b> + <b>{html.escape(m2['actor_name'])}</b></span>"
+                )
+        rec_str = html.escape(adv.get("rec_stats_str") or "主练属性")
+        lines.append(
+            f"<span size='small' foreground='#94a3b8'>💡 暂未同步个人笔记池，已按全角色相性真值推荐 · 优先挑带「{rec_str}」上限词条的高分笔记</span>"
         )
 
     # 嵌入实机校准版本命器材 5选4 图标条与精简避坑提示

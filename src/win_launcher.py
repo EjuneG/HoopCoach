@@ -16,10 +16,13 @@ win_launcher.py — LQSNCoach 免命令行桌面控制台与实时悬浮军师�
 from __future__ import annotations
 
 import ctypes
+from datetime import datetime
 import glob
+import json
 import os
 import sys
 import threading
+import traceback
 import webbrowser
 from typing import Optional
 
@@ -43,6 +46,7 @@ import live_coach as lc
 from log_mirror import LiveLogMirror
 import platform_compat as pc
 from skill_advisor import evaluate_skill_choices
+import updater
 
 
 STRATEGY_OPTIONS = [
@@ -81,17 +85,34 @@ class LQSNCoachDesktopApp:
 
         self.root = tk.Tk()
         self.root.title("🏀 HoopCoach · 星奈育成军师")
-        self.root.geometry("468x742")
-        self.root.minsize(440, 690)
+        screen_h = int(self.root.winfo_screenheight() or 900)
+        screen_w = int(self.root.winfo_screenwidth() or 1440)
+        init_w = min(476, max(430, screen_w - 40))
+        init_h = min(776, max(540, screen_h - 90))
+        self.root.geometry(f"{init_w}x{init_h}")
+        self.root.minsize(430, min(520, init_h))
         self.root.configure(bg="#0f172a")
+        self._apply_window_icon()
 
         self._closing = False
         self._attaching_log = False
         self._scanning_runs = False
+        self._checking_updates = False
+        self._latest_update_res = None
+        self._app_meta = updater.load_app_meta()
         self._dashboard_srv = None
         self._dashboard_url = ""
         self._dashboard_engine = None
         self._dashboard_monitor = None
+        self._note_static_db = None
+        self._note_pool_cache: dict = {}
+        self._note_pool_mtime: float = -2.0
+        self._event_db: Optional[dict] = None
+        self._logged_runtime_errors: set[tuple[str, str, str]] = set()
+        self._scroll_canvas = None
+        self._scroll_bar = None
+        self._scroll_window_id = None
+        self._cards_host = None
 
         self.docs_dir, self.log_dir = pc.resolve_game_dirs(interactive_on_missing=False)
         self.hud_cfg = lc.load_hud_config()
@@ -106,6 +127,9 @@ class LQSNCoachDesktopApp:
         # Tk 控制变量
         self.var_hud_enabled = tk.BooleanVar(value=True)
         self.var_follow_focus = tk.BooleanVar(value=True)
+        self.var_auto_check_updates = tk.BooleanVar(
+            value=bool(self.hud_cfg.get("auto_check_updates", True))
+        )
         self.var_diegetic_mode = tk.StringVar(
             value="diegetic" if bool(self.hud_cfg.get("diegetic_mode", True)) else "compact"
         )
@@ -160,6 +184,33 @@ class LQSNCoachDesktopApp:
             self.root.after(350, self._prompt_first_time_dir)
 
         self.root.after(220, self._poll_log_tick)
+        if self.var_auto_check_updates.get():
+            self.root.after(1800, lambda: self._start_check_updates(silent=True))
+
+    def _apply_window_icon(self) -> None:
+        """Windows 控制台窗口接入专属篮球 .ico 图标（Linux / 缺失时静默跳过）。"""
+        candidates = (
+            os.path.join(pc.BASE_DIR, "packaging", "assets", "hoopcoach.ico"),
+            os.path.join(pc.BASE_DIR, "assets", "hoopcoach.ico"),
+        )
+        ico_path = next((p for p in candidates if os.path.isfile(p)), "")
+        if not ico_path:
+            return
+        if pc.IS_WINDOWS:
+            try:
+                self.root.iconbitmap(default=ico_path)
+                return
+            except Exception:
+                pass
+        try:
+            from PIL import Image, ImageTk  # type: ignore
+
+            img = Image.open(ico_path).resize((64, 64))
+            photo = ImageTk.PhotoImage(img)
+            self._window_icon_photo = photo
+            self.root.iconphoto(True, photo)
+        except Exception:
+            pass
 
     def _setup_styles(self) -> None:
         style = ttk.Style(self.root)
@@ -175,6 +226,59 @@ class LQSNCoachDesktopApp:
             arrowcolor="#f8fafc",
             bordercolor="#334155",
         )
+        style.configure(
+            "Dark.Vertical.TScrollbar",
+            background="#334155",
+            troughcolor="#0f172a",
+            bordercolor="#0f172a",
+            arrowcolor="#94a3b8",
+            relief="flat",
+            width=8,
+        )
+        style.map(
+            "Dark.Vertical.TScrollbar",
+            background=[("active", "#475569"), ("pressed", "#64748b")],
+        )
+
+    def _sync_scroll_layout(self, _event=None) -> None:
+        if self._scroll_canvas is None or self._cards_host is None:
+            return
+        try:
+            c_w = self._scroll_canvas.winfo_width()
+            c_h = self._scroll_canvas.winfo_height()
+            if c_w > 40 and self._scroll_window_id is not None:
+                self._scroll_canvas.itemconfigure(self._scroll_window_id, width=c_w)
+            req_h = self._cards_host.winfo_reqheight()
+            self._scroll_canvas.configure(scrollregion=(0, 0, max(c_w, 1), max(req_h, 1)))
+            if self._scroll_bar is not None:
+                need_scroll = req_h > max(c_h, 1) + 2
+                if need_scroll and not self._scroll_bar.winfo_ismapped():
+                    self._scroll_bar.pack(side="right", fill="y", padx=(0, 3), pady=(0, 4))
+                elif not need_scroll and self._scroll_bar.winfo_ismapped():
+                    self._scroll_bar.pack_forget()
+                    self._scroll_canvas.yview_moveto(0.0)
+        except Exception:
+            pass
+
+    def _on_mousewheel(self, event) -> None:
+        if self._scroll_canvas is None or self._cards_host is None:
+            return
+        try:
+            # 仅在内容高度超出视口时滚动，且避免干扰下拉列表自身滚轮
+            if isinstance(event.widget, ttk.Combobox):
+                return
+            if self._cards_host.winfo_reqheight() <= self._scroll_canvas.winfo_height() + 2:
+                return
+            if getattr(event, "num", None) == 4:
+                self._scroll_canvas.yview_scroll(-2, "units")
+            elif getattr(event, "num", None) == 5:
+                self._scroll_canvas.yview_scroll(2, "units")
+            elif getattr(event, "delta", 0):
+                step = -1 if event.delta > 0 else 1
+                units = max(1, int(abs(event.delta) / 120)) * 2
+                self._scroll_canvas.yview_scroll(step * units, "units")
+        except Exception:
+            pass
 
     def _make_card(self, parent, title: str) -> tk.Frame:
         outer = tk.Frame(parent, bg="#1e293b", highlightbackground="#334155", highlightthickness=1)
@@ -205,16 +309,86 @@ class LQSNCoachDesktopApp:
         ).pack(side="left")
         tk.Label(
             top,
-            text="纯只读 · 零侵入",
+            text=str(self._app_meta.get("version") or "v0.10.1"),
+            bg="#1e293b",
+            fg="#94a3b8",
+            font=("Microsoft YaHei UI", 8, "bold"),
+            padx=6,
+            pady=3,
+        ).pack(side="left", padx=(8, 0), pady=3)
+        tk.Label(
+            top,
+            text="纯只读",
             bg="#14532d",
             fg="#86efac",
             font=("Microsoft YaHei UI", 8, "bold"),
-            padx=8,
+            padx=7,
             pady=3,
         ).pack(side="right", pady=2)
+        self.btn_update = tk.Button(
+            top,
+            text="🔍 检查更新",
+            command=self._on_click_update,
+            bg="#1e293b",
+            fg="#cbd5e1",
+            activebackground="#334155",
+            activeforeground="#ffffff",
+            relief="flat",
+            font=("Microsoft YaHei UI", 8, "bold"),
+            padx=8,
+            pady=3,
+            cursor="hand2",
+        )
+        self.btn_update.pack(side="right", padx=(0, 6), pady=2)
+
+        # 底部：最新建议一行速览（先固定在底部，保证 1080p 150% DPI 下永不被截断）
+        footer = tk.Frame(self.root, bg="#020617", highlightbackground="#334155", highlightthickness=1)
+        footer.pack(fill="x", side="bottom", padx=14, pady=(6, 10))
+        tk.Label(
+            footer,
+            textvariable=self.var_live_preview,
+            bg="#020617",
+            fg="#cbd5e1",
+            font=("Microsoft YaHei UI", 9),
+            anchor="w",
+            padx=10,
+            pady=7,
+            wraplength=410,
+            justify="left",
+        ).pack(fill="x")
+
+        # 中间自适应滚动区（高 DPI 小屏自动显现暗色细滚动条，大屏自动隐藏无冗余占位）
+        scroll_wrap = tk.Frame(self.root, bg="#0f172a")
+        scroll_wrap.pack(fill="both", expand=True)
+        self._scroll_canvas = tk.Canvas(
+            scroll_wrap,
+            bg="#0f172a",
+            highlightthickness=0,
+            bd=0,
+        )
+        self._scroll_bar = ttk.Scrollbar(
+            scroll_wrap,
+            orient="vertical",
+            command=self._scroll_canvas.yview,
+            style="Dark.Vertical.TScrollbar",
+        )
+        self._scroll_canvas.configure(yscrollcommand=self._scroll_bar.set)
+        self._scroll_canvas.pack(side="left", fill="both", expand=True)
+
+        self._cards_host = tk.Frame(self._scroll_canvas, bg="#0f172a")
+        self._scroll_window_id = self._scroll_canvas.create_window(
+            (0, 0),
+            window=self._cards_host,
+            anchor="nw",
+        )
+        self._cards_host.bind("<Configure>", self._sync_scroll_layout)
+        self._scroll_canvas.bind("<Configure>", self._sync_scroll_layout)
+        self.root.bind_all("<MouseWheel>", self._on_mousewheel)
+        self.root.bind_all("<Button-4>", self._on_mousewheel)
+        self.root.bind_all("<Button-5>", self._on_mousewheel)
 
         # 卡片 1：游戏连接与日志目录
-        c1 = self._make_card(self.root, "📂 游戏日志连接")
+        c1 = self._make_card(self._cards_host, "📂 游戏日志连接")
         tk.Label(
             c1,
             textvariable=self.var_status_badge,
@@ -254,7 +428,7 @@ class LQSNCoachDesktopApp:
         ).pack(side="right")
 
         # 卡片 2：游戏内实时悬浮 HUD
-        c2 = self._make_card(self.root, "✨ 游戏内实时悬浮窗 (HUD)")
+        c2 = self._make_card(self._cards_host, "✨ 游戏内实时悬浮窗 (HUD)")
         btn_row = tk.Frame(c2, bg="#1e293b")
         btn_row.pack(fill="x", pady=(0, 6))
 
@@ -355,7 +529,7 @@ class LQSNCoachDesktopApp:
         ).pack(fill="x", pady=(4, 0))
 
         # 卡片 3：流派、偏科与推荐开关
-        c3 = self._make_card(self.root, "⚙️ 育成策略与模块开关（实时热生效）")
+        c3 = self._make_card(self._cards_host, "⚙️ 育成策略与模块开关（实时热生效）")
 
         row_strat = tk.Frame(c3, bg="#1e293b")
         row_strat.pack(fill="x", pady=(0, 6))
@@ -431,7 +605,7 @@ class LQSNCoachDesktopApp:
             cb.grid(row=r, column=c, sticky="w", padx=(0, 12), pady=1)
 
         # 卡片 4：作战室与历史战绩复盘
-        c4 = self._make_card(self.root, "📊 战绩复盘 & 笔记器材配装")
+        c4 = self._make_card(self._cards_host, "📊 战绩复盘 & 笔记器材配装")
         tool_row = tk.Frame(c4, bg="#1e293b")
         tool_row.pack(fill="x")
         tk.Button(
@@ -489,21 +663,21 @@ class LQSNCoachDesktopApp:
             cursor="hand2",
         ).pack(fill="x")
 
-        # 底部：最新建议一行速览
-        footer = tk.Frame(self.root, bg="#020617", highlightbackground="#334155", highlightthickness=1)
-        footer.pack(fill="x", side="bottom", padx=14, pady=(0, 12))
-        tk.Label(
-            footer,
-            textvariable=self.var_live_preview,
-            bg="#020617",
-            fg="#cbd5e1",
-            font=("Microsoft YaHei UI", 9),
+        tk.Checkbutton(
+            c4,
+            text="启动时自动检查新版本（仅 ~2 KB 清单，绝不后台偷跑流量）",
+            variable=self.var_auto_check_updates,
+            command=self._on_toggle_auto_check_updates,
+            bg="#1e293b",
+            fg="#94a3b8",
+            selectcolor="#0f172a",
+            activebackground="#1e293b",
+            activeforeground="#e2e8f0",
+            font=("Microsoft YaHei UI", 8),
             anchor="w",
-            padx=10,
-            pady=7,
-            wraplength=415,
-            justify="left",
-        ).pack(fill="x")
+        ).pack(fill="x", pady=(6, 0))
+
+        self.root.after(40, self._sync_scroll_layout)
 
     # ------------------------------------------------------------------
     # 目录选择与日志异步附着
@@ -583,13 +757,14 @@ class LQSNCoachDesktopApp:
             self.btn_toggle_hud.configure(text="▶ 悬浮窗已暂停（点击开启）", bg="#475569", activebackground="#64748b")
 
     def _refresh_hud_hint_text(self) -> None:
+        borderless_tip = "如游戏开独占全屏看不到角标，请在游戏设置中切换为「无边框窗口化」。"
         if self.var_diegetic_mode.get() == "diegetic":
             self.var_hud_hint.set(
-                "💡 贴身角标：奶白抗锯齿章直接贴在游戏按钮上 · 100% 鼠标穿透 · 右键顶栏状态条可切回紧凑卡片"
+                f"💡 贴身角标：奶白抗锯齿章直接贴在游戏按钮上 · 100% 鼠标穿透 · 右键顶栏状态条可切回紧凑卡片\n📺 {borderless_tip}"
             )
         else:
             self.var_hud_hint.set(
-                "💡 紧凑浮窗：按住顶栏可自由拖动 · 右键顶栏可折叠 · 正文区鼠标直接点穿游戏"
+                f"💡 紧凑浮窗：按住顶栏可自由拖动 · 右键顶栏可折叠 · 正文区鼠标直接点穿游戏\n📺 {borderless_tip}"
             )
 
     def _on_diegetic_mode_changed(self) -> None:
@@ -634,6 +809,86 @@ class LQSNCoachDesktopApp:
             issue_reporter.open_feedback_dialog(self.root, get_context_fn=self._get_feedback_context)
         except Exception as e:
             messagebox.showerror("打开反馈窗口失败", str(e), parent=self.root)
+
+    def _on_toggle_auto_check_updates(self) -> None:
+        self.hud_cfg["auto_check_updates"] = bool(self.var_auto_check_updates.get())
+        self.hud_cfg = lc.save_hud_config(self.hud_cfg)
+
+    def _on_click_update(self) -> None:
+        if self._latest_update_res is not None and self._latest_update_res.has_update:
+            updater.open_update_dialog(
+                self.root,
+                self._latest_update_res,
+                on_restart_required=self._on_close,
+            )
+            return
+        self._start_check_updates(silent=False)
+
+    def _start_check_updates(self, silent: bool = True) -> None:
+        if self._checking_updates or self._closing:
+            return
+        self._checking_updates = True
+        if not silent:
+            self.btn_update.configure(state="disabled", text="⏳ 检查中...")
+            self.var_scan_status.set("⏳ 正在检查最新版本（约 2 KB）...")
+
+        def _worker() -> None:
+            res = updater.check_for_updates(meta=self._app_meta)
+            try:
+                self.root.after(0, lambda r=res, s=silent: self._on_check_updates_done(r, s))
+            except Exception:
+                pass
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_check_updates_done(self, res: updater.UpdateCheckResult, silent: bool) -> None:
+        self._checking_updates = False
+        if self._closing:
+            return
+        self.btn_update.configure(state="normal")
+
+        if not res.ok:
+            self.btn_update.configure(text="🔍 检查更新", bg="#1e293b", fg="#cbd5e1")
+            if not silent:
+                self.var_scan_status.set("⚠️ 检查更新失败（可稍后重试或开浏览器查看）")
+                if res.release_page_url:
+                    if messagebox.askyesno(
+                        "检查更新失败",
+                        f"暂时无法连接更新服务器：\n{res.error}\n\n要直接在浏览器打开 GitHub Releases 页面查看吗？",
+                        parent=self.root,
+                    ):
+                        webbrowser.open(res.release_page_url)
+                else:
+                    messagebox.showwarning("检查更新失败", res.error, parent=self.root)
+            return
+
+        self._latest_update_res = res
+        if res.has_update:
+            sz = updater.format_bytes(res.total_download_bytes)
+            self.btn_update.configure(
+                text=f"⬆️ 新版 {res.latest_version}",
+                bg="#b45309",
+                fg="#fef3c7",
+                activebackground="#d97706",
+            )
+            self.var_scan_status.set(
+                f"✨ 发现新版本 {res.latest_version}（仅需下载 {sz}，点顶栏按钮查看）"
+            )
+            if not silent:
+                updater.open_update_dialog(
+                    self.root,
+                    res,
+                    on_restart_required=self._on_close,
+                )
+        else:
+            self.btn_update.configure(text="✅ 已是最新", bg="#1e293b", fg="#86efac")
+            if not silent:
+                self.var_scan_status.set(f"✅ 当前已是最新版本（{res.current_version}）")
+                updater.open_update_dialog(
+                    self.root,
+                    res,
+                    on_restart_required=self._on_close,
+                )
 
     def _on_toggle_follow_focus(self) -> None:
         self.hud.set_follow_game_focus(self.var_follow_focus.get())
@@ -730,6 +985,65 @@ class LQSNCoachDesktopApp:
         self.var_scan_status.set(msg)
 
     # ------------------------------------------------------------------
+    # 按需数据缓存与轻量去重运行时错误记录
+    # ------------------------------------------------------------------
+
+    def _get_note_static_db(self):
+        if self._note_static_db is None:
+            self._note_static_db = lc.load_note_static_db()
+        return self._note_static_db
+
+    def _get_note_pool(self) -> dict:
+        pool_path = os.path.join(pc.BASE_DIR, "data", "note_pool.json")
+        try:
+            mt = os.path.getmtime(pool_path) if os.path.isfile(pool_path) else -1.0
+        except OSError:
+            mt = -1.0
+        if mt == self._note_pool_mtime:
+            return self._note_pool_cache
+        if mt < 0:
+            self._note_pool_cache = {}
+            self._note_pool_mtime = -1.0
+            return self._note_pool_cache
+        try:
+            with open(pool_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            self._note_pool_cache = data if isinstance(data, dict) else {}
+        except Exception as e:
+            self._note_pool_cache = {}
+            self._record_runtime_error("读取本地笔记池", e)
+        self._note_pool_mtime = mt
+        return self._note_pool_cache
+
+    def _get_event_db(self) -> dict:
+        if self._event_db is None:
+            self._event_db = lc.load_event_db() or {}
+        return self._event_db
+
+    def _record_runtime_error(self, context: str, exc: Exception) -> None:
+        key = (context, type(exc).__name__, str(exc))
+        if key in self._logged_runtime_errors:
+            return
+        self._logged_runtime_errors.add(key)
+        log_path = os.path.join(pc.BASE_DIR, "runtime_error.log")
+        try:
+            if os.path.isfile(log_path) and os.path.getsize(log_path) > 512 * 1024:
+                with open(log_path, "r", encoding="utf-8", errors="ignore") as rf:
+                    tail = rf.read()[-128 * 1024 :]
+                with open(log_path, "w", encoding="utf-8") as wf:
+                    wf.write(tail)
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            tb = traceback.format_exc()
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(f"[{ts}] [{context}] {type(exc).__name__}: {exc}\n{tb}\n")
+        except Exception:
+            pass
+        try:
+            self.var_live_preview.set(f"⚠️ {context}异常（{type(exc).__name__}），详情已写入 runtime_error.log")
+        except Exception:
+            pass
+
+    # ------------------------------------------------------------------
     # 实时日志增量轮询与 HUD 渲染调度
     # ------------------------------------------------------------------
 
@@ -748,8 +1062,8 @@ class LQSNCoachDesktopApp:
                     self._render_current_state(force=True)
                 elif evs:
                     self._render_current_state(force=False)
-        except Exception:
-            pass
+        except Exception as e:
+            self._record_runtime_error("日志轮询", e)
         self.root.after(220, self._poll_log_tick)
 
     def _render_current_state(self, force: bool = False) -> None:
@@ -759,6 +1073,13 @@ class LQSNCoachDesktopApp:
         mode = lc.compute_active_hud_view_mode(state)
 
         # 生成轻量去重签名，避免重复重绘闪烁
+        skill_choices_raw = state.get("cur_skill_choices") or state.get("skill_choices") or ()
+        skill_sig = tuple(
+            (int(x.get("id") or x.get("skill_id") or 0), int(x.get("lv") or x.get("level") or 0))
+            if isinstance(x, dict)
+            else x
+            for x in skill_choices_raw
+        )
         sig = (
             mode,
             int(state.get("exp_round") or 0),
@@ -768,7 +1089,7 @@ class LQSNCoachDesktopApp:
             int(state.get("gold") or 0),
             state.get("cur_story"),
             state.get("pre_edu_char_id"),
-            tuple(state.get("skill_choices") or ()),
+            skill_sig,
             len(self.mirror.last_train_cmds),
             self.strategy_name,
             (self.hud_cfg.get("focus") or {}).get("stat"),
@@ -783,13 +1104,20 @@ class LQSNCoachDesktopApp:
         # 1. 开局选人笔记与本命器材推荐
         if mode == "initactor" and state.get("pre_edu_char_id"):
             try:
-                adv = lc.get_character_note_advice(int(state["pre_edu_char_id"]))
+                chars, rules, rel_scores, _entries_cat = self._get_note_static_db()
+                pool = self._get_note_pool()
+                adv = lc.recommend_notes_for_character(
+                    int(state["pre_edu_char_id"]), chars, rules, rel_scores, pool
+                )
                 if adv:
                     self.hud.render_note_selection(adv, "", "")
                     cname = adv["character"].get("short_name", "")
-                    self.var_live_preview.set(f"📒 选人配装：{cname}（已推荐最优笔记组合与 5 件器材）")
-            except Exception:
-                pass
+                    if adv.get("borrow_combos") or adv.get("pure_own_combos"):
+                        self.var_live_preview.set(f"📒 选人配装：{cname}（已推荐最优笔记组合与 5 件器材）")
+                    else:
+                        self.var_live_preview.set(f"📒 选人配装：{cname}（通用最优高相性搭档 + 毕业 5 器材）")
+            except Exception as e:
+                self._record_runtime_error("选人配装推荐", e)
             self.hud.refresh_scene_overlay(state)
             return
 
@@ -797,18 +1125,19 @@ class LQSNCoachDesktopApp:
         skill_choices = state.get("cur_skill_choices") or state.get("skill_choices")
         if mode in ("skill", "skill_choice") and skill_choices:
             try:
+                pool = self._get_note_pool()
                 evals = evaluate_skill_choices(
-                    skill_choices or [],
-                    main_char_id=int(state.get("main_char_id") or 0),
-                    learned_skill_ids=set(state.get("learned_skills") or ()),
-                    note_skill_hints=state.get("note_skill_hints") or {},
+                    int(state.get("main_char_id") or 0),
+                    list(skill_choices or []),
+                    set(state.get("learned_skills") or ()),
+                    note_pool=(pool if pool else None),
                 )
                 if evals:
                     self.hud.render_skill_choice(state, evals)
                     top = next((x for x in evals if x.get("rank") == 1), evals[0])
                     self.var_live_preview.set(f"🎯 技能三选一：首选【{top.get('skill_name', '')}】")
-            except Exception:
-                pass
+            except Exception as e:
+                self._record_runtime_error("选技能推荐", e)
             self.hud.refresh_scene_overlay(state)
             return
 
@@ -816,13 +1145,14 @@ class LQSNCoachDesktopApp:
         if mode in ("story", "story_choice") and state.get("cur_story"):
             try:
                 sid, sname = state["cur_story"]
-                adv = lc.lookup_story_choice_advice(str(sid), str(sname), state, self.strategy)
+                event_db = self._get_event_db()
+                adv = lc.evaluate_story_event(str(sid), str(sname), state, self.strategy, event_db)
                 if adv:
                     self.hud.render_story_choice(state, adv)
                     first_rec = (adv.get("recommendation") or "").splitlines()[0]
                     self.var_live_preview.set(f"📖 事件【{adv.get('ev_name', '')}】：{first_rec}")
-            except Exception:
-                pass
+            except Exception as e:
+                self._record_runtime_error("剧情分支推荐", e)
             self.hud.refresh_scene_overlay(state)
             return
 
@@ -835,8 +1165,8 @@ class LQSNCoachDesktopApp:
                     self.var_live_preview.set(
                         f"🌴 {wk.get('day_tag', '周末')}：👑 {wk.get('best_compact') or wk.get('headline', '')} (EV {wk.get('best_ev', 0):.0f})"
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                self._record_runtime_error("周末决策推荐", e)
             self.hud.refresh_scene_overlay(state)
             return
 
@@ -844,15 +1174,21 @@ class LQSNCoachDesktopApp:
         if self.mirror.last_train_cmds and len(self.mirror.last_train_cmds) == 6:
             try:
                 scored = lc.score_training_turn(state, self.mirror.last_train_cmds, self.strategy)
-                shop_tip = lc.build_shop_hud_tip(state, self.strategy) if hasattr(lc, "build_shop_hud_tip") else ""
+                best_ev = scored[0]["score"] if scored else None
+                shop_tip = lc.format_weekday_shop_tip(
+                    state,
+                    best_ev=best_ev,
+                    strategy=self.strategy,
+                    scored_cmds=scored,
+                )
                 if scored:
                     self.hud.render_turn(state, scored, shop_tip)
                     best = scored[0]
                     self.var_live_preview.set(
                         f"🏀 第{int(state.get('round') or 0):02d}/28训 · 体{int(state.get('ps') or 0)} 金{int(state.get('gold') or 0)} → 👑 {best['name']} (EV {best['score']:.0f})"
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                self._record_runtime_error("平日训练推荐", e)
             self.hud.refresh_scene_overlay(state)
             return
 
@@ -886,7 +1222,18 @@ class LQSNCoachDesktopApp:
         self.root.mainloop()
 
 
-def main() -> None:
+def main(skip_startup_guards: bool = False) -> None:
+    if not skip_startup_guards:
+        try:
+            import bootstrap
+
+            if bootstrap.warn_if_archive_temp_run(pc.BASE_DIR):
+                return
+            acquired, _mutex_handle = bootstrap.acquire_single_instance_mutex()
+            if not acquired:
+                return
+        except Exception:
+            pass
     app = LQSNCoachDesktopApp()
     app.run()
 

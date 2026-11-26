@@ -738,8 +738,10 @@ class DashboardEngine:
                 "rec_stats_str": note_adv.get("rec_stats_str", ""),
             },
             "notes": {
+                "is_empty_pool": bool(note_adv.get("is_empty_pool", False)),
                 "borrow_combos": [_fmt_combo(c) for c in (note_adv.get("borrow_combos") or [])[:8]],
                 "pure_own_combos": [_fmt_combo(c) for c in (note_adv.get("pure_own_combos") or [])[:5]],
+                "generic_combos": [_fmt_combo(c) for c in (note_adv.get("generic_combos") or [])[:5]],
                 "auto_breeders": ab,
                 "revision_warning": note_adv.get("revision_warning", ""),
             },

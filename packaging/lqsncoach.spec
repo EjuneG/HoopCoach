@@ -1,17 +1,20 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller --onedir 绿色目录包构建配置（Windows 纯只读版 HoopCoach）
+PyInstaller --onedir 壳肉分离绿色目录包构建配置（Windows 纯只读版 HoopCoach）
 
-打包后目录结构（解压即用、无黑框、零 Python 安装门槛）：
+打包后目录结构（解压即用、无黑框、零 Python 安装门槛、日常 ~0.6 MB 轻量热更新）：
   HoopCoach/
-  ├── HoopCoach.exe      # 双击启动桌面小控制台 + 游戏内悬浮 HUD
-  ├── _internal/         # Python 运行时与标准库
-  ├── config/            # 用户热配置（hud_config.json / local_paths.json / app_meta.json）
+  ├── HoopCoach.exe      # 稳定运行时引导外壳（src/bootstrap.py）
+  ├── _internal/         # Python 运行时、标准库、Tkinter、Pillow（壳不变则永不重下）
+  ├── src/               # 平铺纯只读业务模块（日常热更新仅替换此处与静态数据）
+  ├── config/            # 用户热配置（hud_config.json / local_paths.json 受保护；app_meta.json 随更）
   ├── dashboard/         # 本地作战室前端页面
   ├── data/              # 机制库、器材库、技能库、角色数据（运行时在此生成 runs/）
   └── strategies/        # 训练流 / 商店流 / 扭蛋流权重配置
 
-说明：本 spec 显式排除一切自动化点击驱动模块，确保产物 100% 纯只读零侵入。
+说明：
+1. 本 spec 仅将 `src/bootstrap.py` 与运行库打入 exe/_internal/，业务 `.py` 模块平铺在 `src/` 目录；
+2. 显式排除一切自动化点击驱动模块，确保产物 100% 纯只读零侵入。
 """
 
 import os
@@ -20,8 +23,9 @@ from PyInstaller.building.build_main import Analysis, PYZ, EXE, COLLECT
 SPEC_DIR = os.path.dirname(os.path.abspath(SPEC))
 ROOT_DIR = os.path.dirname(SPEC_DIR)
 SRC_DIR = os.path.join(ROOT_DIR, "src")
+ICON_PATH = os.path.join(SPEC_DIR, "assets", "hoopcoach.ico")
 
-# 纯只读核心模块
+# 运行时壳必须预装的标准库与第三方依赖（确保平铺的 src/*.py 零缺包）
 hiddenimports = [
     "PIL",
     "PIL.Image",
@@ -29,6 +33,34 @@ hiddenimports = [
     "PIL.ImageDraw",
     "PIL.ImageFilter",
     "PIL.ImageFont",
+    "tkinter",
+    "tkinter.ttk",
+    "tkinter.filedialog",
+    "tkinter.messagebox",
+    "concurrent.futures",
+    "ctypes",
+    "ctypes.wintypes",
+    "difflib",
+    "getpass",
+    "glob",
+    "hashlib",
+    "html",
+    "http.server",
+    "mimetypes",
+    "platform",
+    "socket",
+    "ssl",
+    "tempfile",
+    "urllib.error",
+    "urllib.parse",
+    "urllib.request",
+    "webbrowser",
+    "zipfile",
+]
+
+# 排除业务模块（使其平铺在外部 src/ 以支持 ~0.6 MB 轻量热更新）+ 排除一切私有自动化模块
+excludes = [
+    # 业务模块（平铺在目录外部 src/）
     "analyzer",
     "dashboard_server",
     "equipment_advisor",
@@ -39,20 +71,16 @@ hiddenimports = [
     "note_advisor",
     "platform_compat",
     "skill_advisor",
+    "updater",
     "win_diegetic_hud",
-    "tkinter",
-    "tkinter.ttk",
-    "tkinter.filedialog",
-    "tkinter.messagebox",
-]
-
-# 显式排除所有自动化点击 / 私有挂机模块，确保 0 字节自动化代码进入 exe
-excludes = [
+    "win_launcher",
+    # 私有/自动化模块（严禁进入公开包）
     "auto_driver",
     "lobby_driver",
     "decision_bridge",
     "strategy_planner",
     "box_scanner",
+    # 非 Windows / 测试依赖
     "gi",
     "cairo",
     "pytest",
@@ -60,10 +88,10 @@ excludes = [
 ]
 
 a = Analysis(
-    [os.path.join(SRC_DIR, "win_launcher.py")],
-    pathex=[SRC_DIR],
+    [os.path.join(SRC_DIR, "bootstrap.py")],
+    pathex=[],  # 故意不加入 SRC_DIR，彻底防止业务模块被意外封死进 PYZ
     binaries=[],
-    datas=[],  # 静态数据目录由构建脚本直接平铺拷贝至 LQSNCoach.exe 同级目录，便于读写配置与归档
+    datas=[],  # 业务源码与静态数据由构建脚本平铺至 HoopCoach.exe 同级目录
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
@@ -80,6 +108,7 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name="HoopCoach",
+    icon=ICON_PATH if os.path.isfile(ICON_PATH) else None,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

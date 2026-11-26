@@ -1485,6 +1485,7 @@ class WindowsFloatingHUD:
             markup = f"{markup}\n<span foreground='#cbd5e1'>🎒 {html.escape(eq_txt)}</span>"
         top_b = adv["borrow_combos"][0] if adv.get("borrow_combos") else None
         top_o = adv["pure_own_combos"][0] if adv.get("pure_own_combos") else None
+        top_g = adv["generic_combos"][0] if adv.get("generic_combos") else None
         if top_b:
             mini = (
                 f"<span foreground='#38bdf8' weight='bold'>📒{cname}</span>  "
@@ -1494,6 +1495,11 @@ class WindowsFloatingHUD:
             mini = (
                 f"<span foreground='#38bdf8' weight='bold'>📒{cname}</span>  "
                 f"<span foreground='#facc15' weight='bold'>💎自:{html.escape(top_o['note1']['actor_name'])}+{html.escape(top_o['note2']['actor_name'])}({top_o['total_compat']}分·{html.escape(top_o['rank_name'])})</span>"
+            )
+        elif top_g:
+            mini = (
+                f"<span foreground='#38bdf8' weight='bold'>📒{cname}</span>  "
+                f"<span foreground='#4ade80' weight='bold'>🌐通:{html.escape(top_g['note1']['actor_name'])}+{html.escape(top_g['note2']['actor_name'])}({top_g['total_compat']}分·{html.escape(top_g['rank_name'])})</span>"
             )
         else:
             mini = f"<span foreground='#38bdf8' weight='bold'>📒{cname} 配装推荐</span>"

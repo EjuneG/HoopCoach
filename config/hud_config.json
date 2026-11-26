@@ -1,5 +1,6 @@
 {
   "diegetic_mode": true,
+  "auto_check_updates": true,
   "recommendations": {
     "train": true,
     "story": true,

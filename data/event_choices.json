@@ -26,7 +26,7 @@
     "name": "器材加成-70熟练度",
     "branches": {
       "1": {
-        "count": 77,
+        "count": 78,
         "effect_id": 41004181,
         "ps": 40,
         "coins": 0,
@@ -59,7 +59,7 @@
     "name": "器材加成-100熟练度",
     "branches": {
       "1": {
-        "count": 76,
+        "count": 77,
         "effect_id": 41004184,
         "ps": 70,
         "coins": 0,
@@ -623,7 +623,7 @@
     "name": "羽田朱志香集训事件",
     "branches": {
       "2": {
-        "count": 3,
+        "count": 4,
         "effect_id": null,
         "ps": 30,
         "coins": 0,
@@ -929,7 +929,7 @@
     "name": "羽田朱志香许愿事件",
     "branches": {
       "2": {
-        "count": 3,
+        "count": 4,
         "effect_id": null,
         "ps": 40,
         "coins": 0,
@@ -1537,7 +1537,7 @@
     "name": "突然的凉风",
     "branches": {
       "1": {
-        "count": 24,
+        "count": 25,
         "effect_id": 7000,
         "ps": 10,
         "coins": 0,
@@ -2140,7 +2140,7 @@
         "label": "选项1(稳拿💪体能+10)"
       },
       "2": {
-        "count": 58,
+        "count": 59,
         "effect_id": 616,
         "ps": 0,
         "coins": 0,
@@ -2359,7 +2359,7 @@
         "label": "选项1(维持原计划·⚡精力+10)"
       },
       "2": {
-        "count": 68,
+        "count": 69,
         "effect_id": null,
         "ps": 0,
         "coins": 0,
@@ -2913,12 +2913,12 @@
         "max_props": {}
       },
       "2": {
-        "count": 1,
+        "count": 2,
         "effect_id": 7201,
         "ps": 0,
         "coins": 0,
         "props": {
-          "101": 9
+          "101": 10
         },
         "max_props": {}
       }
@@ -3049,7 +3049,7 @@
     "name": "心理辅导",
     "branches": {
       "1": {
-        "count": 4,
+        "count": 5,
         "effect_id": 7000,
         "ps": 10,
         "coins": 0,
