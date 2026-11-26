@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import os
+import sys
 import zipfile
 
 
@@ -287,6 +288,11 @@ def build_all(
 
 
 def main() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
     parser = argparse.ArgumentParser(description="生成 HoopCoach 轻量热更包与 manifest.json")
     parser.add_argument("--repo-root", default=".", help="公开仓库根目录")
     parser.add_argument("--dist-dir", default="dist", help="产物输出目录")
@@ -315,9 +321,9 @@ def main() -> None:
         portable_dir=os.path.abspath(args.portable_dir) if args.portable_dir else "",
     )
     print(
-        f"✅ 热更产物已生成: patch={os.path.basename(res['patch_path'])} "
-        f"({res['patch_size'] / 1024:.1f} KB, {res['patch_files']} 文件) | "
-        f"assets={res['assets_count']} 张 (hash={res['assets_hash']}) | "
+        f"[OK] Hot-update bundle generated: patch={os.path.basename(res['patch_path'])} "
+        f"({res['patch_size'] / 1024:.1f} KB, {res['patch_files']} files) | "
+        f"assets={res['assets_count']} (hash={res['assets_hash']}) | "
         f"manifest={os.path.basename(res['manifest_path'])}"
     )
 
