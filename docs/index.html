@@ -3,8 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HoopCoach — 《篮球少女：飞跃巅峰》实时育成军师</title>
-  <meta name="description" content="专为《篮球少女：飞跃巅峰》打造的轻量化实时育成参谋：贴身建议角标、开局笔记与器材配装、28 训复盘作战室。" />
+  <title>HoopCoach — 《篮球少女：飞跃巅峰》场边小助手</title>
+  <meta name="description" content="《篮球少女：飞跃巅峰》(Hoop Girls) 开源只读育成助手：贴身小角标 HUD、笔记相性计算、器材配装推荐与局后复盘。" />
+  <meta name="keywords" content="篮球少女,篮球少女飞跃巅峰,Hoop Girls,HoopCoach,育成助手,笔记相性,器材配装,HUD" />
+  <link rel="canonical" href="https://ejuneg.github.io/HoopCoach/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="HoopCoach — 《篮球少女：飞跃巅峰》场边小助手" />
+  <meta property="og:description" content="开源只读育成小助手：游戏内贴身角标、笔记相性计算、器材配装与局后复盘。" />
+  <meta property="og:url" content="https://ejuneg.github.io/HoopCoach/" />
+  <meta property="og:image" content="https://ejuneg.github.io/HoopCoach/assets/screenshots/hud_live_demo.webp" />
   <link rel="icon" type="image/png" href="assets/site/logo.png" />
   <style>
     :root {
@@ -414,7 +421,7 @@
       z-index: 0;
     }
 
-    /* 澪奈 Q 版探头贴纸 */
+    /* 澪奈 Q 版探头贴纸（可点击换人彩蛋） */
     .mascot-peek {
       position: absolute;
       top: -28px;
@@ -423,7 +430,8 @@
       display: flex;
       align-items: flex-end;
       gap: 8px;
-      pointer-events: none;
+      cursor: pointer;
+      user-select: none;
     }
 
     .mascot-bubble {
@@ -437,6 +445,7 @@
       color: var(--ink);
       margin-bottom: 16px;
       white-space: nowrap;
+      transition: transform 0.16s ease;
     }
 
     .mascot-bubble span { color: var(--orange); }
@@ -449,7 +458,12 @@
       box-shadow: 3px 3px 0 var(--ink);
       background: var(--white);
       transform: rotate(5deg);
+      transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
+
+    .mascot-peek:hover img { transform: rotate(-4deg) scale(1.08); }
+    .mascot-peek:hover .mascot-bubble { transform: translateY(-2px); }
+    .mascot-peek:active img { transform: rotate(2deg) scale(0.94); }
 
     .stage-card {
       position: relative;
@@ -1177,18 +1191,18 @@
         <img class="brand-logo" src="assets/site/logo.png" alt="HoopCoach" />
         <span class="brand-text">
           <span class="brand-name">Hoop<span>Coach</span></span>
-          <span class="brand-sub">篮球少女 · 实时育成军师</span>
+          <span class="brand-sub">《篮球少女》小助手</span>
         </span>
       </a>
       <nav class="nav-links">
-        <a href="#features">核心功能</a>
-        <a href="#preview">界面预览</a>
-        <a href="#quickstart">3 步上手</a>
+        <a href="#features">功能</a>
+        <a href="#preview">预览</a>
+        <a href="#quickstart">上手</a>
         <a href="https://github.com/EjuneG/HoopCoach" target="_blank" rel="noopener">GitHub</a>
       </nav>
-      <a class="nav-dl" href="https://github.com/EjuneG/HoopCoach/releases/latest" target="_blank" rel="noopener">
+      <a class="nav-dl" data-dl-btn="nav" href="https://github.com/EjuneG/HoopCoach/releases/latest" target="_blank" rel="noopener">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        下载 Windows 版
+        <span data-dl-label>下载</span>
       </a>
     </div>
   </header>
@@ -1208,27 +1222,26 @@
       <div>
         <div class="hero-badge">
           <span class="hero-badge-tag">HOOP GIRLS</span>
-          <span>《篮球少女：飞跃巅峰》PC 端育成助手</span>
+          <span>《篮球少女：飞跃巅峰》PC 小助手</span>
         </div>
 
         <h1>
-          训练、买药、技能、配装<br />
-          像原生 UI 一样<br />
-          <span class="h1-highlight">一眼看穿最优解</span>
+          给你的育成画面<br />
+          贴一张<span class="h1-highlight">场边小抄</span>
         </h1>
 
         <p class="hero-desc">
-          把 EV 精算、开局笔记相性、器材推荐与 28 训战绩复盘做进轻巧的贴身角标里——不用切屏查攻略，专注打出下一张高分毕业卡。
+          训练、买药、挑技能、配笔记，不用切屏查表。
         </p>
 
         <div class="cta-row">
-          <a class="btn btn-primary" href="https://github.com/EjuneG/HoopCoach/releases/latest" target="_blank" rel="noopener">
+          <a class="btn btn-primary" data-dl-btn="hero" href="https://github.com/EjuneG/HoopCoach/releases/latest" target="_blank" rel="noopener">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            下载 Windows 绿色版
+            <span data-dl-label>下载 Windows 版</span>
           </a>
           <a class="btn btn-secondary" href="https://github.com/EjuneG/HoopCoach" target="_blank" rel="noopener">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.11.79-.25.79-.56v-2.16c-3.2.7-3.88-1.36-3.88-1.36-.52-1.34-1.28-1.7-1.28-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.78 0c2.2-1.49 3.16-1.18 3.16-1.18.63 1.59.23 2.77.12 3.06.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.26 5.69.42.36.79 1.06.79 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg>
-            GitHub 源码
+            GitHub
           </a>
         </div>
 
@@ -1241,8 +1254,8 @@
             <img src="assets/site/head_1046.png" alt="希雅" title="C 希雅" />
           </div>
           <div class="roster-meta">
-            <strong>覆盖全 47 位球员 &amp; 70+ 器材</strong>
-            实时热切流派与偏科 · 自动增量更新
+            <strong>47 位少女 · 70+ 器材</strong>
+            开源免费 · 仅读本地日志
           </div>
         </div>
       </div>
@@ -1250,16 +1263,16 @@
       <!-- 右侧互动赛场 HUD 战术板 -->
       <div class="stage-wrap">
         <div class="stage-back" aria-hidden="true"></div>
-        <div class="mascot-peek">
-          <div class="mascot-bubble">点下面切换 <span>3 种实战视角</span>！</div>
-          <img src="assets/site/q_1001.png" alt="澪奈 Q版贴纸" />
-        </div>
+        <button class="mascot-peek" id="mascot-peek" type="button" title="点我换一位篮球少女～" aria-label="切换看板娘贴纸">
+          <span class="mascot-bubble" id="mascot-bubble">点下面<span>切着看</span>～</span>
+          <img id="mascot-img" src="assets/site/q_1001.png" alt="澪奈 Q版贴纸" />
+        </button>
 
         <div class="stage-card">
           <div class="stage-tabs" role="tablist" aria-label="HUD 模拟场景">
-            <button class="stage-tab active" role="tab" aria-selected="true" data-scene="train">平日 6 选 1</button>
-            <button class="stage-tab" role="tab" aria-selected="false" data-scene="skill">技能 3 选 1</button>
-            <button class="stage-tab" role="tab" aria-selected="false" data-scene="loadout">开局笔记 &amp; 配装</button>
+            <button class="stage-tab active" role="tab" aria-selected="true" data-scene="train">训练</button>
+            <button class="stage-tab" role="tab" aria-selected="false" data-scene="skill">技能</button>
+            <button class="stage-tab" role="tab" aria-selected="false" data-scene="loadout">配装</button>
           </div>
 
           <div class="stage-body">
@@ -1277,24 +1290,24 @@
                 <img src="assets/site/head_1002.png" alt="龙宫寺心叶" />
                 <div class="scene-char-info">
                   <div class="scene-char-name">龙宫寺 心叶 <span class="pos-chip">PF #0</span></div>
-                  <div class="scene-char-sub">当前流派：训练流 · 冲总评最优 · 贴身角标浮于训练键上方</div>
+                  <div class="scene-char-sub">训练流 · 平日 6 选 1</div>
                 </div>
               </div>
               <div class="sim-cards-3">
                 <div class="sim-slot best">
-                  <span class="diegetic-pill"><span class="lead lead-gold">★ 首选</span><span class="val">146.2 · 彩×2</span></span>
+                  <span class="diegetic-pill"><span class="lead lead-gold">★ 推荐</span><span class="val">146.2 · 彩×2</span></span>
                   <div class="sim-slot-title">投射训练 Lv.4</div>
-                  <div class="sim-slot-sub">双彩圈爆发 · 突破 +1</div>
+                  <div class="sim-slot-sub">双彩圈 +1</div>
                 </div>
                 <div class="sim-slot">
-                  <span class="diegetic-pill"><span class="lead lead-blue">◆ 次选</span><span class="val">139.5 · 羁+2</span></span>
+                  <span class="diegetic-pill"><span class="lead lead-blue">◆ 备选</span><span class="val">139.5 · 羁+2</span></span>
                   <div class="sim-slot-title">防守训练 Lv.3</div>
-                  <div class="sim-slot-sub">补齐短板 · 升羁绊</div>
+                  <div class="sim-slot-sub">顺便涨羁绊</div>
                 </div>
                 <div class="sim-slot">
-                  <span class="diegetic-pill"><span class="lead lead-rose">控体</span><span class="val">98.4 · 易断体</span></span>
+                  <span class="diegetic-pill"><span class="lead lead-rose">省点体</span><span class="val">98.4 · 易断体</span></span>
                   <div class="sim-slot-title">体能训练 Lv.2</div>
-                  <div class="sim-slot-sub">体力偏低风险高</div>
+                  <div class="sim-slot-sub">体力有点紧</div>
                 </div>
               </div>
             </div>
@@ -1305,24 +1318,24 @@
                 <img src="assets/site/head_1007.png" alt="闪堂电" />
                 <div class="scene-char-info">
                   <div class="scene-char-name">闪堂 电 <span class="pos-chip">SG #3</span></div>
-                  <div class="scene-char-sub">按角色职责与剩余 PT 评估三张技能卡，帮避开低性价比白板技</div>
+                  <div class="scene-char-sub">技能 3 选 1</div>
                 </div>
               </div>
               <div class="sim-cards-3">
                 <div class="sim-slot best">
-                  <span class="diegetic-pill"><span class="lead lead-gold">★ 必拿</span><span class="val">契合 S+ · 省PT</span></span>
+                  <span class="diegetic-pill"><span class="lead lead-gold">★ 很配</span><span class="val">S+ · 省PT</span></span>
                   <div class="sim-slot-title">精准三分 [金]</div>
-                  <div class="sim-slot-sub">得分手核心输出技</div>
+                  <div class="sim-slot-sub">得分核心</div>
                 </div>
                 <div class="sim-slot">
-                  <span class="diegetic-pill"><span class="lead lead-blue">◆ 备选</span><span class="val">契合 A · 可拿</span></span>
+                  <span class="diegetic-pill"><span class="lead lead-blue">◆ 可选</span><span class="val">A · 备选</span></span>
                   <div class="sim-slot-title">快速补防 [银]</div>
-                  <div class="sim-slot-sub">外线协防补强</div>
+                  <div class="sim-slot-sub">外线协防</div>
                 </div>
                 <div class="sim-slot">
-                  <span class="diegetic-pill"><span class="lead lead-gray">× 跳过</span><span class="val">低收益 · 省PT</span></span>
+                  <span class="diegetic-pill"><span class="lead lead-gray">× 算了</span><span class="val">省PT</span></span>
                   <div class="sim-slot-title">篮下卡位 [铜]</div>
-                  <div class="sim-slot-sub">位置不符建议跳过</div>
+                  <div class="sim-slot-sub">不太搭位置</div>
                 </div>
               </div>
             </div>
@@ -1333,7 +1346,7 @@
                 <img src="assets/site/head_1046.png" alt="希雅" />
                 <div class="scene-char-info">
                   <div class="scene-char-name">希雅·奥黛拉 <span class="pos-chip">C #34</span></div>
-                  <div class="scene-char-sub">推荐双笔记：闪堂 + 真崎（总相性 31 · 优） · 一键给出 5 器材位</div>
+                  <div class="scene-char-sub">双笔记：闪堂 + 真崎（相性 31 · 优）</div>
                 </div>
               </div>
               <div class="sim-equip-grid">
@@ -1346,8 +1359,8 @@
             </div>
 
             <div class="stage-foot">
-              <span>鼠标点击完全穿透 · 切窗或剧情过场自动隐身</span>
-              <span>支持 16:9 / 21:9 / 4:3</span>
+              <span>鼠标穿透 · 切窗自动隐藏</span>
+              <span>16:9 / 21:9 / 4:3</span>
             </div>
           </div>
         </div>
@@ -1365,45 +1378,44 @@
     <section id="features">
       <div class="sec-head">
         <div>
-          <span class="sec-kicker">GAMEPLAY FEATURES</span>
-          <h2 class="sec-title">从选人开局到局后复盘，一路陪跑</h2>
+          <span class="sec-kicker">FEATURES</span>
+          <h2 class="sec-title">它能干嘛</h2>
         </div>
-        <p class="sec-sub">所有建议直接贴在游戏按钮旁，不打断手感，也不需要手动抄数据</p>
       </div>
 
       <div class="bento-grid">
         <article class="bento-card">
           <div>
-            <span class="bento-num">NO.01</span>
-            <h3>贴身角标，随画面自动显现</h3>
-            <p>平日训练 6 选 1、周末野餐/买药/扭蛋、技能 3 选 1 与剧情分支，直接浮在对应选项旁；切出游戏或进剧情自动隐藏。</p>
+            <span class="bento-num">01</span>
+            <h3>贴身小角标</h3>
+            <p>训练、买药、技能和剧情，直接浮在按钮旁提示。</p>
           </div>
           <img class="bento-art" src="assets/site/eq_11004.png" alt="支援口哨" loading="lazy" />
         </article>
 
         <article class="bento-card">
           <div>
-            <span class="bento-num">NO.02</span>
-            <h3>笔记相性 &amp; 器材一键配卡</h3>
-            <p>内置 47 位球员完整关系矩阵，选人阶段立刻给出高相性双搭档与 5 器材推荐，支持冲总评与 PVP 专精阵型切换。</p>
+            <span class="bento-num">02</span>
+            <h3>笔记 &amp; 配装</h3>
+            <p>选人时自动算好双搭档相性与 5 件器材。</p>
           </div>
           <img class="bento-art" src="assets/site/head_1002.png" alt="龙宫寺心叶" loading="lazy" />
         </article>
 
         <article class="bento-card">
           <div>
-            <span class="bento-num">NO.03</span>
-            <h3>28 训深度复盘作战室</h3>
-            <p>每打完一局自动归档战绩，浏览器一键查看 5 位置最高评分底座、评分走势，并逐回合揪出高亏损分歧选择。</p>
+            <span class="bento-num">03</span>
+            <h3>局后小本本</h3>
+            <p>自动记下每局战绩，网页里翻最高分与复盘。</p>
           </div>
           <img class="bento-art" src="assets/site/eq_11002.png" alt="高级智能篮球" loading="lazy" />
         </article>
 
         <article class="bento-card">
           <div>
-            <span class="bento-num">NO.04</span>
-            <h3>双击即用，轻巧增量更新</h3>
-            <p>绿色便携包解压双击即开，可随时在桌面控制台热切流派与偏科；后续版本升级只下载几百 KB 补丁，保留全部记录。</p>
+            <span class="bento-num">04</span>
+            <h3>解压即用</h3>
+            <p>绿色免安装，随时切流派，小更新只下几百 KB。</p>
           </div>
           <img class="bento-art" src="assets/site/head_1046.png" alt="希雅" loading="lazy" />
         </article>
@@ -1414,39 +1426,38 @@
     <section id="preview">
       <div class="sec-head">
         <div>
-          <span class="sec-kicker">SCREENSHOTS</span>
-          <h2 class="sec-title">实机界面一览</h2>
+          <span class="sec-kicker">PREVIEW</span>
+          <h2 class="sec-title">长这样</h2>
         </div>
-        <p class="sec-sub">点上方标签切换不同画面，点大图可全屏细看</p>
       </div>
 
       <div class="gallery-shell">
         <div class="gallery-tabs" role="tablist" aria-label="界面预览切换">
           <button class="g-tab active" role="tab" aria-selected="true" data-shot="0">
-            <span class="g-tab-num">VIEW 01</span>
-            <span class="g-tab-title">贴身角标 HUD</span>
+            <span class="g-tab-num">01</span>
+            <span class="g-tab-title">贴身角标</span>
           </button>
           <button class="g-tab" role="tab" aria-selected="false" data-shot="1">
-            <span class="g-tab-num">VIEW 02</span>
-            <span class="g-tab-title">桌面小控制台</span>
+            <span class="g-tab-num">02</span>
+            <span class="g-tab-title">桌面控制台</span>
           </button>
           <button class="g-tab" role="tab" aria-selected="false" data-shot="2">
-            <span class="g-tab-num">VIEW 03</span>
-            <span class="g-tab-title">作战室 · 战绩总览</span>
+            <span class="g-tab-num">03</span>
+            <span class="g-tab-title">战绩总览</span>
           </button>
           <button class="g-tab" role="tab" aria-selected="false" data-shot="3">
-            <span class="g-tab-num">VIEW 04</span>
-            <span class="g-tab-title">作战室 · 28 训复盘</span>
+            <span class="g-tab-num">04</span>
+            <span class="g-tab-title">单局复盘</span>
           </button>
         </div>
 
         <div class="gallery-stage">
           <div class="gallery-bar">
-            <p class="gallery-caption" id="gallery-caption">训练、技能、周末商店与剧情选项的贴身角标效果，鼠标完全穿透、自动适配各类屏幕比例。</p>
-            <span class="zoom-hint">点击图片放大查看</span>
+            <p class="gallery-caption" id="gallery-caption">浮在游戏按钮旁，鼠标直接点穿。</p>
+            <span class="zoom-hint">点击放大</span>
           </div>
           <div class="gallery-frame" id="gallery-frame">
-            <img id="gallery-img" src="assets/screenshots/hud_badges_showcase.png" alt="HoopCoach 贴身角标 HUD" />
+            <img id="gallery-img" src="assets/screenshots/hud_live_demo.webp" alt="HoopCoach 实机贴身角标" />
           </div>
         </div>
       </div>
@@ -1457,24 +1468,23 @@
       <div class="quickstart-box">
         <div class="quickstart-head">
           <span class="sec-kicker">QUICK START</span>
-          <h2 class="sec-title">Windows 3 步直接开练</h2>
-          <p class="sec-sub">无需配置环境，解压即用</p>
+          <h2 class="sec-title">三步开用</h2>
         </div>
         <div class="steps-grid">
           <div class="step-card">
-            <span class="step-tag">STEP 01</span>
-            <h3>下载并完整解压</h3>
-            <p>在 Releases 下载最新 <code>HoopCoach-Windows-*.zip</code>，完整解压到任意本地文件夹（不要在压缩包内直接双击）。</p>
+            <span class="step-tag">01</span>
+            <h3>解压</h3>
+            <p>下载最新 <code>zip</code>，解压到本地文件夹。</p>
           </div>
           <div class="step-card">
-            <span class="step-tag">STEP 02</span>
-            <h3>双击 HoopCoach.exe</h3>
-            <p>自动定位游戏目录（如未识别点一次「切换目录」即可永久记住），按习惯选择流派与角标样式。</p>
+            <span class="step-tag">02</span>
+            <h3>运行</h3>
+            <p>双击 <code>HoopCoach.exe</code>，自动找游戏目录。</p>
           </div>
           <div class="step-card">
-            <span class="step-tag">STEP 03</span>
-            <h3>进局实时护航</h3>
-            <p>建议游戏设为无边框窗口化。进入育成或选人页后角标自动显现，局后点「打开作战室网页」查看复盘。</p>
+            <span class="step-tag">03</span>
+            <h3>开练</h3>
+            <p>游戏设无边框窗口化，进育成自动显现。</p>
           </div>
         </div>
       </div>
@@ -1483,13 +1493,13 @@
         <div class="bottom-cta-left">
           <img src="assets/site/head_1001.png" alt="澪奈" />
           <div>
-            <h3>准备好冲下一张毕业卡了吗？</h3>
-            <p>下载绿色版解压即用，遇到问题或想要新功能随时来 GitHub 留言。</p>
+            <h3>带它打一局？</h3>
+            <p>开源免费，有 Bug 或想法欢迎来 GitHub 留言～</p>
           </div>
         </div>
         <div class="cta-row" style="margin-bottom: 0;">
-          <a class="btn btn-primary" href="https://github.com/EjuneG/HoopCoach/releases/latest" target="_blank" rel="noopener">立即下载最新版</a>
-          <a class="btn btn-secondary" href="https://github.com/EjuneG/HoopCoach/issues" target="_blank" rel="noopener">反馈 / 提建议</a>
+          <a class="btn btn-primary" data-dl-btn="bottom" href="https://github.com/EjuneG/HoopCoach/releases/latest" target="_blank" rel="noopener"><span data-dl-label>下载最新版</span></a>
+          <a class="btn btn-secondary" href="https://github.com/EjuneG/HoopCoach/issues" target="_blank" rel="noopener">留言 / 反馈</a>
         </div>
       </div>
     </section>
@@ -1498,12 +1508,12 @@
   <footer>
     <div class="container">
       <div class="foot-links">
-        <a href="https://github.com/EjuneG/HoopCoach" target="_blank" rel="noopener">GitHub 仓库</a>
-        <a href="https://github.com/EjuneG/HoopCoach/releases/latest" target="_blank" rel="noopener">版本下载</a>
-        <a href="https://github.com/EjuneG/HoopCoach/issues" target="_blank" rel="noopener">反馈 Bug / 提建议</a>
+        <a href="https://github.com/EjuneG/HoopCoach" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/EjuneG/HoopCoach/releases/latest" target="_blank" rel="noopener">Releases</a>
+        <a href="https://github.com/EjuneG/HoopCoach/issues" target="_blank" rel="noopener">Issues</a>
       </div>
       <p class="foot-note">
-        HoopCoach 为完全开源的非官方玩家工具，仅读取本地游戏日志。页面中的游戏角色与器材素材版权归原游戏官方所有。
+        非官方开源工具，仅读取本地日志。游戏素材版权归原官方所有。
       </p>
     </div>
   </footer>
@@ -1562,24 +1572,24 @@
     // 3. 实机截图 Tab 画廊
     const shots = [
       {
-        src: "assets/screenshots/hud_badges_showcase.png",
-        alt: "HoopCoach 贴身角标 HUD",
-        caption: "训练、技能、周末商店与剧情选项的贴身角标效果，鼠标完全穿透、自动适配各类屏幕比例。"
+        src: "assets/screenshots/hud_live_demo.webp",
+        alt: "HoopCoach 实机贴身角标",
+        caption: "浮在游戏按钮旁，鼠标直接点穿。"
       },
       {
         src: "assets/screenshots/desktop_console.png",
-        alt: "HoopCoach 桌面小控制台",
-        caption: "清爽直观的桌面控制台：随时热切育成流派、偏科引导与悬浮窗样式，支持一键在线增量更新。"
+        alt: "HoopCoach 桌面控制台",
+        caption: "切流派、调偏科、一键更新。"
       },
       {
         src: "assets/screenshots/dashboard_overview.png",
-        alt: "HoopCoach 本地作战室总览",
-        caption: "自动归档每一局育成战绩，直观追踪 5 位置最高评分底座与历史评分成长曲线。"
+        alt: "HoopCoach 战绩总览",
+        caption: "各位置最高分与历史走势。"
       },
       {
         src: "assets/screenshots/dashboard_replay.png",
-        alt: "HoopCoach 本地作战室单局复盘",
-        caption: "逐回合对比你的选择与军师最优解，快速定位六维短板与高亏损分歧回合。"
+        alt: "HoopCoach 单局复盘",
+        caption: "28 训逐回合回看。"
       }
     ];
     const gImg = document.getElementById("gallery-img");
@@ -1610,6 +1620,57 @@
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") lb.classList.remove("open");
     });
+
+    // 5. 看板娘 Q 版贴纸点击换人彩蛋
+    const mascotBtn = document.getElementById("mascot-peek");
+    const mascotImg = document.getElementById("mascot-img");
+    const mascotBubble = document.getElementById("mascot-bubble");
+    const mascotLines = [
+      "今天出<span>彩圈</span>！",
+      "别忘买<span>体力药</span>～",
+      "稳住，别断体！",
+      "这把<span>稳高分</span>～",
+      "戳我干嘛呀～",
+      "帮你看<span>小抄</span>呢！",
+      "下一训出<span>双彩</span>！",
+      "打完记得<span>复盘</span>～"
+    ];
+    let lastMascotIdx = 0;
+    let lastLineIdx = -1;
+    mascotBtn.addEventListener("click", () => {
+      let idx = Math.floor(Math.random() * stickers.length);
+      if (idx === lastMascotIdx) idx = (idx + 1) % stickers.length;
+      lastMascotIdx = idx;
+      let lIdx = Math.floor(Math.random() * mascotLines.length);
+      if (lIdx === lastLineIdx) lIdx = (lIdx + 1) % mascotLines.length;
+      lastLineIdx = lIdx;
+      const picked = stickers[idx];
+      mascotImg.src = `assets/site/q_${picked.id}.png`;
+      mascotImg.alt = `${picked.name} Q版贴纸`;
+      mascotBubble.innerHTML = `${picked.name}：${mascotLines[lIdx]}`;
+    });
+
+    // 6. 自动拉取最新 Windows 整包直链与版本号（失败时静默回退 Releases 页）
+    fetch("https://api.github.com/repos/EjuneG/HoopCoach/releases/latest")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((rel) => {
+        if (!rel || !Array.isArray(rel.assets)) return;
+        const winZip = rel.assets.find((a) => /^HoopCoach-Windows-.*\.zip$/i.test(a.name || ""));
+        const ver = rel.tag_name || "";
+        document.querySelectorAll("[data-dl-btn]").forEach((el) => {
+          if (winZip && winZip.browser_download_url) {
+            el.href = winZip.browser_download_url;
+            el.removeAttribute("target");
+          }
+          const label = el.querySelector("[data-dl-label]");
+          if (!label || !ver) return;
+          const kind = el.dataset.dlBtn;
+          if (kind === "hero") label.textContent = `下载 Windows 版 ${ver}`;
+          else if (kind === "bottom") label.textContent = `下载 ${ver}`;
+          else if (kind === "nav") label.textContent = `下载 ${ver}`;
+        });
+      })
+      .catch(() => {});
   </script>
 </body>
 </html>

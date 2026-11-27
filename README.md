@@ -1,14 +1,15 @@
 # HoopCoach
 
-> 《篮球少女：飞跃巅峰》(*Hoop Girls*) 纯只读实时育成助手。
+> 《篮球少女：飞跃巅峰》(*Hoop Girls*) 纯只读实时育成助手 · [**在线预览主页**](https://ejuneg.github.io/HoopCoach/)
 
+[![主页预览](https://img.shields.io/badge/主页-HoopCoach_Pages-ff5126)](https://ejuneg.github.io/HoopCoach/)
 [![纯只读零侵入](https://img.shields.io/badge/安全-纯只读_·_零注入-16a34a)](#safety)
 [![Windows 绿色免装](https://img.shields.io/badge/平台-Windows_免装_Python-2563eb)](#quickstart)
 [![增量更新](https://img.shields.io/badge/热更新-约_0.6_MB-d97706)](#quickstart)
 
-只读监听游戏本地日志，在游戏画面旁实时给出**训练收益排序、周末/商店/扭蛋决策、剧情与选技能建议、开局笔记与器材配装**，并附带本地网页版战绩复盘。
+只读监听游戏本地日志，在游戏画面旁实时给出**训练收益排序、周末/商店/扭蛋决策、剧情与选技能建议、开局笔记相性计算与器材配装**，并附带本地网页版战绩复盘。
 
-![HoopCoach 游戏内实时贴身角标](docs/assets/screenshots/hud_badges_showcase.png)
+![HoopCoach 游戏内实时贴身角标](docs/assets/screenshots/hud_live_demo.webp)
 
 <a id="safety"></a>
 
