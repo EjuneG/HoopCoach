@@ -61,7 +61,7 @@ except Exception:
     messagebox = None
 
 try:
-    from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageTk  # noqa: F401
+    from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageGrab, ImageTk  # noqa: F401
 except Exception:
     pass
 

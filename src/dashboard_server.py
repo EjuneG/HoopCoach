@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+import io
 import json
 import mimetypes
 import os
@@ -29,6 +30,7 @@ import threading
 import time
 import urllib.parse
 import webbrowser
+import zipfile
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Optional
@@ -1379,6 +1381,16 @@ def make_handler(engine: DashboardEngine, live_monitor: LiveMonitor):
                 if path == "/api/live":
                     self._send_json(live_monitor.get_snapshot())
                     return
+                if path == "/api/export-diag":
+                    zbytes, fname = build_dashboard_diagnostic_zip_bytes(engine, live_monitor)
+                    self.send_response(HTTPStatus.OK)
+                    self.send_header("Content-Type", "application/zip")
+                    self.send_header("Content-Disposition", f'attachment; filename="{fname}"')
+                    self.send_header("Cache-Control", "no-store")
+                    self.send_header("Content-Length", str(len(zbytes)))
+                    self.end_headers()
+                    self.wfile.write(zbytes)
+                    return
 
                 # 静态头像与器材图标
                 if path.startswith("/assets/heads/"):
@@ -1399,6 +1411,90 @@ def make_handler(engine: DashboardEngine, live_monitor: LiveMonitor):
     return DashboardHandler
 
 
+def build_dashboard_diagnostic_zip_bytes(
+    engine: DashboardEngine,
+    live_monitor: Optional[LiveMonitor] = None,
+) -> tuple[bytes, str]:
+    """构建作战室脱敏诊断 zip 包（供 /api/export-diag 下载，专门排查战绩/评分/日志解析异常）。"""
+    import issue_reporter as ir
+
+    ts = time.strftime("%Y%m%d_%H%M%S")
+    fname = f"hoopcoach_dashboard_diag_{ts}.zip"
+    buf = io.BytesIO()
+    diag_env = ir.collect_diagnostic_info({"active_view_mode": "dashboard"})
+    runs = engine._get_runs_enriched()
+
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("diagnostic_env.json", json.dumps(diag_env, indent=2, ensure_ascii=False) + "\n")
+        # 脱敏战绩摘要表（不含个人路径）
+        safe_runs = ir._sanitize_recursive(runs)
+        zf.writestr("detailed_runs_sanitized.json", json.dumps(safe_runs, indent=2, ensure_ascii=False) + "\n")
+
+        manifest_fp = os.path.join(RUNS_DIR, "archive_manifest.json")
+        if os.path.isfile(manifest_fp):
+            try:
+                with open(manifest_fp, "r", encoding="utf-8") as mf:
+                    m_txt = ir.sanitize_text(mf.read())
+                zf.writestr("archive_manifest_sanitized.json", m_txt)
+            except Exception:
+                pass
+
+        # 附带最高分 2 局 + 最新 2 局的精简归档，方便定位榜单异常局
+        pick_ids: list[str] = []
+        for r in sorted(runs, key=lambda x: x.get("final_rank", 0), reverse=True)[:2]:
+            rid = r.get("run_id")
+            if rid and rid not in pick_ids:
+                pick_ids.append(rid)
+        for r in sorted(runs, key=lambda x: x.get("seq_no", 0), reverse=True)[:2]:
+            rid = r.get("run_id")
+            if rid and rid not in pick_ids:
+                pick_ids.append(rid)
+        for rid in pick_ids:
+            detail = engine.get_run_detail(rid)
+            if detail:
+                zf.writestr(
+                    f"sample_archives/{rid}.json",
+                    json.dumps(ir._sanitize_recursive(detail), indent=2, ensure_ascii=False) + "\n",
+                )
+
+        # 提取最新 2 份日志中所有 new_rank 周围协议上下文（快速核对是否混入非育成协议）
+        log_dir_use = getattr(live_monitor, "log_dir", None) or ""
+        if not log_dir_use:
+            try:
+                _, log_dir_use = resolve_game_dirs(interactive_on_missing=False)
+            except Exception:
+                log_dir_use = ""
+        if log_dir_use and os.path.isdir(log_dir_use):
+            log_files = sorted(glob.glob(os.path.join(log_dir_use, "*.txt")), key=os.path.getmtime, reverse=True)[:2]
+            rank_snips: list[str] = []
+            for lp in log_files:
+                bn = os.path.basename(lp)
+                try:
+                    with open(lp, "r", encoding="utf-8", errors="ignore") as f:
+                        lines = f.readlines()
+                    for idx_l, ln in enumerate(lines):
+                        if "new_rank" in ln or "education.sc_education_result" in ln:
+                            ctx = "".join(lines[max(0, idx_l - 2) : min(len(lines), idx_l + 3)])
+                            rank_snips.append(f"[{bn}:{idx_l + 1}]\n{ir.sanitize_text(ctx.strip())}\n")
+                            if len(rank_snips) >= 40:
+                                break
+                except Exception:
+                    continue
+            if rank_snips:
+                zf.writestr("recent_rank_protocols_sanitized.txt", "\n---\n".join(rank_snips) + "\n")
+
+            if log_files:
+                compact = ir.extract_compact_run_log(log_files[0], max_chars=24000)
+                if compact:
+                    zf.writestr("latest_run_compact_log.txt", compact)
+
+        err_txt = ir._read_sanitized_runtime_error_log(max_chars=8000)
+        if err_txt:
+            zf.writestr("runtime_error_sanitized.log", err_txt)
+
+    return buf.getvalue(), fname
+
+
 def start_background_server(
     host: str = "127.0.0.1",
     port: int = 8765,
@@ -1414,6 +1510,25 @@ def start_background_server(
     if log_dir:
         live_monitor.set_log_dir(log_dir)
     threading.Thread(target=live_monitor.get_snapshot, daemon=True).start()
+
+    # 若本地存在旧版 schema 归档（如 v3 可能误采队伍总评价/PVP 的 new_rank），后台静默自动重算自愈
+    if log_dir and os.path.isdir(log_dir):
+        def _auto_upgrade_stale_runs() -> None:
+            try:
+                import analyzer as _az
+                if os.path.isfile(_az.MANIFEST_PATH):
+                    m = _az._load_manifest()
+                    if int(m.get("schema_version") or 0) < int(getattr(_az, "MANIFEST_SCHEMA_VERSION", 4)):
+                        _az.LOG_DIR = log_dir
+                        _az.extract_all_runs(force_rebuild=False)
+                        engine.invalidate_caches()
+                        try:
+                            export_static_snapshot(engine)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+        threading.Thread(target=_auto_upgrade_stale_runs, daemon=True).start()
 
     server = None
     actual_port = port

@@ -33,6 +33,7 @@ hiddenimports = [
     "PIL.ImageDraw",
     "PIL.ImageFilter",
     "PIL.ImageFont",
+    "PIL.ImageGrab",
     "PIL.ImageTk",
     "tkinter",
     "tkinter.ttk",

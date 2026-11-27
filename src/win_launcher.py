@@ -1787,12 +1787,27 @@ class LQSNCoachDesktopApp:
     def _get_feedback_context(self) -> dict:
         ctx = self.hud.get_diagnostic_context() if hasattr(self.hud, "get_diagnostic_context") else {}
         fc = self.hud_cfg.get("focus") or {}
+        st = self.mirror.state if self.mirror else None
+        extra_snap = {
+            "last_train_cmds_count": len(self.mirror.last_train_cmds) if self.mirror else 0,
+            "strategy": self.strategy_name,
+        }
+        game_rect = None
+        try:
+            grect = getattr(self.hud, "_last_game_rect", None)
+            if grect and len(grect) == 4:
+                game_rect = tuple(int(v) for v in grect)
+        except Exception:
+            game_rect = None
         ctx.update({
             "strategy": self.strategy_name,
             "focus_stat": fc.get("stat"),
             "focus_bonus": fc.get("bonus"),
             "log_path": (self.mirror.log_path if self.mirror else ""),
             "hud_config": self.hud_cfg,
+            "state_snapshot": issue_reporter.build_state_snapshot(st, extra=extra_snap) if st else None,
+            "runtime_error_path": os.path.join(pc.BASE_DIR, "runtime_error.log"),
+            "game_rect": game_rect,
         })
         return ctx
 
@@ -2139,6 +2154,11 @@ class LQSNCoachDesktopApp:
             else x
             for x in skill_choices_raw
         )
+        store_sig = tuple(
+            (int(it.get("id") or 0), int(it.get("num") or 0))
+            for it in (state.get("store_items") or ())
+            if isinstance(it, dict)
+        )
         sig = (
             mode,
             int(state.get("exp_round") or 0),
@@ -2146,6 +2166,9 @@ class LQSNCoachDesktopApp:
             int(state.get("round_type") or 1),
             int(state.get("ps") or 0),
             int(state.get("gold") or 0),
+            bool(state.get("fired_70", False)),
+            bool(state.get("fired_71", False)),
+            store_sig,
             state.get("cur_story"),
             state.get("pre_edu_char_id"),
             skill_sig,

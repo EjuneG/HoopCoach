@@ -3014,6 +3014,17 @@
       resizeTimer = setTimeout(() => renderTrendChart(), 120);
     });
 
+    const btnExportDiag = $("btn-export-diag");
+    if (btnExportDiag) {
+      btnExportDiag.addEventListener("click", () => {
+        if (!state.online) {
+          alert("当前为离线静态快照模式，请通过桌面控制台启动本地作战室后再导出诊断包。");
+          return;
+        }
+        window.location.href = "/api/export-diag";
+      });
+    }
+
     $("btn-refresh-all").addEventListener("click", async () => {
       if (state.online) {
         try { await fetch("/api/refresh", { method: "POST" }); } catch (_) {}

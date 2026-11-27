@@ -1085,12 +1085,12 @@ class WindowsFloatingHUD:
             else:
                 tag_s, body_s = "星奈", strip_markup_to_clean_text(raw_t)
             tag_clean = strip_markup_to_clean_text(tag_s)[:8] or "星奈"
-            body_clean = strip_markup_to_clean_text(body_s)[:28]
+            body_clean = strip_markup_to_clean_text(body_s)[:36]
             slot_mk = (
                 f"<span foreground='#0284c7' weight='bold'>[{html.escape(tag_clean)}]</span> "
                 f"<span foreground='#1e3a5f' weight='bold'>{html.escape(body_clean)}</span>"
             )
-            est_w = max(24, min(42, len(tag_clean) * 2 + len(body_clean) * 2 + 4))
+            est_w = max(24, min(52, len(tag_clean) * 2 + len(body_clean) * 2 + 4))
             self.header_text.configure(width=est_w)
             self._render_pango_to_text_widget(self.header_text, slot_mk, is_header=True)
             self._set_windows_visible(self._is_shown, False)

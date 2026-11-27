@@ -63,7 +63,7 @@ class LiveLogMirror:
 
     @staticmethod
     def _find_fast_replay_offset(path: str, min_size_bytes: int = 1_500_000) -> int:
-        """大日志冷启动加速：反向定位最后一次育成开局锚点 (education.cs_start_education)，往前留 64KB 安全余量。"""
+        """大日志冷启动加速：反向定位最后一次育成开局锚点 (education.cs_start_education) 所在行首，避免吃进上一局残留状态。"""
         try:
             fsize = os.path.getsize(path)
             if fsize < min_size_bytes:
@@ -80,11 +80,22 @@ class LiveLogMirror:
                     buf = bf.read(read_sz) + tail_overlap
                     idx = buf.rfind(anchor)
                     if idx != -1:
-                        return max(0, pos + idx - 65536)
+                        abs_anchor = pos + idx
+                        line_start = buf.rfind(b"\n", 0, idx)
+                        if line_start != -1:
+                            return pos + line_start + 1
+                        return max(0, abs_anchor - 256)
                     tail_overlap = buf[: len(anchor) + 64]
         except Exception:
             return 0
         return 0
+
+    def _reset_for_new_run(self) -> None:
+        """开新局 (education.cs_start_education) 时彻底清空上一局残留状态（器材映射/哨子事件标记/训次/商店等）。"""
+        self.state = lc.make_initial_state()
+        self.last_train_cmds = []
+        self._skill_buf = [""]
+        self._edu_buf = ""
 
     def attach_latest(self) -> bool:
         latest = self._find_latest_log()
@@ -94,17 +105,18 @@ class LiveLogMirror:
             return True
         self.close()
         self.log_path = latest
-        self.state = lc.make_initial_state()
-        self.last_train_cmds = []
-        self._skill_buf = [""]
-        self._edu_buf = ""
+        self._reset_for_new_run()
         self.recent_lines.clear()
         self.recent_events.clear()
         start_off = self._find_fast_replay_offset(latest)
         self.fp = open(latest, "r", encoding="utf-8", errors="ignore")
         if start_off > 0:
             self.fp.seek(start_off)
-            self.fp.readline()  # 对齐到完整行首
+            if start_off > 1:
+                # 若落在行中则对齐到下一完整行首；若恰好紧跟 '\n' 则不丢弃锚点行本身
+                self.fp.seek(start_off - 1)
+                if self.fp.read(1) != "\n":
+                    self.fp.readline()
         # 一次性快进读取历史行，精准恢复当前育成状态（快进时跳过纯 Unity/XLua 堆栈噪声行）
         skip_pfx = self._FAST_SKIP_PREFIXES
         for line in self.fp:
@@ -112,6 +124,14 @@ class LiveLogMirror:
                 if not line or line.startswith(skip_pfx) or "cs_heartbeat" in line:
                     continue
             self._feed_line(line, record_events=False)
+        # 冷启动中途续玩兜底：若日志前半段未记录开局，基于 train_counts/exp_round 防止 round 卡在 1
+        if int(self.state.get("round", 1) or 1) == 1:
+            tc_sum = sum(int(v or 0) for v in (self.state.get("train_counts") or {}).values())
+            exp_r = int(self.state.get("exp_round", 0) or 0)
+            if tc_sum > 0:
+                self.state["round"] = tc_sum + 1
+            elif exp_r > 2:
+                self.state["round"] = max(2, exp_r - ((exp_r - 1) // 7) * 2)
         return True
 
     def poll(self) -> list[dict]:
@@ -147,36 +167,62 @@ class LiveLogMirror:
         ):
             self.recent_lines.append(stripped[:220])
 
-        # 跟踪剧情加载事件 ID 与名称
+        # 跟踪剧情加载事件 ID 与名称（同步标记哨子 70/100 熟练度事件已触发，避免触发后永久残留提示）
         if "[EDU_MODEL]_LoadStory:" in line:
             sm = re.search(r"\[EDU_MODEL\]_LoadStory:\s+(\d+)\s+([^\s\t\r\n]+)", line)
             if sm:
-                self.state["cur_story"] = (sm.group(1), sm.group(2))
+                ev_id = sm.group(1)
+                self.state["cur_story"] = (ev_id, sm.group(2))
+                if ev_id == "70":
+                    self.state["fired_70"] = True
+                elif ev_id == "71":
+                    self.state["fired_71"] = True
 
-        # 跟踪商店购买生命周期：cs_buy_edu_item 发出后置起 store_buy_pending，
-        # 直到 [EDU_MODEL] 更新完货架且 edu_store_view 重新打开（或切离商店状态）才放行下一买
+        # 跟踪商店购买、新局重置、平日训练/休息训次推进与关键 RPC 生命周期
         if "request_call:" in line and "education." in line:
             rm_all = re.search(r"(education\.cs_[a-z0-9_]+)", line)
             if rm_all:
                 rpc_name = rm_all.group(1)
-                if rpc_name == "education.cs_buy_edu_item":
+                if rpc_name == "education.cs_start_education":
+                    self._reset_for_new_run()
+                elif rpc_name == "education.cs_buy_edu_item":
                     self.state["store_buy_pending"] = True
                     bm = re.search(r"buy_num\s*=\s*(\d+),\s*store_item_id\s*=\s*(\d+)", line)
                     if bm:
+                        iid = int(bm.group(2))
                         self.state["last_store_buy_req"] = {
                             "buy_num": int(bm.group(1)),
-                            "store_item_id": int(bm.group(2)),
+                            "store_item_id": iid,
                         }
+                        lc._apply_facility_book_purchase(self.state, iid)
+                    else:
+                        bm_i = re.search(r"store_item_id\s*=\s*(\d+)", line)
+                        if bm_i:
+                            lc._apply_facility_book_purchase(self.state, int(bm_i.group(1)))
+                elif rpc_name == "education.cs_train":
+                    self.state["store_buy_pending"] = False
+                    self.state["slot_machine_pending"] = False
+                    cm_t = re.search(r"cmd_idx\s*=\s*(\d+)", line)
+                    if cm_t:
+                        c_idx = int(cm_t.group(1))
+                        if 1 <= c_idx <= 6:
+                            self.state["train_counts"][c_idx] = self.state["train_counts"].get(c_idx, 0) + 1
+                    self.state["round"] = int(self.state.get("round", 1) or 1) + 1
+                elif rpc_name == "education.cs_decide":
+                    self.state["store_buy_pending"] = False
+                    self.state["slot_machine_pending"] = False
+                    if re.search(r"decide_type\s*=\s*2\b", line):
+                        self.state["round"] = int(self.state.get("round", 1) or 1) + 1
+                elif rpc_name == "education.cs_select_edu_slot_machines":
+                    self.state["slot_machine_pending"] = True
                 elif rpc_name in (
-                    "education.cs_train",
-                    "education.cs_decide",
                     "education.cs_match",
                     "education.cs_select_edu_activity",
                     "education.cs_end_education",
-                    "education.cs_start_education",
                     "education.cs_restore_education",
                 ):
                     self.state["store_buy_pending"] = False
+                    self.state["slot_machine_pending"] = False
                 if record_events:
                     events.append({"kind": "rpc", "name": rpc_name})
 
@@ -192,6 +238,7 @@ class LiveLogMirror:
 
         if "[UIManager]" in line and "CloseAll" in line:
             self.state["store_buy_pending"] = False
+            self.state["slot_machine_pending"] = False
             self.state["block_input"] = False
             self.state["block_input_ts"] = 0.0
         elif "[UIManager]" in line and ("OpenUIView" in line or "CloseUIView" in line or "HideUIView" in line):
@@ -205,6 +252,8 @@ class LiveLogMirror:
                 op, vn = um.group(1), um.group(2).rsplit(".", 1)[-1]
                 if vn == "edu_store_view" and op in ("OpenUIView", "CloseUIView", "HideUIView"):
                     self.state["store_buy_pending"] = False
+                if vn == "slot_machine_view" and op in ("CloseUIView", "HideUIView"):
+                    self.state["slot_machine_pending"] = False
                 if record_events:
                     events.append({"kind": "view_open" if op == "OpenUIView" else "view_close", "name": vn})
         if "[EDU_MODEL]_SwitchState" in line:
@@ -212,6 +261,8 @@ class LiveLogMirror:
             if em:
                 st_val = int(em.group(1))
                 self.state["store_buy_pending"] = False
+                if st_val != 21:
+                    self.state["slot_machine_pending"] = False
                 if record_events:
                     events.append({"kind": "state_id", "value": st_val})
 

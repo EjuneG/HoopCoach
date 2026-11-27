@@ -1,0 +1,6 @@
+name = "hoopcoach"
+main = "index.js"
+compatibility_date = "2025-01-01"
+
+[vars]
+GITHUB_REPO = "EjuneG/HoopCoach"

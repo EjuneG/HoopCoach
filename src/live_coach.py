@@ -3651,10 +3651,16 @@ def update_state_from_token(state: dict, tok: str):
 
     # 提取支援卡/器材熟练度与星级/突破 (supactor_dict / supactor_borrow_info / edu_common_effect_info 双重映射，兼容增量更新与中途续玩)
     if "supactor_dict" in tok or "supactor_borrow_info" in tok or "supactor_data" in tok:
-        for awk_m in re.finditer(
-            r"awake_level\s*=\s*(\d+),\s*break_level\s*=\s*(\d+),\s*card_id\s*=\s*(\d+),\s*cfg_id\s*=\s*(\d+)",
-            tok,
-        ):
+        full_awk_matches = list(
+            re.finditer(
+                r"awake_level\s*=\s*(\d+),\s*break_level\s*=\s*(\d+),\s*card_id\s*=\s*(\d+),\s*cfg_id\s*=\s*(\d+)",
+                tok,
+            )
+        )
+        # 若单块内含完整开局/恢复器材列表 (>=3 张完整配置)，先清旧映射防止上一局残留器材混入体检
+        if len(full_awk_matches) >= 3:
+            state["supactor_card_to_cfg"] = {}
+        for awk_m in full_awk_matches:
             awk_lv, brk_lv, cid, cfg_id = (
                 int(awk_m.group(1)),
                 int(awk_m.group(2)),
@@ -5880,14 +5886,14 @@ def evaluate_weekend_and_shop(state: dict, strategy: dict):
             "ps_cap_after": g_cap_after,
             "mates": total_mates,
             "short_tag": short_tag,
-            "short": f"#{g['idx']} {short_tag}{mate_s}({price}金 EV:{g_ev:.0f}·净{net_g_ev:.0f})",
-            "desc": f"#{g['idx']}【{short_tag}{mate_s}】({price}金)",
+            "short": f"【{short_tag}】{mate_s}({price}金 EV:{g_ev:.0f}·净{net_g_ev:.0f})",
+            "desc": f"【{short_tag}{mate_s}】({price}金)",
         })
     scored_gashapon.sort(key=lambda x: (x["net_ev"], x["ev"]), reverse=True)
     afford_gashas = [x for x in scored_gashapon if gold >= x["price"]]
     best_gasha = afford_gashas[0] if afford_gashas else (scored_gashapon[0] if scored_gashapon else None)
     gasha_cost = best_gasha["price"] if best_gasha else 60
-    gasha_today_str = f"🎰6号{best_gasha['desc']}" if best_gasha else "🎰6号扭蛋"
+    gasha_today_str = f"🎰扭蛋{best_gasha['desc']}" if best_gasha else "🎰扭蛋机"
     best_gasha_w_gain = 35 if (best_gasha and best_gasha["cfg_id"] in (100, 99)) else 0
 
     # 3. 评估今日 3号建筑·街机小游戏 (#1~#3) 的精确动态 EV（按净收益 net_ev 排序，确保 60金+1队友 优于 80金无队友）
@@ -5938,10 +5944,10 @@ def evaluate_weekend_and_shop(state: dict, strategy: dict):
     mg_disc_tag = "🏷️5折" if (mg_disc_active and any(m["price"] in (30, 40, 50) for m in minigames)) else "🏷️特价"
 
     if gasha_disc_active and best_gasha:
-        gasha_today_str = f"🎰6号{gasha_disc_tag}{best_gasha['desc']}"
+        gasha_today_str = f"🎰扭蛋{gasha_disc_tag}{best_gasha['desc']}"
     mg_cost = best_mg["price"] if best_mg else 60
-    mg_prefix = "🎮3号🔥特级" if mg_spec_active else (f"🎮3号{mg_disc_tag}" if mg_disc_active else "🎮3号")
-    mg_today_str = f"{mg_prefix}{best_mg['desc']}" if best_mg else "🎮3号街机"
+    mg_prefix = "🎮街机🔥特级" if mg_spec_active else (f"🎮街机{mg_disc_tag}" if mg_disc_active else "🎮街机")
+    mg_today_str = f"{mg_prefix}{best_mg['desc']}" if best_mg else "🎮街机"
 
     # 4. 评估 8号打工 与 1号休息/散心 的精确 EV（含急招2倍、散心特活及单周末生效一次的状态转移）
     work_light = sels.get(19) or sels.get(3) or {
@@ -5986,19 +5992,19 @@ def evaluate_weekend_and_shop(state: dict, strategy: dict):
 
     wh_ev_direct = _calc_wh_dir_ev(wh_mates, wh_urgent, extra_w_gain=0, start_ps=ps)
 
-    wl_short = f"💼8号{'🔥急招' if wl_urgent else ''}轻打工(+{wl_today_gold}金" + (f"·👥{wl_mates})" if wl_mates else ")")
-    wh_short = f"🔨8号{'🔥急招' if wh_urgent else ''}重打工(-25体+{wh_today_gold}金" + (f"·👥{wh_mates})" if wh_mates else ")")
+    wl_short = f"💼{'🔥急招' if wl_urgent else ''}轻打工(+{wl_today_gold}金" + (f"·👥{wl_mates})" if wl_mates else ")")
+    wh_short = f"🔨{'🔥急招' if wh_urgent else ''}重打工(-25体+{wh_today_gold}金" + (f"·👥{wh_mates})" if wh_mates else ")")
 
     # 周六未打工时，急招状态保留到周日；周六已打工时，周日急招已消耗恢复 1 倍基础工资
     sun_wl_keep_gold = wl_base
     sun_wh_keep_gold = wh_base
-    sun_wl_keep_short = f"💼8号{'🔥急招' if wl_urgent else ''}轻打工(+{sun_wl_keep_gold}金)"
-    sun_wh_keep_short = f"🔨8号{'🔥急招' if wh_urgent else ''}重打工(-25体+{sun_wh_keep_gold}金)"
+    sun_wl_keep_short = f"💼{'🔥急招' if wl_urgent else ''}轻打工(+{sun_wl_keep_gold}金)"
+    sun_wh_keep_short = f"🔨{'🔥急招' if wh_urgent else ''}重打工(-25体+{sun_wh_keep_gold}金)"
     sun_wl_keep_ev = round((0.0 if next_week_trains == 0 else 4.5) + wl_tip_ev + work_arch_add, 1)
     sun_wl_after_work_gold = (wl_base // 2) if wl_urgent else wl_base
 
     rest_est_gain = 70 + rest_mates * 20
-    rest_short = f"🧺1号外出野餐(+{rest_est_gain}体" + (f"·👥{rest_mates})" if rest_mates else ")")
+    rest_short = f"🧺外出野餐(+{rest_est_gain}体" + (f"·👥{rest_mates})" if rest_mates else ")")
     out_20_pairs = [
         calc_stat_gain_ev(k, 20, props, prop_max, strategy, round_num, True, rem_trains_now)
         for k in range(101, 107)
@@ -6015,12 +6021,12 @@ def evaluate_weekend_and_shop(state: dict, strategy: dict):
     if out_real_total < out_raw_total:
         out_stat_str += f"·实+{out_real_total}"
     out_short = (
-        f"🚣1号{'🔥划船特活' if out_spec_active else '公园划船'}(+30体{out_stat_str}"
+        f"🚣{'🔥划船特活' if out_spec_active else '公园划船'}(+30体{out_stat_str}"
         + (f"·👥{out_mates})" if out_mates else ")")
     )
     out_no_mate_real = int(round(out_20_real * out_mult))
     out_no_mate_stat_str = f"+{out_base_raw}属" + (f"·实+{out_no_mate_real}" if out_no_mate_real < out_base_raw else "")
-    sun_out_no_mate_short = f"🚣1号{'🔥划船特活' if out_spec_active else '公园划船'}(+30体{out_no_mate_stat_str})"
+    sun_out_no_mate_short = f"🚣{'🔥划船特活' if out_spec_active else '公园划船'}(+30体{out_no_mate_stat_str})"
     # 仅当体力真正低于下周安全底线 safe_ps_floor 时才将外出野餐纳入备选，杜绝中高体力(如70~100体)纯回体空过
     rest_check_ps = sched_ctx["safe_ps_floor"]
     # 外出野餐的驻留队友 +20体/人 已计入 rest_est_gain (70 + 20 * rest_mates)，不再重复加 +10~14 属性分；且周末纯回体亏损发育/生钱行动轮次
@@ -6151,7 +6157,7 @@ def evaluate_weekend_and_shop(state: dict, strategy: dict):
                     sun_act_str = sun_out_no_mate_short
                     sun_r_ev = out_ev
                 else:
-                    sun_act_str = "🧺1号外出野餐(+70体)"
+                    sun_act_str = "🧺外出野餐(+70体)"
                     sun_r_ev = rest_ev
                 rem_g_a2 = gold_after_sat - inv_a2["cost"]
                 ev_a2 = round(best_gasha["ev"] + inv_a2["ev"] + sun_r_ev + keep_gold_ev(rem_g_a2), 1)
@@ -6204,7 +6210,7 @@ def evaluate_weekend_and_shop(state: dict, strategy: dict):
                         avg_hard = sum(calc_minigame_dynamic_ev(gid_k, 100, 0, state, strategy)[0] for gid_k in (3, 9, 12, 21, 33, 36)) / 6.0
                         avg_norm = sum(calc_minigame_dynamic_ev(gid_k, 80, 0, state, strategy)[0] for gid_k in (2, 8, 11, 20, 32, 35)) / 6.0
                         sun_mg_ev_a4 = round(0.50 * avg_hard + 0.50 * avg_norm + 3.2, 1)
-                    sun_mg_lbl_a4 = mg_today_str if mg_spec_active else (f"🎮3号{mg_disc_tag}周日街机" if mg_disc_active else "🎮3号周日街机")
+                    sun_mg_lbl_a4 = mg_today_str if mg_spec_active else (f"🎮{mg_disc_tag}周日街机" if mg_disc_active else "🎮周日街机")
                     rem_after_sun_mg = gold_after_sat - sun_mg_cost_a4
                     inv_a4 = plan_shop_investments(rem_after_sun_mg)
                     tot_w_a4 = best_gasha_w_gain + inv_a4["w_gain"]
@@ -6280,7 +6286,7 @@ def evaluate_weekend_and_shop(state: dict, strategy: dict):
                     sun_act_c3 = sun_out_no_mate_short
                     sun_ev_c3 = out_ev_c3
                 else:
-                    sun_act_c3 = "🧺1号外出野餐(+70体)"
+                    sun_act_c3 = "🧺外出野餐(+70体)"
                     sun_ev_c3 = rest_ev_c3
                 rem_g_c3 = gold_after_mg - inv_c3["cost"]
                 ev_c3 = round(best_mg["ev"] + inv_c3["ev"] + sun_ev_c3 + keep_gold_ev(rem_g_c3), 1)
@@ -6352,7 +6358,7 @@ def evaluate_weekend_and_shop(state: dict, strategy: dict):
                         avg_hard_b3 = sum(calc_minigame_dynamic_ev(gid_k, 100, 0, state, strategy)[0] for gid_k in (3, 9, 12, 21, 33, 36)) / 6.0
                         avg_norm_b3 = sum(calc_minigame_dynamic_ev(gid_k, 80, 0, state, strategy)[0] for gid_k in (2, 8, 11, 20, 32, 35)) / 6.0
                         sun_mg_ev_b3 = round(0.50 * avg_hard_b3 + 0.50 * avg_norm_b3 + 3.2, 1)
-                    sun_mg_lbl_b3 = mg_today_str if (best_mg and mg_spec_active) else f"🎮3号{mg_disc_tag}周日街机(约45金)"
+                    sun_mg_lbl_b3 = mg_today_str if (best_mg and mg_spec_active) else f"🎮{mg_disc_tag}周日街机(约45金)"
                     rem_after_mg_b3 = gold_after_w - sun_mg_cost_b3
                     inv_b3 = plan_shop_investments(rem_after_mg_b3)
                     w_b3 = inv_b3["w_gain"]
@@ -6391,7 +6397,7 @@ def evaluate_weekend_and_shop(state: dict, strategy: dict):
                     sun_act_b2 = sun_out_no_mate_short
                     sun_r_ev_b2 = sun_out_ev
                 else:
-                    sun_act_b2 = "🧺1号外出野餐(+70体)"
+                    sun_act_b2 = "🧺外出野餐(+70体)"
                     sun_r_ev_b2 = sun_rest_ev
                 rem_g_b2 = gold_after_w - inv_b2["cost"]
                 ev_b2 = round(w_dir_ev_b2 + inv_b2["ev"] + sun_r_ev_b2 + keep_gold_ev(rem_g_b2), 1)
@@ -6575,7 +6581,7 @@ def evaluate_weekend_and_shop(state: dict, strategy: dict):
                             ) / 6.0
                             sun_mg_ev_e3 = round(0.50 * avg_hard_e3 + 0.50 * avg_norm_e3 + 3.2, 1)
                         sun_mg_lbl_e3 = (
-                            mg_today_str if (best_mg and mg_spec_active) else f"🎮3号{mg_disc_tag}周日街机(约45金)"
+                            mg_today_str if (best_mg and mg_spec_active) else f"🎮{mg_disc_tag}周日街机(约45金)"
                         )
                         rem_after_mg_e3 = gold_after_t - sun_mg_cost_e3
                         inv_e3 = plan_shop_investments(rem_after_mg_e3)
@@ -6619,7 +6625,7 @@ def evaluate_weekend_and_shop(state: dict, strategy: dict):
                         sun_act_e4 = sun_out_no_mate_short
                         sun_ev_e4 = out_ev_e4
                     else:
-                        sun_act_e4 = "🧺1号外出野餐(+70体)"
+                        sun_act_e4 = "🧺外出野餐(+70体)"
                         sun_ev_e4 = rest_ev_e4
                     rem_g_e4 = gold_after_t - inv_e4["cost"]
                     ev_e4 = round(
@@ -6727,7 +6733,7 @@ def evaluate_weekend_and_shop(state: dict, strategy: dict):
                 )
                 shop_pre = " + ".join(x for x in (inv_g["str"], pot_s["str"], stat_s["str"]) if x)
                 pot_txt = f"🛒{shop_pre} + " if shop_pre else ""
-                g_prefix = f"🎰6号{gasha_disc_tag}抽" if gasha_disc_active else "🎰6号抽"
+                g_prefix = f"🎰{gasha_disc_tag}抽扭蛋" if gasha_disc_active else "🎰抽扭蛋"
                 sun_options.append({
                     "act": (6, 17),
                     "total_ev": tot_ev,
@@ -6751,7 +6757,7 @@ def evaluate_weekend_and_shop(state: dict, strategy: dict):
                 )
                 shop_pre_m = " + ".join(x for x in (inv_m["str"], pot_m["str"], stat_m["str"]) if x)
                 pot_txt_m = f"🛒{shop_pre_m} + " if shop_pre_m else ""
-                m_prefix = "🎮3号🔥特级玩" if mg_spec_active else (f"🎮3号{mg_disc_tag}玩" if mg_disc_active else "🎮3号玩")
+                m_prefix = "🎮🔥特级街机" if mg_spec_active else (f"🎮{mg_disc_tag}街机" if mg_disc_active else "🎮街机")
                 sun_options.append({
                     "act": (3, 6),
                     "total_ev": tot_ev_m,
@@ -7467,6 +7473,52 @@ def format_weekday_hud_tips(state: dict, scored_cmds: list = None, include_shop:
     return hud_lines
 
 
+_EDU_RESULT_BLOCK_RE = re.compile(
+    r"education\.sc_education_result\s*\{(.*?)\n\}",
+    re.S,
+)
+_NON_EDU_NEW_RANK_CTX_RE = re.compile(
+    r"(?:card\.sc_team_rank_reward|pvp\.cs_challenge_pvp|old_rank\s*=|home_pvp_score\s*=|total_point\s*=|new_mark\s*=|reward_idx_list\s*=)"
+)
+
+
+def extract_education_result_ranks(text: str) -> list[int]:
+    """
+    精准提取育成结算包 (education.sc_education_result) 内的单局评价分 new_rank，
+    严格排除队伍总评价奖励 (card.sc_team_rank_reward)、竞技场排名 (pvp.cs_challenge_pvp)
+    及榜单积分等其他协议中的同名 new_rank 字段。
+    """
+    if not text or "new_rank" not in text:
+        return []
+    ranks: list[int] = []
+    for bm in _EDU_RESULT_BLOCK_RE.finditer(text):
+        rm = re.search(r"\bnew_rank\s*=\s*(\d+)\b", bm.group(1))
+        if rm:
+            val = int(rm.group(1))
+            if 1000 <= val <= 20000:
+                ranks.append(val)
+    if ranks:
+        return ranks
+
+    # 兜底（仅用于无完整网络包头的极简日志/单测片段）：严禁命中任何非育成协议上下文
+    for rm in re.finditer(r"\bnew_rank\s*=\s*(\d+)\b", text):
+        val = int(rm.group(1))
+        if not (3000 <= val <= 20000):
+            continue
+        ctx = text[max(0, rm.start() - 320) : min(len(text), rm.end() + 200)]
+        if _NON_EDU_NEW_RANK_CTX_RE.search(ctx):
+            continue
+        disp_matches = list(re.finditer(r"dispatch:\s*([a-zA-Z0-9_.]+)", ctx))
+        if disp_matches and disp_matches[-1].group(1) != "education.sc_education_result":
+            continue
+        ranks.append(val)
+    return ranks
+
+
+def has_education_result(text: str) -> bool:
+    return bool(extract_education_result_ranks(text))
+
+
 def extract_stitched_run_segments(log_dir: str = LOG_DIR) -> list[dict]:
     """
     按时间顺序扫描全部日志文件，以 cs_start_education 为新局起点，
@@ -7489,17 +7541,22 @@ def extract_stitched_run_segments(log_dir: str = LOG_DIR) -> list[dict]:
             prefix
             and stitched
             and not stitched[-1]["has_settled"]
-            and ("cs_restore_education" in prefix or "education.cs_train" in prefix or "new_rank" in prefix)
+            and (
+                "cs_restore_education" in prefix
+                or "education.cs_train" in prefix
+                or "education.sc_education_result" in prefix
+                or "new_rank" in prefix
+            )
         ):
             stitched[-1]["seg"] += "\n" + prefix
             stitched[-1]["end_log"] = os.path.basename(lp)
-            if re.search(r"new_rank\s*=\s*(?:[3-9]\d{3}|1\d{4})\b", stitched[-1]["seg"]):
+            if has_education_result(stitched[-1]["seg"]):
                 stitched[-1]["has_settled"] = True
 
         for i, st in enumerate(starts):
             ed = starts[i + 1] if i + 1 < len(starts) else len(txt)
             seg = txt[st:ed]
-            has_settled = bool(re.search(r"new_rank\s*=\s*(?:[3-9]\d{3}|1\d{4})\b", seg))
+            has_settled = has_education_result(seg)
             stitched.append({
                 "log": os.path.basename(lp),
                 "end_log": os.path.basename(lp),
@@ -7884,7 +7941,7 @@ def replay_last_run(strategy_name="training_flow", run_offset: int = 1):
     wk_turns = parse_weekend_turns_from_text(seg)
     story_turns = parse_story_turns_from_text(seg)
 
-    res_ranks = [int(x) for x in re.findall(r"new_rank\s*=\s*(\d+)", seg) if 3000 <= int(x) <= 20000]
+    res_ranks = extract_education_result_ranks(seg)
     final_rank = res_ranks[-1] if res_ranks else final_st.get("rank", 0)
     lineup_str = format_lineup_summary(final_st) or "未知阵容"
     _, w3_final = get_whistle_step(final_st)
@@ -11425,11 +11482,18 @@ def watch_live(strategy_name="training_flow", auto_play=False, use_gui=True):
                             hud.refresh_scene_overlay(state)
                         ui_mode_dirty = False
 
+                if "dispatch:" in line and "education.sc_education_result" in line:
+                    state["_in_edu_result_block"] = True
+                elif state.get("_in_edu_result_block") and line.strip() == "}":
+                    state["_in_edu_result_block"] = False
+
                 if ("request_call:" in line and "education.cs_end_education" in line) or (
-                    "new_rank =" in line and re.search(r"new_rank\s*=\s*(?:[3-9]\d{3}|1\d{4})\b", line)
+                    state.get("_in_edu_result_block")
+                    and "new_rank =" in line
+                    and re.search(r"new_rank\s*=\s*(\d+)\b", line)
                 ):
                     rk_m = re.search(r"new_rank\s*=\s*(\d+)", line)
-                    if rk_m and not state.get("_settled_archived"):
+                    if rk_m and 1000 <= int(rk_m.group(1)) <= 20000 and not state.get("_settled_archived"):
                         state["_settled_archived"] = True
                         settled_rk = int(rk_m.group(1))
                         def _bg_archive(rk_val=settled_rk):

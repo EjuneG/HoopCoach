@@ -513,7 +513,13 @@ def build_weekday_trough_line(
     raw_tips = format_weekday_hud_tips_fn(state, scored, include_shop=include_shop) if format_weekday_hud_tips_fn else []
     tag = f"{int(state.get('round', 1)):02d}训"
 
-    if int(state.get("round", 0)) == 1 and state.get("main_char_id") and check_lineup_and_equip_synergy_fn:
+    exp_r_now = int(state.get("exp_round", 0) or 0)
+    if (
+        int(state.get("round", 0)) == 1
+        and (exp_r_now == 0 or exp_r_now <= 2)
+        and state.get("main_char_id")
+        and check_lineup_and_equip_synergy_fn
+    ):
         try:
             cfg_ids = sorted(set((state.get("supactor_card_to_cfg") or {}).values()))
             syn_tips = check_lineup_and_equip_synergy_fn(
@@ -522,15 +528,38 @@ def build_weekday_trough_line(
                 cfg_ids,
             )
             if syn_tips:
-                clean_syn = strip_markup_to_clean_text(syn_tips[0])[:38]
+                clean_syn = strip_markup_to_clean_text(syn_tips[0])
+                clean_syn = clean_syn.replace("金技不生效，下局可换同定位/通用卡", "金技不适配")
+                clean_syn = clean_syn[:38]
                 return f"{tag}｜<span foreground='#E03A12'>{html.escape(clean_syn)}</span>"
         except Exception:
             pass
 
     if raw_tips:
-        clean_t = strip_markup_to_clean_text(raw_tips[0])[:38]
-        color = "#E03A12" if any(k in clean_t for k in ("必买", "免费", "哨", "集训", "海滩", "许愿")) else HUD_TEXT_INK
-        return f"{tag}｜<span foreground='{color}'>{html.escape(clean_t)}</span>"
+        clean_tips = [strip_markup_to_clean_text(t) for t in raw_tips if strip_markup_to_clean_text(t)]
+        shop_tip = next(
+            (t for t in clean_tips if any(k in t for k in ("商店", "0金免费", "低体可买", "必买", "急救", "勿买"))),
+            "",
+        )
+        non_shop_tip = next((t for t in clean_tips if t != shop_tip), "")
+        if shop_tip and non_shop_tip:
+            # 商店提示不再被 70/100 熟事件或普通 Buff 覆盖：优先亮商店提醒，若同时有关键回体前瞻则精简双显
+            short_ev = ""
+            if "ID70" in non_shop_tip or "哨子达70" in non_shop_tip:
+                short_ev = "下训哨70(+40体)"
+            elif "ID71" in non_shop_tip or "哨子满100" in non_shop_tip:
+                short_ev = "下训哨100(+70体)"
+            elif "集训" in non_shop_tip:
+                short_ev = "下训集训+30体"
+            elif "合宿" in non_shop_tip:
+                short_ev = "下训合宿回体"
+            elif "许愿" in non_shop_tip:
+                short_ev = "下周许愿+40体"
+            chosen = f"{shop_tip[:22]} · {short_ev}" if short_ev else shop_tip[:38]
+        else:
+            chosen = (shop_tip or clean_tips[0])[:38]
+        color = "#E03A12" if any(k in chosen for k in ("必买", "免费", "急救", "低体可买", "哨", "集训", "海滩", "许愿")) else HUD_TEXT_INK
+        return f"{tag}｜<span foreground='{color}'>{html.escape(chosen)}</span>"
 
     if get_whistle_step_fn:
         _, w3_badge = get_whistle_step_fn(state)
@@ -950,8 +979,8 @@ def build_badges_for_mode(
                     })
                 else:
                     act_lbl_map = {
-                        6: "6号扭蛋",
-                        3: "3号街机",
+                        6: "扭蛋机",
+                        3: "街机",
                         8: "餐厅打工",
                         1: "公园出行",
                     }
@@ -977,7 +1006,7 @@ def build_badges_for_mode(
                 if (3, 6) in act_ev_map:
                     bldg_cands.append(("arcade_game", "街机小游戏", act_ev_map[(3, 6)]["total_ev"]))
                 if (6, 17) in act_ev_map:
-                    bldg_cands.append(("street_gashapon", "6号扭蛋机", act_ev_map[(6, 17)]["total_ev"]))
+                    bldg_cands.append(("street_gashapon", "扭蛋机", act_ev_map[(6, 17)]["total_ev"]))
                 p_opts = [(k, act_ev_map[k]) for k in ((1, 14), (1, 13)) if k in act_ev_map]
                 if p_opts:
                     pk, pv = max(p_opts, key=lambda x: x[1]["total_ev"])

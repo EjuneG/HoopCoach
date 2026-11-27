@@ -1,7 +1,9 @@
 {
   "app_name": "HoopCoach",
-  "version": "v0.11.0",
+  "version": "v0.11.1",
   "runtime_version": "rt1",
   "github_repo": "EjuneG/HoopCoach",
-  "custom_mirrors": []
+  "custom_mirrors": [],
+  "feedback_worker_url": "https://hoopcoach.ejuneg6.workers.dev",
+  "feedback_app_key": ""
 }

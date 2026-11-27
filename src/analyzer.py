@@ -134,7 +134,7 @@ def sanitize_run_id(log_tag: str) -> str:
 def build_single_run_archive(item: dict, seq_no: int, lc, strategy: dict) -> dict | None:
     """从单局拼接日志文本 seg 中提取汇总指标与完整逐回合时间线。"""
     seg = item["seg"]
-    res = [int(x) for x in re.findall(r"new_rank\s*=\s*(\d+)", seg) if 3000 <= int(x) <= 20000]
+    res = lc.extract_education_result_ranks(seg)
     if not res:
         return None
     final_rank = res[-1]
@@ -403,6 +403,9 @@ def build_single_run_archive(item: dict, seq_no: int, lc, strategy: dict) -> dic
     return {"summary": summary, "detail": detail}
 
 
+MANIFEST_SCHEMA_VERSION = 4
+
+
 def _load_manifest() -> dict:
     if os.path.exists(MANIFEST_PATH):
         try:
@@ -410,7 +413,7 @@ def _load_manifest() -> dict:
                 return json.load(f)
         except Exception:
             pass
-    return {"schema_version": 3, "log_meta": {}, "runs_order": [], "runs_meta": []}
+    return {"schema_version": MANIFEST_SCHEMA_VERSION, "log_meta": {}, "runs_order": [], "runs_meta": []}
 
 
 def extract_all_runs(strategy_name: str = "training_flow", force_rebuild: bool = False) -> list[dict]:
@@ -421,8 +424,15 @@ def extract_all_runs(strategy_name: str = "training_flow", force_rebuild: bool =
     """
     os.makedirs(ARCHIVE_DIR, exist_ok=True)
     manifest = _load_manifest()
-    if manifest.get("schema_version") != 3:
-        manifest = {"schema_version": 3, "log_meta": {}, "runs_order": [], "runs_meta": []}
+    if manifest.get("schema_version") != MANIFEST_SCHEMA_VERSION:
+        # 协议解析升级（如 v4 严格锚定 education.sc_education_result.new_rank）自动触发一次全量重算
+        manifest = {
+            "schema_version": MANIFEST_SCHEMA_VERSION,
+            "log_meta": {},
+            "runs_order": [],
+            "runs_meta": [],
+        }
+        force_rebuild = True
     elif force_rebuild:
         # 强制重建：仅清空日志指纹让现存日志全部重算；保留 runs_meta，
         # 使原始日志已被清理的历史老局（archive/*.json 仍在）照常并入战绩总表，不被 --rebuild 丢弃
@@ -477,9 +487,9 @@ def extract_all_runs(strategy_name: str = "training_flow", force_rebuild: bool =
                 prefix = txt[:m_start.start()] if m_start else txt
                 has_cont = any(
                     k in prefix
-                    for k in ("cs_restore_education", "education.cs_", "new_rank", "[EDU_MODEL]")
+                    for k in ("cs_restore_education", "education.cs_", "education.sc_education_result", "[EDU_MODEL]")
                 )
-                has_settled = bool(re.search(r"new_rank\s*=\s*(?:[3-9]\d{3}|1\d{4})\b", prefix))
+                has_settled = lc.has_education_result(prefix)
                 return (m_start is not None), (has_cont and not has_settled)
 
             need_back = False
@@ -550,19 +560,20 @@ def extract_all_runs(strategy_name: str = "training_flow", force_rebuild: bool =
             and (
                 "cs_restore_education" in prefix
                 or "education.cs_" in prefix
+                or "education.sc_education_result" in prefix
                 or "new_rank" in prefix
                 or "[EDU_MODEL]" in prefix
             )
         ):
             dirty_stitched[-1]["seg"] += "\n" + prefix
             dirty_stitched[-1]["end_log"] = bn
-            if re.search(r"new_rank\s*=\s*(?:[3-9]\d{3}|1\d{4})\b", dirty_stitched[-1]["seg"]):
+            if lc.has_education_result(dirty_stitched[-1]["seg"]):
                 dirty_stitched[-1]["has_settled"] = True
 
         for i, st in enumerate(starts):
             ed = starts[i + 1] if i + 1 < len(starts) else len(txt)
             seg = txt[st:ed]
-            has_settled = bool(re.search(r"new_rank\s*=\s*(?:[3-9]\d{3}|1\d{4})\b", seg))
+            has_settled = lc.has_education_result(seg)
             dirty_stitched.append({
                 "log": bn,
                 "end_log": bn,
