@@ -422,8 +422,13 @@ def extract_all_runs(strategy_name: str = "training_flow", force_rebuild: bool =
     - 对 (mtime, size) 未变化的历史日志，连 open().read() 都不调用，直接从 data/runs/archive/<run_id>.json 秒读
     - 仅当存在新日志或正在写入的最新日志时，只读取从最后一个未完结/变更日志起的尾部 1~2 个文件
     """
+    if not LOG_DIR or not os.path.isdir(LOG_DIR):
+        raise FileNotFoundError(
+            f"游戏日志目录无效或未绑定：{LOG_DIR!r}。请先在桌面控制台选择《篮球少女》游戏目录。"
+        )
     os.makedirs(ARCHIVE_DIR, exist_ok=True)
     manifest = _load_manifest()
+    prev_runs_order = list(manifest.get("runs_order") or [])
     if manifest.get("schema_version") != MANIFEST_SCHEMA_VERSION:
         # 协议解析升级（如 v4 严格锚定 education.sc_education_result.new_rank）自动触发一次全量重算
         manifest = {
@@ -624,10 +629,18 @@ def extract_all_runs(strategy_name: str = "training_flow", force_rebuild: bool =
         runs_order.append(run_id)
         runs_meta.append({"run_id": run_id, "log": item["log"], "end_log": item["end_log"]})
 
+    # 防护：schema 升级/全量重算若意外得到 0 局，但磁盘上原先已有归档，
+    # 禁止用空结果覆盖，避免并发扫描或 LOG_DIR 瞬时异常把战绩表清空。
+    if not all_summaries and prev_runs_order and force_rebuild:
+        raise RuntimeError(
+            f"全量重算未解析到任何完赛局（日志目录共 {len(logs)} 个文件），已保留原有 {len(prev_runs_order)} 局归档未覆盖。"
+        )
+
     sorted_by_rank = sorted(all_summaries, key=lambda r: r["final_rank"], reverse=True)
     with open(OUT_PATH, "w", encoding="utf-8") as f:
         json.dump(sorted_by_rank, f, indent=2, ensure_ascii=False)
 
+    manifest["schema_version"] = MANIFEST_SCHEMA_VERSION
     manifest["log_meta"] = cur_log_meta
     manifest["runs_order"] = runs_order
     manifest["runs_meta"] = runs_meta
