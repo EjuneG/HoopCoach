@@ -12,12 +12,15 @@ import json
 import os
 import re
 import sys
+import threading
 from collections import Counter
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from platform_compat import BASE_DIR, resolve_game_dirs
 
 _, LOG_DIR = resolve_game_dirs(interactive_on_missing=True)
+_INITIAL_LOG_DIR = LOG_DIR
+_EXTRACT_LOCK = threading.Lock()
 RUNS_DIR = os.path.join(BASE_DIR, "data", "runs")
 ARCHIVE_DIR = os.path.join(RUNS_DIR, "archive")
 MANIFEST_PATH = os.path.join(RUNS_DIR, "archive_manifest.json")
@@ -416,15 +419,48 @@ def _load_manifest() -> dict:
     return {"schema_version": MANIFEST_SCHEMA_VERSION, "log_meta": {}, "runs_order": [], "runs_meta": []}
 
 
-def extract_all_runs(strategy_name: str = "training_flow", force_rebuild: bool = False) -> list[dict]:
+def _resolve_active_log_dir(log_dir: str | None = None) -> str:
+    """动态解析有效日志目录：显式传参 > 外部改写/已存在的模块 LOG_DIR > 实时重新探测。"""
+    global LOG_DIR
+    if log_dir is not None:
+        return str(log_dir).strip()
+    if LOG_DIR != _INITIAL_LOG_DIR:
+        return str(LOG_DIR or "").strip()
+    if LOG_DIR and os.path.isdir(LOG_DIR):
+        return LOG_DIR
+    _, fresh_log_dir = resolve_game_dirs(interactive_on_missing=False)
+    if fresh_log_dir:
+        LOG_DIR = fresh_log_dir
+    return str(LOG_DIR or "").strip()
+
+
+def extract_all_runs(
+    strategy_name: str = "training_flow",
+    force_rebuild: bool = False,
+    log_dir: str | None = None,
+) -> list[dict]:
     """
     真·按文件增量同步全部已完赛对局：
     - 对 (mtime, size) 未变化的历史日志，连 open().read() 都不调用，直接从 data/runs/archive/<run_id>.json 秒读
     - 仅当存在新日志或正在写入的最新日志时，只读取从最后一个未完结/变更日志起的尾部 1~2 个文件
     """
-    if not LOG_DIR or not os.path.isdir(LOG_DIR):
+    with _EXTRACT_LOCK:
+        return _extract_all_runs_locked(
+            strategy_name=strategy_name,
+            force_rebuild=force_rebuild,
+            log_dir=log_dir,
+        )
+
+
+def _extract_all_runs_locked(
+    strategy_name: str = "training_flow",
+    force_rebuild: bool = False,
+    log_dir: str | None = None,
+) -> list[dict]:
+    active_log_dir = _resolve_active_log_dir(log_dir)
+    if not active_log_dir or not os.path.isdir(active_log_dir):
         raise FileNotFoundError(
-            f"游戏日志目录无效或未绑定：{LOG_DIR!r}。请先在桌面控制台选择《篮球少女》游戏目录。"
+            f"游戏日志目录无效或未绑定：{active_log_dir!r}。请先在桌面控制台选择《篮球少女》游戏目录。"
         )
     os.makedirs(ARCHIVE_DIR, exist_ok=True)
     manifest = _load_manifest()
@@ -444,7 +480,7 @@ def extract_all_runs(strategy_name: str = "training_flow", force_rebuild: bool =
         manifest["log_meta"] = {}
 
     logs = sorted(
-        glob.glob(os.path.join(LOG_DIR, "*.txt")),
+        glob.glob(os.path.join(active_log_dir, "*.txt")),
         key=lambda p: (os.path.getmtime(p), os.path.basename(p)),
     )
     cur_log_meta = {}
@@ -630,7 +666,7 @@ def extract_all_runs(strategy_name: str = "training_flow", force_rebuild: bool =
         runs_meta.append({"run_id": run_id, "log": item["log"], "end_log": item["end_log"]})
 
     # 防护：schema 升级/全量重算若意外得到 0 局，但磁盘上原先已有归档，
-    # 禁止用空结果覆盖，避免并发扫描或 LOG_DIR 瞬时异常把战绩表清空。
+    # 禁止用空结果覆盖，避免并发扫描或日志目录异常把战绩表清空。
     if not all_summaries and prev_runs_order and force_rebuild:
         raise RuntimeError(
             f"全量重算未解析到任何完赛局（日志目录共 {len(logs)} 个文件），已保留原有 {len(prev_runs_order)} 局归档未覆盖。"

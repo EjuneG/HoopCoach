@@ -245,6 +245,7 @@ class DashboardEngine:
         self._runs_mtime: float = -1.0
         self._archive_index: dict[str, str] = {}
         self._archive_dir_mtime: float = -1.0
+        self._pool_sync_lock = threading.Lock()
 
     def _char_pos_code(self, cid: Optional[int]) -> str:
         if not cid or cid not in self.chars:
@@ -356,13 +357,49 @@ class DashboardEngine:
             self._archive_dir_mtime = -1.0
             self.equip_db, _, _ = equipment_advisor.load_equip_data(force_reload=True)
 
+    def sync_local_pools(
+        self,
+        docs_dir: Optional[str] = None,
+        log_dir: Optional[str] = None,
+        force_rescan: bool = False,
+    ) -> dict[str, Any]:
+        """从本地游戏存档 (ob_*) 与近期日志增量同步已有角色、笔记池与器材池。"""
+        with self._pool_sync_lock:
+            res: dict[str, Any] = {"ok": False, "owned_actors": 0, "own_notes": 0, "owned_equips": 0}
+            try:
+                note_pool = note_advisor.sync_note_and_actor_pool(
+                    self.chars,
+                    self.entries_catalog,
+                    force_rescan=force_rescan,
+                    docs_dir=docs_dir,
+                    log_dir=log_dir,
+                )
+                res["owned_actors"] = len(note_pool.get("owned_actors") or [])
+                res["own_notes"] = len(note_pool.get("own_notes") or {})
+                res["ok"] = True
+            except Exception as e:
+                res["note_error"] = str(e)
+
+            try:
+                equip_pool = equipment_advisor.sync_equip_pool(
+                    docs_dir=docs_dir,
+                    log_dir=log_dir,
+                    force_rescan=force_rescan,
+                )
+                res["owned_equips"] = len(equip_pool.get("owned_cards") or {})
+            except Exception as e:
+                res["equip_error"] = str(e)
+
+            self.invalidate_caches()
+            return res
+
     def get_overview(self) -> dict:
         runs = self._get_runs_enriched()
         note_pool = _safe_read_json(NOTE_POOL_FILE, {})
         daily_queue = _safe_read_json(DAILY_QUEUE_FILE, {})
         account_meta = _parse_account_diamonds()
 
-        # 1. 五位置破万底座（从全部真实归档实时汇总）
+        # 1. 五位置最高评分底座（从全部真实归档实时汇总）
         pos_best: dict[str, dict] = {
             p: {
                 "pos": p,
@@ -411,6 +448,18 @@ class DashboardEngine:
         over_10k = sum(1 for x in ranks if x >= 10000)
         recent10 = ranks[-10:] if ranks else []
         prev10 = ranks[-20:-10] if len(ranks) > 10 else []
+
+        best_run = max((r for r in runs if r["final_rank"] > 0), key=lambda r: r["final_rank"], default=None)
+        covered_positions = [p for p in pos_best.values() if p["best_rank"] > 0]
+        pos_avg_best_rank = (
+            round(sum(p["best_rank"] for p in covered_positions) / len(covered_positions))
+            if covered_positions else 0
+        )
+        pos_avg_auto_est = (
+            round(sum(p["auto_est"] for p in covered_positions) / len(covered_positions))
+            if covered_positions else 0
+        )
+        weakest_pos = min(covered_positions, key=lambda p: p["best_rank"], default=None)
 
         own_notes_dict = note_pool.get("own_notes") or {}
         rainbow_own_notes = [n for n in own_notes_dict.values() if int(n.get("rank") or 0) >= 7]
@@ -473,12 +522,20 @@ class DashboardEngine:
             "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
             "kpi": {
                 "total_runs": total_runs,
-                "best_rank": max(ranks) if ranks else 0,
+                "best_rank": best_run["final_rank"] if best_run else 0,
+                "best_char": best_run["main_name"] if best_run else "",
+                "best_pos": best_run["main_pos"] if best_run else "",
+                "best_run_id": best_run["run_id"] if best_run else "",
                 "avg_rank_all": round(sum(ranks) / len(ranks), 1) if ranks else 0.0,
                 "avg_rank_recent10": round(sum(recent10) / len(recent10), 1) if recent10 else 0.0,
                 "avg_rank_prev10": round(sum(prev10) / len(prev10), 1) if prev10 else 0.0,
                 "over_10k_count": over_10k,
                 "pos_10k_count": sum(1 for p in pos_best.values() if p["is_10k"]),
+                "pos_covered_count": len(covered_positions),
+                "pos_avg_best_rank": pos_avg_best_rank,
+                "pos_avg_auto_est": pos_avg_auto_est,
+                "pos_min_pos": weakest_pos["pos"] if weakest_pos else "",
+                "pos_min_rank": weakest_pos["best_rank"] if weakest_pos else 0,
                 "own_notes_total": len(own_notes_dict),
                 "rainbow_notes_count": len(rainbow_own_notes),
                 "rainbow_chars_count": len(rainbow_chars),
@@ -1330,8 +1387,8 @@ def make_handler(engine: DashboardEngine, live_monitor: LiveMonitor):
         def do_POST(self) -> None:
             parsed = urllib.parse.urlparse(self.path)
             if parsed.path == "/api/refresh":
-                engine.invalidate_caches()
-                self._send_json({"ok": True, "refreshed_at": time.strftime("%H:%M:%S")})
+                sync_info = engine.sync_local_pools(log_dir=getattr(live_monitor, "log_dir", None))
+                self._send_json({"ok": True, "refreshed_at": time.strftime("%H:%M:%S"), "sync": sync_info})
                 return
             self.send_error(HTTPStatus.NOT_FOUND)
 
@@ -1499,9 +1556,15 @@ def start_background_server(
     host: str = "127.0.0.1",
     port: int = 8765,
     log_dir: Optional[str] = None,
+    docs_dir: Optional[str] = None,
 ) -> tuple[ThreadingHTTPServer, str, DashboardEngine, LiveMonitor]:
     """供桌面控制台内嵌拉起本地作战室服务，自动尝试空闲端口。"""
     engine = DashboardEngine()
+    if (docs_dir and os.path.isdir(docs_dir)) or (log_dir and os.path.isdir(log_dir)):
+        try:
+            engine.sync_local_pools(docs_dir=docs_dir, log_dir=log_dir)
+        except Exception:
+            pass
     try:
         export_static_snapshot(engine)
     except Exception:
@@ -1520,7 +1583,7 @@ def start_background_server(
                     m = _az._load_manifest()
                     if int(m.get("schema_version") or 0) < int(getattr(_az, "MANIFEST_SCHEMA_VERSION", 4)):
                         _az.LOG_DIR = log_dir
-                        _az.extract_all_runs(force_rebuild=False)
+                        _az.extract_all_runs(force_rebuild=False, log_dir=log_dir)
                         engine.invalidate_caches()
                         try:
                             export_static_snapshot(engine)
@@ -1556,6 +1619,12 @@ def main() -> None:
     args = parser.parse_args()
 
     engine = DashboardEngine()
+    try:
+        d_dir, l_dir = platform_compat.resolve_game_dirs(interactive_on_missing=False)
+        if (d_dir and os.path.isdir(d_dir)) or (l_dir and os.path.isdir(l_dir)):
+            engine.sync_local_pools(docs_dir=d_dir, log_dir=l_dir)
+    except Exception:
+        pass
     snap_path = export_static_snapshot(engine)
 
     if args.export_static:

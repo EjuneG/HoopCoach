@@ -41,10 +41,12 @@ from platform_compat import BASE_DIR, resolve_game_dirs
 _CACHE_LOCK = threading.Lock()
 
 DOCS_DIR, LOG_DIR = resolve_game_dirs(interactive_on_missing=False)
+_INITIAL_DOCS_DIR, _INITIAL_LOG_DIR = DOCS_DIR, LOG_DIR
 CHAR_DB_FILE = os.path.join(BASE_DIR, "data", "hoopgirls", "characters.json")
 INHERIT_RULES_FILE = os.path.join(BASE_DIR, "data", "hoopgirls", "inheritance_rules.json")
 NOTE_POOL_CACHE_FILE = os.path.join(BASE_DIR, "data", "note_pool.json")
 NOTE_VISUAL_CACHE_FILE = os.path.join(BASE_DIR, "data", "note_visual_cache.json")
+NOTE_OVERRIDES_FILE = os.path.join(BASE_DIR, "config", "note_overrides.json")
 GEMINI_API_BIN = os.path.expanduser("~/.local/bin/gemini-api")
 
 STAT_NAMES = {
@@ -80,49 +82,74 @@ QUALITY_NAMES = {
 
 HARMONY_BONUS_BY_STAR = {0: 0, 1: 2, 2: 5, 3: 10}
 
-# 已在 11-04~11-05 笔记合成/分解中淘汰的旧日志自备笔记 ID，以及已更换的旧好友助战笔记 ID
-ARCHIVED_OWN_NOTE_IDS = {
-    "474989023295193",  # 10-27 澪奈 4阶 209分
-    "393075407721204",  # 10-27 闪堂 3阶 142分
-    "617925536388348",  # 11-01 闪堂 6阶 322分
-    "655308932773230",  # 11-01 毒岛 4阶 206分
-    "576144096727089",  # 11-01 闪堂 6阶 355分
-    "584940190218732",  # 11-01 真崎 6阶 351分
-    "655308932801510",  # 11-02 望月 6阶 427分 (已迭代为 473分 2★)
-    "608579692064024",  # 11-03 闪堂 5阶 362分 (已合成淘汰，现用 365分 6阶红)
-}
+# 可选本地私人笔记覆盖配置（存放在 config/note_overrides.json，公开分发包不含私人数据）
+ARCHIVED_OWN_NOTE_IDS: set[str] = set()
+ARCHIVED_BORROW_NOTE_IDS: set[str] = set()
+MANUAL_BORROW_OVERRIDES: dict[str, dict] = {}
 
-ARCHIVED_BORROW_NOTE_IDS = {
-    "404620280668031",  # 10-29 勤俊 闪堂 358分
-    "623972849034529",  # 11-01 落翼之秋 望月 505分
-    "548106549421347",  # 11-01 菲菲回来了 远野 364分 (已换名雪 506分)
-    "628370897558430",  # 11-01 Sinlem 闪堂 516分 (已换卧云 479分)
-    "655858690790763",  # 11-02 紫金星空 佐久间 427分
-    "598684083073614",  # 11-02 期期 林原 419分
-    "641565037563228",  # 11-03 Motto 野上 468分
-    "559101663176432",  # 11-03 黎明的裤角 千圣 415分
-    "547007035775032",  # 11-03 Epi 和泉 398分
-}
 
-MANUAL_BORROW_OVERRIDES = {
-    "900000000001033": {
-        "note_id": 900000000001033,
-        "actor_id": 1033,
-        "actor_name": "卧云",
-        "rank": 6,
-        "score": 479,
-        "entry_num": 13,
-        "friend": "Sinlem",
-        "last_seen": "manual_confirmed",
-        "harmony_star": 0,
-        "harmony_bonus": 0,
-        "stat_bonuses": {},
-        "cap_bonuses": {},
-        "stat_stars": {},
-        "cap_stars": {},
-        "special_entries": [],
-    }
-}
+def _load_note_overrides() -> tuple[set[str], dict[str, dict]]:
+    """读取可选本地 config/note_overrides.json，不存在时返回空集合/空字典。"""
+    archived: set[str] = set(ARCHIVED_OWN_NOTE_IDS) | set(ARCHIVED_BORROW_NOTE_IDS)
+    manual_borrows: dict[str, dict] = {str(k): dict(v) for k, v in MANUAL_BORROW_OVERRIDES.items() if isinstance(v, dict)}
+    if not NOTE_OVERRIDES_FILE or not os.path.isfile(NOTE_OVERRIDES_FILE):
+        return archived, manual_borrows
+    try:
+        with open(NOTE_OVERRIDES_FILE, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+        if isinstance(raw, dict):
+            for key in ("archived_own_note_ids", "archived_borrow_note_ids"):
+                for item in raw.get(key) or []:
+                    if str(item).strip():
+                        archived.add(str(item).strip())
+            for k, v in (raw.get("manual_borrow_overrides") or {}).items():
+                if isinstance(v, dict):
+                    manual_borrows[str(k)] = dict(v)
+    except Exception:
+        pass
+    return archived, manual_borrows
+
+
+def _resolve_active_game_dirs(
+    docs_dir: Optional[str] = None,
+    log_dir: Optional[str] = None,
+) -> tuple[str, str]:
+    """
+    动态解析当前有效的 (docs_dir, log_dir)：
+    1. 优先使用显式传入参数（只要非 None 即严格尊重，传空串表示当前未绑定目录；仅传 log_dir 时自动推导父目录为 docs_dir）；
+    2. 若模块级 DOCS_DIR/LOG_DIR 被外部脚本或测试显式改写，尊重改写值；
+    3. 否则实时调用 resolve_game_dirs(interactive_on_missing=False)，兼容 Windows 首次未绑目录、后手动选目录的场景。
+    """
+    global DOCS_DIR, LOG_DIR
+    if docs_dir is not None or log_dir is not None:
+        d_dir = str(docs_dir or "").strip()
+        l_dir = str(log_dir or "").strip()
+        if l_dir and not d_dir:
+            norm_l = os.path.normpath(l_dir)
+            if os.path.basename(norm_l).lower() == "logs":
+                d_dir = os.path.dirname(norm_l)
+            else:
+                d_dir = norm_l
+        elif d_dir and not l_dir:
+            cand_l = os.path.join(d_dir, "Logs")
+            if os.path.isdir(cand_l):
+                l_dir = cand_l
+        return d_dir, l_dir
+
+    if DOCS_DIR != _INITIAL_DOCS_DIR or LOG_DIR != _INITIAL_LOG_DIR:
+        return DOCS_DIR, LOG_DIR
+
+    fresh_docs, fresh_logs = resolve_game_dirs(interactive_on_missing=False)
+    DOCS_DIR, LOG_DIR = fresh_docs, fresh_logs
+    return fresh_docs, fresh_logs
+
+
+def _atomic_write_json(path: str, payload: dict) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp_path = f"{path}.tmp.{os.getpid()}.{threading.get_ident()}"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, path)
 
 
 def load_static_db():
@@ -246,192 +273,232 @@ def format_note_highlights(note: dict, target_rec_stats: Optional[list] = None) 
     return " · ".join(parts) if parts else f"共{note.get('entry_num', 0)}条因子"
 
 
-def sync_note_and_actor_pool(chars: dict, entries_catalog: dict, force_rescan: bool = False) -> dict:
+def sync_note_and_actor_pool(
+    chars: dict,
+    entries_catalog: dict,
+    force_rescan: bool = False,
+    docs_dir: Optional[str] = None,
+    log_dir: Optional[str] = None,
+    max_new_logs: int = 30,
+) -> dict:
     """
     从本地存档目录 (ob_*) 与历史日志 (Logs/*.txt) 同步：
     - owned_actors: 玩家已解锁的球员 ID 列表
     - own_notes: 玩家自备笔记字典 {note_id_str: note_obj}
     - borrowed_notes: 好友/社团助战借用过的笔记字典 {note_id_str: note_obj}
     - min_kept_rank: 自动回收设置保留的最低品阶（默认 5 阶金）
-    按日志 (mtime, size) 增量缓存，避免重复全盘读取历史大日志，并与 data/note_pool.json 持久化。
+    按日志 (mtime, size) 增量缓存，避免重复全盘读取历史大日志，并与 data/note_pool.json 原子持久化。
     """
-    cached = {"owned_actors": [], "own_notes": {}, "borrowed_notes": {}, "min_kept_rank": 5, "archived_ids": [], "scanned_logs": {}}
-    if os.path.exists(NOTE_POOL_CACHE_FILE):
-        try:
-            with open(NOTE_POOL_CACHE_FILE, "r", encoding="utf-8") as f:
-                loaded = json.load(f)
-            if isinstance(loaded, dict):
-                cached = loaded
-        except Exception:
-            pass
+    with _CACHE_LOCK:
+        active_docs_dir, active_log_dir = _resolve_active_game_dirs(docs_dir=docs_dir, log_dir=log_dir)
+        has_valid_docs = bool(active_docs_dir and os.path.isdir(active_docs_dir))
+        has_valid_logs = bool(active_log_dir and os.path.isdir(active_log_dir))
 
-    archived_ids = set(str(x) for x in cached.get("archived_ids", [])) | ARCHIVED_OWN_NOTE_IDS | ARCHIVED_BORROW_NOTE_IDS
-    scanned_logs = {} if force_rescan else dict(cached.get("scanned_logs") or {})
-    owned_set = set() if force_rescan else set(int(x) for x in cached.get("owned_actors", []) if int(x) in chars)
-    # 仅从缓存加载非视觉临时键 (非 v_ 开头) 的日志真值笔记，避免旧的误识视觉键残留污染
-    own_notes = {} if force_rescan else {
-        str(k): v
-        for k, v in cached.get("own_notes", {}).items()
-        if str(k) not in archived_ids and not str(k).startswith("v_")
-    }
-    borrowed_notes = {} if force_rescan else {
-        str(k): v
-        for k, v in cached.get("borrowed_notes", {}).items()
-        if str(k) not in archived_ids and not str(k).startswith("v_")
-    }
-    for k, v in MANUAL_BORROW_OVERRIDES.items():
-        if k not in archived_ids and k not in borrowed_notes:
-            borrowed_notes[k] = dict(v)
-    min_kept_rank = int(cached.get("min_kept_rank", 5))
-
-    # 1. 扫描 Documents/ob_*/ 下的 new_initactor.json 与 edu_recycle_note_quality_pref.json
-    for ob_dir in sorted(glob.glob(os.path.join(DOCS_DIR, "ob_*"))):
-        if not os.path.isdir(ob_dir):
-            continue
-        init_file = os.path.join(ob_dir, "new_initactor.json")
-        if os.path.exists(init_file):
+        cached = {
+            "owned_actors": [],
+            "own_notes": {},
+            "borrowed_notes": {},
+            "min_kept_rank": 5,
+            "archived_ids": [],
+            "scanned_logs": {},
+        }
+        has_existing_cache = os.path.exists(NOTE_POOL_CACHE_FILE)
+        if has_existing_cache:
             try:
-                with open(init_file, "r", encoding="utf-8") as f:
-                    d = json.load(f)
-                for k in d.keys():
-                    cid = int(k)
+                with open(NOTE_POOL_CACHE_FILE, "r", encoding="utf-8") as f:
+                    loaded = json.load(f)
+                if isinstance(loaded, dict):
+                    cached = loaded
+            except Exception:
+                pass
+
+        if not has_valid_docs and not has_valid_logs and not has_existing_cache:
+            return cached
+
+        override_archived, manual_borrows = _load_note_overrides()
+        archived_ids = set(str(x) for x in cached.get("archived_ids", [])) | override_archived
+        scanned_logs = {} if force_rescan else dict(cached.get("scanned_logs") or {})
+        owned_set = set() if force_rescan else set(int(x) for x in cached.get("owned_actors", []) if int(x) in chars)
+        # 仅从缓存加载非视觉临时键 (非 v_ 开头) 的日志真值笔记，避免旧的误识视觉键残留污染
+        own_notes = {} if force_rescan else {
+            str(k): v
+            for k, v in cached.get("own_notes", {}).items()
+            if str(k) not in archived_ids and not str(k).startswith("v_")
+        }
+        borrowed_notes = {} if force_rescan else {
+            str(k): v
+            for k, v in cached.get("borrowed_notes", {}).items()
+            if str(k) not in archived_ids and not str(k).startswith("v_")
+        }
+        for k, v in manual_borrows.items():
+            if k not in archived_ids and k not in borrowed_notes:
+                borrowed_notes[k] = dict(v)
+        min_kept_rank = int(cached.get("min_kept_rank", 5))
+
+        # 1. 扫描 Documents/ob_*/ 下的 new_initactor.json 与 edu_recycle_note_quality_pref.json
+        if has_valid_docs:
+            for ob_dir in sorted(glob.glob(os.path.join(active_docs_dir, "ob_*"))):
+                if not os.path.isdir(ob_dir):
+                    continue
+                init_file = os.path.join(ob_dir, "new_initactor.json")
+                if os.path.exists(init_file):
+                    try:
+                        with open(init_file, "r", encoding="utf-8") as f:
+                            d = json.load(f)
+                        if isinstance(d, dict):
+                            for k in d.keys():
+                                if str(k).isdigit():
+                                    cid = int(k)
+                                    if cid in chars:
+                                        owned_set.add(cid)
+                        elif isinstance(d, list):
+                            for k in d:
+                                if str(k).isdigit():
+                                    cid = int(k)
+                                    if cid in chars:
+                                        owned_set.add(cid)
+                    except Exception:
+                        pass
+
+                recycle_file = os.path.join(ob_dir, "edu_recycle_note_quality_pref.json")
+                if os.path.exists(recycle_file):
+                    try:
+                        with open(recycle_file, "r", encoding="utf-8") as f:
+                            pref = json.load(f)
+                        # pref 为长度 7 的布尔数组，true 表示自动分解，首个 false 对应保留的最低品阶
+                        if isinstance(pref, list):
+                            for idx, is_recycled in enumerate(pref):
+                                if not is_recycled:
+                                    min_kept_rank = idx + 1
+                                    break
+                    except Exception:
+                        pass
+
+        # 2. 扫描 Logs/*.txt 提取完整笔记结构与玩家选人记录
+        note_block_re = re.compile(
+            r"note_data\s*=\s*\{\s*entry\s*=\s*\{(.*?)\},\s*entry_num\s*=\s*(\d+),\s*initactor_id\s*=\s*(\d+),\s*is_locked\s*=\s*(true|false),\s*mark_type\s*=\s*(\d+),\s*note_id\s*=\s*(\d+),\s*note_rank\s*=\s*(\d+),\s*note_score\s*=\s*(\d+)",
+            re.S,
+        )
+
+        if has_valid_logs:
+            all_logs = sorted(glob.glob(os.path.join(active_log_dir, "*.txt")), key=os.path.getmtime)
+            pending_logs: list[tuple[str, str, dict]] = []
+            for lp in all_logs:
+                log_name = os.path.basename(lp)
+                try:
+                    st = os.stat(lp)
+                    log_sig = {"mtime": round(st.st_mtime, 6), "size": int(st.st_size)}
+                except OSError:
+                    continue
+                if not force_rescan and scanned_logs.get(log_name) == log_sig:
+                    continue
+                pending_logs.append((lp, log_name, log_sig))
+
+            if max_new_logs > 0 and len(pending_logs) > max_new_logs:
+                pending_logs = pending_logs[-max_new_logs:]
+
+            for lp, log_name, log_sig in pending_logs:
+                try:
+                    with open(lp, "r", encoding="utf-8", errors="ignore") as f:
+                        t = f.read()
+                except Exception:
+                    continue
+                scanned_logs[log_name] = log_sig
+
+                # 玩家在开局选人界面点选过的角色必为已拥有角色
+                for m in re.finditer(r"education\.cs_edu_initactor_record\s*\{initactor_cfg_id\s*=\s*(\d+)\}", t):
+                    cid = int(m.group(1))
                     if cid in chars:
                         owned_set.add(cid)
-            except Exception:
-                pass
 
-        recycle_file = os.path.join(ob_dir, "edu_recycle_note_quality_pref.json")
-        if os.path.exists(recycle_file):
-            try:
-                with open(recycle_file, "r", encoding="utf-8") as f:
-                    pref = json.load(f)
-                # pref 为长度 7 的布尔数组，true 表示自动分解，首个 false 对应保留的最低品阶
-                for idx, is_recycled in enumerate(pref):
-                    if not is_recycled:
-                        min_kept_rank = idx + 1
-                        break
-            except Exception:
-                pass
+                # 先提取 borrow_note_info 块中的助战借用笔记（严格限制在 edu_note_list 之前，防空借用跨界吞自备笔记）
+                for pos in [m.start() for m in re.finditer(r"borrow_note_info\s*=\s*\{", t)]:
+                    end_cands = [
+                        p for p in (t.find("burn_state =", pos), t.find("edu_note_list =", pos)) if p != -1 and p > pos
+                    ]
+                    end_pos = min(end_cands) if end_cands else -1
+                    if end_pos != -1 and end_pos - pos < 15000:
+                        btxt = t[pos:end_pos]
+                        nm = note_block_re.search(btxt)
+                        if nm:
+                            entries_raw, enum, aid, is_locked, mark_type, nid, nrank, nscore = nm.groups()
+                            nid_int = int(nid)
+                            if nid_int > 0:
+                                name_m = re.search(r'name\s*=\s*"([^"]+)"', btxt)
+                                friend_name = name_m.group(1) if name_m else "好友助战"
+                                parsed = _parse_entries(entries_raw, entries_catalog)
+                                aid_int = int(aid)
+                                borrowed_notes[str(nid_int)] = {
+                                    "note_id": nid_int,
+                                    "actor_id": aid_int,
+                                    "actor_name": chars.get(aid_int, {}).get("short_name", str(aid_int)),
+                                    "rank": int(nrank),
+                                    "score": int(nscore),
+                                    "entry_num": int(enum),
+                                    "friend": friend_name,
+                                    "last_seen": log_name,
+                                    **parsed,
+                                }
 
-    # 2. 扫描 Logs/*.txt 提取完整笔记结构与玩家选人记录
-    note_block_re = re.compile(
-        r"note_data\s*=\s*\{\s*entry\s*=\s*\{(.*?)\},\s*entry_num\s*=\s*(\d+),\s*initactor_id\s*=\s*(\d+),\s*is_locked\s*=\s*(true|false),\s*mark_type\s*=\s*(\d+),\s*note_id\s*=\s*(\d+),\s*note_rank\s*=\s*(\d+),\s*note_score\s*=\s*(\d+)",
-        re.S,
-    )
-
-    logs = sorted(glob.glob(os.path.join(LOG_DIR, "*.txt")), key=os.path.getmtime)
-    for lp in logs:
-        log_name = os.path.basename(lp)
-        try:
-            st = os.stat(lp)
-            log_sig = {"mtime": round(st.st_mtime, 6), "size": int(st.st_size)}
-        except OSError:
-            continue
-        if not force_rescan and scanned_logs.get(log_name) == log_sig:
-            continue
-        try:
-            with open(lp, "r", encoding="utf-8", errors="ignore") as f:
-                t = f.read()
-        except Exception:
-            continue
-        scanned_logs[log_name] = log_sig
-
-        # 玩家在开局选人界面点选过的角色必为已拥有角色
-        for m in re.finditer(r"education\.cs_edu_initactor_record\s*\{initactor_cfg_id\s*=\s*(\d+)\}", t):
-            cid = int(m.group(1))
-            if cid in chars:
-                owned_set.add(cid)
-
-        # 先提取 borrow_note_info 块中的助战借用笔记（严格限制在 edu_note_list 之前，防空借用跨界吞自备笔记）
-        for pos in [m.start() for m in re.finditer(r"borrow_note_info\s*=\s*\{", t)]:
-            end_cands = [
-                p for p in (t.find("burn_state =", pos), t.find("edu_note_list =", pos)) if p != -1 and p > pos
-            ]
-            end_pos = min(end_cands) if end_cands else -1
-            if end_pos != -1 and end_pos - pos < 15000:
-                btxt = t[pos:end_pos]
-                nm = note_block_re.search(btxt)
-                if nm:
-                    entries_raw, enum, aid, is_locked, mark_type, nid, nrank, nscore = nm.groups()
+                # 再提取所有 note_data 块，排除借用笔记后即为玩家自备笔记
+                for m in note_block_re.finditer(t):
+                    entries_raw, enum, aid, is_locked, mark_type, nid, nrank, nscore = m.groups()
                     nid_int = int(nid)
-                    if nid_int > 0:
-                        name_m = re.search(r'name\s*=\s*"([^"]+)"', btxt)
-                        friend_name = name_m.group(1) if name_m else "好友助战"
-                        parsed = _parse_entries(entries_raw, entries_catalog)
-                        aid_int = int(aid)
-                        borrowed_notes[str(nid_int)] = {
-                            "note_id": nid_int,
-                            "actor_id": aid_int,
-                            "actor_name": chars.get(aid_int, {}).get("short_name", str(aid_int)),
-                            "rank": int(nrank),
-                            "score": int(nscore),
-                            "entry_num": int(enum),
-                            "friend": friend_name,
-                            "last_seen": log_name,
-                            **parsed,
-                        }
+                    if nid_int <= 0 or str(nid_int) in borrowed_notes:
+                        continue
+                    parsed = _parse_entries(entries_raw, entries_catalog)
+                    aid_int = int(aid)
+                    if aid_int in chars:
+                        owned_set.add(aid_int)
+                    own_notes[str(nid_int)] = {
+                        "note_id": nid_int,
+                        "actor_id": aid_int,
+                        "actor_name": chars.get(aid_int, {}).get("short_name", str(aid_int)),
+                        "rank": int(nrank),
+                        "score": int(nscore),
+                        "entry_num": int(enum),
+                        "is_locked": is_locked == "true",
+                        "last_seen": log_name,
+                        **parsed,
+                    }
 
-        # 再提取所有 note_data 块，排除借用笔记后即为玩家自备笔记
-        for m in note_block_re.finditer(t):
-            entries_raw, enum, aid, is_locked, mark_type, nid, nrank, nscore = m.groups()
-            nid_int = int(nid)
-            if nid_int <= 0 or str(nid_int) in borrowed_notes:
+        # 确保借用笔记不混入自备笔记，且剔除已归档/已合成的旧笔记及被同一好友新助战覆盖的旧助战
+        for nid_str in list(own_notes.keys()):
+            if nid_str in borrowed_notes or nid_str in archived_ids:
+                del own_notes[nid_str]
+        for nid_str in list(borrowed_notes.keys()):
+            if nid_str in archived_ids:
+                del borrowed_notes[nid_str]
+
+        # 同一好友若有更新的助战笔记，自动淘汰该好友的旧助战记录
+        by_friend = {}
+        for nid_str, nb in borrowed_notes.items():
+            fr = nb.get("friend", "")
+            if not fr or fr == "好友助战":
                 continue
-            parsed = _parse_entries(entries_raw, entries_catalog)
-            aid_int = int(aid)
-            if aid_int in chars:
-                owned_set.add(aid_int)
-            own_notes[str(nid_int)] = {
-                "note_id": nid_int,
-                "actor_id": aid_int,
-                "actor_name": chars.get(aid_int, {}).get("short_name", str(aid_int)),
-                "rank": int(nrank),
-                "score": int(nscore),
-                "entry_num": int(enum),
-                "is_locked": is_locked == "true",
-                "last_seen": log_name,
-                **parsed,
-            }
+            by_friend.setdefault(fr, []).append((nb.get("last_seen", ""), nid_str))
+        for fr, items in by_friend.items():
+            if len(items) > 1:
+                items.sort()
+                for _, old_nid in items[:-1]:
+                    borrowed_notes.pop(old_nid, None)
 
-    # 确保借用笔记不混入自备笔记，且剔除已归档/已合成的旧笔记及被同一好友新助战覆盖的旧助战
-    for nid_str in list(own_notes.keys()):
-        if nid_str in borrowed_notes or nid_str in archived_ids:
-            del own_notes[nid_str]
-    for nid_str in list(borrowed_notes.keys()):
-        if nid_str in archived_ids:
-            del borrowed_notes[nid_str]
+        # 叠加通过游戏画面视觉扫描 (data/note_visual_cache.json) 捕获的最新自备与好友借用笔记
+        _apply_visual_cache_to_pool(own_notes, borrowed_notes, chars)
 
-    # 同一好友若有更新的助战笔记，自动淘汰该好友的旧助战记录
-    by_friend = {}
-    for nid_str, nb in borrowed_notes.items():
-        fr = nb.get("friend", "")
-        if not fr or fr == "好友助战":
-            continue
-        by_friend.setdefault(fr, []).append((nb.get("last_seen", ""), nid_str))
-    for fr, items in by_friend.items():
-        if len(items) > 1:
-            items.sort()
-            for _, old_nid in items[:-1]:
-                borrowed_notes.pop(old_nid, None)
-
-    # 叠加通过游戏画面视觉扫描 (data/note_visual_cache.json) 捕获的最新自备与好友借用笔记
-    _apply_visual_cache_to_pool(own_notes, borrowed_notes, chars)
-
-    result = {
-        "owned_actors": sorted(owned_set),
-        "own_notes": own_notes,
-        "borrowed_notes": borrowed_notes,
-        "min_kept_rank": min_kept_rank,
-        "archived_ids": sorted(archived_ids),
-        "scanned_logs": scanned_logs,
-    }
-    try:
-        os.makedirs(os.path.dirname(NOTE_POOL_CACHE_FILE), exist_ok=True)
-        with open(NOTE_POOL_CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump(result, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
-    return result
+        result = {
+            "owned_actors": sorted(owned_set),
+            "own_notes": own_notes,
+            "borrowed_notes": borrowed_notes,
+            "min_kept_rank": min_kept_rank,
+            "archived_ids": sorted(archived_ids),
+            "scanned_logs": scanned_logs,
+        }
+        try:
+            _atomic_write_json(NOTE_POOL_CACHE_FILE, result)
+        except Exception:
+            pass
+        return result
 
 
 def _load_visual_cache() -> dict:

@@ -86,10 +86,10 @@
       <section class="panel">
         <div class="panel-head">
           <div>
-            <h2 class="panel-title">5 位置破万底座</h2>
+            <h2 class="panel-title">5 位置最高评分底座</h2>
             <p class="panel-sub">决定满级 10 级托管的同位置预估上限（×0.97），点击卡片直达对应纪录局复盘</p>
           </div>
-          <span class="pill" id="pos-10k-summary">—</span>
+          <span class="pill" id="pos-base-summary">—</span>
         </div>
         <div class="pos-grid" id="overview-positions"></div>
       </section>
@@ -140,9 +140,9 @@
               <select id="run-char-filter" class="ctrl-select grow">
                 <option value="">全部角色</option>
               </select>
-              <label class="chk-pill">
-                <input type="checkbox" id="run-only-10k" />
-                <span>破万</span>
+              <label class="chk-pill" title="按最终评分从高到低排序">
+                <input type="checkbox" id="run-sort-rank" />
+                <span>高分优先</span>
               </label>
             </div>
             <div class="compare-bar" id="compare-bar">
@@ -233,35 +233,78 @@
 
     <!-- ==================== 视图 4：笔记相性查询与沙盒 ==================== -->
     <section id="view-compat" class="view-panel">
-      <section class="panel">
-        <div class="panel-head">
-          <div>
-            <h2 class="panel-title">笔记相性试算沙盒（A + B ➔ 主力 C）</h2>
-            <p class="panel-sub">点任意槽位支持中文 / 拼音首字母 / 位置 / 学校极速秒搜，也可直接带入你本地的自备与好友真实笔记</p>
-          </div>
-          <div class="head-controls">
-            <button id="btn-compat-autofill" class="action-btn action-btn-primary" type="button">★ 填手头最优</button>
-            <button id="btn-compat-swap" class="action-btn" type="button" title="互换笔记槽位 A 与 B">⇄ 互换</button>
-            <button id="btn-compat-clear" class="action-btn" type="button">清空 A/B</button>
-          </div>
+      <div class="panel compat-mode-bar">
+        <div class="compat-mode-tabs" id="compat-mode-seg" role="tablist" aria-label="相性查询工作台模式">
+          <button type="button" class="compat-mode-btn active" data-cmode="forward" role="tab" aria-selected="true">
+            <span class="compat-mode-title">◆ 配对试算（正查）</span>
+            <span class="compat-mode-desc">选主力 C · 试算双笔记 A+B 与搭档墙</span>
+          </button>
+          <button type="button" class="compat-mode-btn" data-cmode="reverse" role="tab" aria-selected="false">
+            <span class="compat-mode-title">▸ 单卡反查</span>
+            <span class="compat-mode-desc">选单本笔记 / 角色 · 反查激活谁</span>
+          </button>
+          <button type="button" class="compat-mode-btn" data-cmode="breeding" role="tab" aria-selected="false">
+            <span class="compat-mode-title">★ 黄金三角 &amp; 枢纽</span>
+            <span class="compat-mode-desc">全局互刷彩闭环 · 种马枢纽与铺路</span>
+          </button>
         </div>
+      </div>
 
-        <div class="compat-sandbox-grid" id="compat-sandbox-slots"></div>
-        <div class="compat-result-bar" id="compat-result-bar"></div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-head">
-          <div class="seg" id="compat-mode-seg">
-            <button type="button" class="seg-btn active" data-cmode="forward">◆ 正查：谁最搭当前主力</button>
-            <button type="button" class="seg-btn" data-cmode="reverse">▸ 反查：单笔记 / 角色激活谁</button>
-            <button type="button" class="seg-btn" data-cmode="breeding">★ 黄金三角 &amp; 刷笔记枢纽</button>
+      <!-- 模式 1：配对试算（正查：沙盒 + 搭档墙合为一体） -->
+      <div id="compat-pane-forward" class="compat-pane active">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2 class="panel-title">笔记相性试算沙盒（主力 C ⟵ 笔记 A + 笔记 B）</h2>
+              <p class="panel-sub">点任意槽位支持中文 / 拼音首字母 / 位置 / 学校极速秒搜，也可直接带入你本地的自备与好友真实笔记</p>
+            </div>
+            <div class="head-controls">
+              <button id="btn-compat-autofill" class="action-btn action-btn-primary" type="button">★ 填手头最优</button>
+              <button id="btn-compat-swap" class="action-btn" type="button" title="互换笔记槽位 A 与 B">⇄ 互换</button>
+              <button id="btn-compat-clear" class="action-btn" type="button">清空 A/B</button>
+            </div>
           </div>
-          <span class="panel-sub" id="compat-mode-hint">点击卡片智能填入沙盒槽位，省去下拉翻找</span>
-        </div>
 
-        <div id="compat-workspace-body"></div>
-      </section>
+          <div class="compat-sandbox-grid" id="compat-sandbox-slots"></div>
+          <div class="compat-result-bar" id="compat-result-bar"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2 class="panel-title" id="compat-forward-title">谁最搭当前主力</h2>
+              <p class="panel-sub" id="compat-forward-sub">按基础关系分降序，点击卡片智能填入上方槽位 A/B；自动训练刷彩优先选【同位刷彩】</p>
+            </div>
+          </div>
+          <div id="compat-forward-body"></div>
+        </section>
+      </div>
+
+      <!-- 模式 2：单卡反查（顶格展开独立工作台） -->
+      <div id="compat-pane-reverse" class="compat-pane">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2 class="panel-title">单笔记 / 角色反查：它能激活谁</h2>
+              <p class="panel-sub">选一本真实笔记或任意角色，反查它搭配自备 / 好友笔记能把谁推上 30【优】/ 40 满档 / 45【极】</p>
+            </div>
+          </div>
+          <div id="compat-reverse-body"></div>
+        </section>
+      </div>
+
+      <!-- 模式 3：黄金三角 & 枢纽规划（全局宏观视角） -->
+      <div id="compat-pane-breeding" class="compat-pane">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2 class="panel-title">黄金三角互哺圈 &amp; 刷笔记枢纽规划</h2>
+              <p class="panel-sub">基于全图鉴关系矩阵与你的本地笔记池，一键定位 3 人永动互刷彩笔记闭环与下一步最值得练的枢纽种马</p>
+            </div>
+          </div>
+          <div id="compat-breeding-body"></div>
+        </section>
+      </div>
     </section>
 
     <!-- ==================== 视图 4.5：养成计划与专题攻略 ==================== -->

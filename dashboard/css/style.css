@@ -62,11 +62,11 @@
   --chart-grad-top: rgba(27, 92, 255, 0.22);
   --chart-grad-bot: rgba(27, 92, 255, 0.02);
   --chart-dot-stroke: #ffffff;
-  --chart-10k-line: #e68a00;
-  --chart-10k-label: #b86700;
-  --chart-10k-dot: #ff8a00;
-  --chart-10k-dot-stroke: #101b33;
-  --chart-10k-pill-bg: #fff4d1;
+  --chart-ref-line: #e68a00;
+  --chart-ref-label: #b86700;
+  --chart-ref-pill-bg: #fff4d1;
+  --chart-peak-dot: #ff8a00;
+  --chart-peak-dot-stroke: #101b33;
 
   --console-bg: #111b31;
   --console-text: #dce7ff;
@@ -135,11 +135,11 @@
   --chart-grad-top: rgba(77, 141, 255, 0.30);
   --chart-grad-bot: rgba(77, 141, 255, 0.02);
   --chart-dot-stroke: #131f38;
-  --chart-10k-line: #ffb703;
-  --chart-10k-label: #ffc83d;
-  --chart-10k-dot: #ffb703;
-  --chart-10k-dot-stroke: #131f38;
-  --chart-10k-pill-bg: rgba(255, 183, 3, 0.18);
+  --chart-ref-line: #ffb703;
+  --chart-ref-label: #ffc83d;
+  --chart-ref-pill-bg: rgba(255, 183, 3, 0.18);
+  --chart-peak-dot: #ffb703;
+  --chart-peak-dot-stroke: #131f38;
 
   --console-bg: #091020;
   --console-text: #c9daf7;
@@ -620,7 +620,7 @@ html, body {
 .badge-accent { background: var(--accent-soft); color: var(--accent);    border-color: color-mix(in srgb, var(--accent) 36%, transparent); }
 .badge-purple { background: var(--purple-soft); color: var(--purple);    border-color: color-mix(in srgb, var(--purple) 36%, transparent); }
 
-/* 冠军金 破万专属徽章 */
+/* 冠军金 纪录专属徽章 */
 .badge-champ {
   background: var(--gold-grad);
   color: #101b33;
@@ -794,21 +794,28 @@ html, body {
   background: var(--surface);
 }
 
-.pos-card.is-10k {
+.pos-card.is-best {
   background: var(--champ-bg);
   border-color: color-mix(in srgb, var(--gold) 70%, var(--border-strong));
 }
 
-.pos-card.is-10k::before {
+.pos-card.is-best::before {
   background: var(--gold-grad);
 }
 
-.pos-card.need-10k {
-  border-color: color-mix(in srgb, var(--orange) 60%, var(--border-strong));
+.pos-card.is-empty {
+  opacity: 0.72;
+  cursor: default;
 }
 
-.pos-card.need-10k::before {
-  background: linear-gradient(90deg, var(--orange), var(--gold));
+.pos-card.is-empty::before {
+  background: var(--border-strong);
+}
+
+.pos-card.is-empty:hover {
+  transform: none;
+  box-shadow: none;
+  background: var(--surface-3);
 }
 
 .pos-top {
@@ -842,7 +849,7 @@ html, body {
   letter-spacing: -0.02em;
 }
 
-.pos-card.is-10k .pos-score {
+.pos-card.is-best .pos-score {
   color: var(--gold-text);
 }
 
@@ -865,15 +872,11 @@ html, body {
 .pos-bar-fill {
   height: 100%;
   border-radius: 999px;
-  background: var(--mint);
+  background: linear-gradient(90deg, var(--accent), var(--sky));
 }
 
-.pos-card.is-10k .pos-bar-fill {
+.pos-card.is-best .pos-bar-fill {
   background: var(--gold-grad);
-}
-
-.pos-card.need-10k .pos-bar-fill {
-  background: linear-gradient(90deg, var(--orange), var(--gold));
 }
 
 .pos-foot {
@@ -1105,7 +1108,7 @@ html, body {
   font-size: 14.5px;
 }
 
-.run-item-score.is-10k {
+.run-item-score.is-record {
   color: var(--gold-text);
 }
 
@@ -1147,7 +1150,7 @@ html, body {
   line-height: 1;
 }
 
-.run-hero-score.is-10k {
+.run-hero-score.is-record {
   color: var(--gold-text);
 }
 
@@ -1584,6 +1587,72 @@ details.fold-block summary:hover {
 }
 
 /* ---------- 视图 4：笔记相性查询与极速选人 ---------- */
+.compat-mode-bar {
+  padding: 10px 12px;
+}
+
+.compat-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.compat-mode-btn {
+  appearance: none;
+  border: 1.5px solid var(--border);
+  background: var(--surface-3);
+  color: var(--text);
+  border-radius: 11px;
+  padding: 10px 14px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  transition: background 0.14s, border-color 0.14s, transform 0.12s, box-shadow 0.14s;
+}
+
+.compat-mode-btn:hover {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.compat-mode-btn.active {
+  background: var(--nav-active-bg);
+  color: var(--nav-active-text);
+  border-color: var(--border-strong);
+  box-shadow: var(--nav-active-shadow);
+}
+
+.compat-mode-title {
+  font-size: 13.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.compat-mode-desc {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+.compat-mode-btn.active .compat-mode-desc {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.compat-pane {
+  display: none;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.compat-pane.active {
+  display: flex;
+}
+
 .compat-sandbox-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) 26px minmax(0, 1fr) minmax(0, 1fr);
@@ -2119,6 +2188,10 @@ details.fold-block summary:hover {
   margin-bottom: 16px;
 }
 
+.reverse-split.is-single {
+  grid-template-columns: 1fr;
+}
+
 /* 黄金三角与铺路 */
 .triangle-grid {
   display: grid;
@@ -2592,6 +2665,7 @@ details.fold-block summary:hover {
   .runs-layout, .plans-layout { grid-template-columns: 1fr; }
   .runs-sidebar, .plans-sidebar { position: static; max-height: 360px; }
   .planner-grid, .live-grid, .reverse-split { grid-template-columns: 1fr; }
+  .compat-mode-tabs { grid-template-columns: 1fr; }
   .compat-sandbox-grid { grid-template-columns: 1fr; }
   .compat-arrow { display: none; }
 }

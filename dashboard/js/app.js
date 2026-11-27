@@ -27,7 +27,7 @@
     trendLimit: 0,
     runSearch: "",
     runChar: "",
-    runOnly10k: false,
+    runSortByRank: false,
     selectedRunId: null,
     compareIds: [],
     runDetailCache: {},
@@ -152,10 +152,36 @@
   }
 
   /* ==================== 视图 1：总览 ==================== */
+  function computeRunRecords(ov) {
+    const runs = (ov && ov.runs) || [];
+    let bestRun = null;
+    const posBestIds = new Set();
+    const charBestMap = {};
+    for (const r of runs) {
+      if (!r || !(r.final_rank > 0)) continue;
+      if (!bestRun || r.final_rank > bestRun.final_rank) bestRun = r;
+      const key = r.main_char_id || r.main_name;
+      if (key && (!charBestMap[key] || r.final_rank > charBestMap[key].final_rank)) {
+        charBestMap[key] = r;
+      }
+    }
+    for (const p of (ov && ov.positions) || []) {
+      if (p && p.best_rank > 0 && p.best_run_id) posBestIds.add(p.best_run_id);
+    }
+    const charBestIds = new Set(Object.values(charBestMap).map((r) => r.run_id));
+    return {
+      globalBestId: bestRun ? bestRun.run_id : "",
+      globalBestRun: bestRun,
+      posBestIds,
+      charBestIds,
+    };
+  }
+
   function renderOverview() {
     const ov = state.overview;
     if (!ov) return;
     const k = ov.kpi;
+    const rec = computeRunRecords(ov);
 
     // 1. 4 张 KPI 卡片
     const delta10 = k.avg_rank_prev10 ? (k.avg_rank_recent10 - k.avg_rank_prev10).toFixed(0) : null;
@@ -163,21 +189,42 @@
       ? `<span class="badge ${Number(delta10) >= 0 ? "badge-green" : "badge-red"}">${Number(delta10) >= 0 ? "+" : ""}${delta10} vs 前10局</span>`
       : "";
 
+    const bestChar = k.best_char || (rec.globalBestRun ? rec.globalBestRun.main_name : "");
+    const bestPos = k.best_pos || (rec.globalBestRun ? rec.globalBestRun.main_pos : "");
+    const bestHolderBadge = bestChar
+      ? `<span class="badge badge-champ">★ ${esc(bestChar)}${bestPos ? " · " + esc(bestPos) : ""}</span>`
+      : "";
+
+    const positions = ov.positions || [];
+    const coveredPos = positions.filter((p) => p.best_rank > 0);
+    const avgPosBest = k.pos_avg_best_rank || (coveredPos.length
+      ? Math.round(coveredPos.reduce((s, p) => s + p.best_rank, 0) / coveredPos.length)
+      : 0);
+    const avgPosAuto = k.pos_avg_auto_est || (coveredPos.length
+      ? Math.round(coveredPos.reduce((s, p) => s + (p.auto_est || Math.round(p.best_rank * 0.97)), 0) / coveredPos.length)
+      : 0);
+    const weakestPos = coveredPos.length
+      ? coveredPos.reduce((m, p) => (p.best_rank < m.best_rank ? p : m), coveredPos[0])
+      : null;
+    const posKpiBadge = coveredPos.length === 5 && weakestPos
+      ? `<span class="badge">短板 ${esc(weakestPos.pos)} ${weakestPos.best_rank.toLocaleString()}</span>`
+      : `<span class="badge">已覆盖 ${coveredPos.length} / 5 位</span>`;
+
     $("overview-kpis").innerHTML = `
       <div class="kpi-card">
         <div class="kpi-label">历史最高分</div>
-        <div class="kpi-val kpi-val-gold">${k.best_rank.toLocaleString()}</div>
-        <div class="kpi-foot"><span>破万 ${k.over_10k_count} / ${k.total_runs} 局</span><span class="badge badge-champ">★ ${k.total_runs ? Math.round(k.over_10k_count / k.total_runs * 100) : 0}%</span></div>
+        <div class="kpi-val kpi-val-gold">${k.best_rank ? k.best_rank.toLocaleString() : "—"}</div>
+        <div class="kpi-foot"><span>累计归档 ${k.total_runs} 局</span>${bestHolderBadge}</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">近 10 局均分</div>
-        <div class="kpi-val">${Math.round(k.avg_rank_recent10).toLocaleString()}</div>
-        <div class="kpi-foot"><span>全历史均分 ${Math.round(k.avg_rank_all).toLocaleString()}</span>${deltaHtml}</div>
+        <div class="kpi-val">${k.avg_rank_recent10 ? Math.round(k.avg_rank_recent10).toLocaleString() : "—"}</div>
+        <div class="kpi-foot"><span>全历史均分 ${k.avg_rank_all ? Math.round(k.avg_rank_all).toLocaleString() : "—"}</span>${deltaHtml}</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">5 位置破万进度</div>
-        <div class="kpi-val">${k.pos_10k_count} / 5</div>
-        <div class="kpi-foot"><span>10 级托管全位置保底底座</span></div>
+        <div class="kpi-label">5 位置底座均分</div>
+        <div class="kpi-val">${avgPosBest ? avgPosBest.toLocaleString() : "—"}</div>
+        <div class="kpi-foot"><span>托管均估 ~${avgPosAuto ? avgPosAuto.toLocaleString() : "—"}</span>${posKpiBadge}</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">自备 7 阶彩笔记</div>
@@ -186,27 +233,36 @@
       </div>
     `;
 
-    // 2. 5 位置底座
-    $("pos-10k-summary").textContent = `${k.pos_10k_count} / 5 位置已破万`;
-    $("overview-positions").innerHTML = ov.positions.map((p) => {
-      const pct = Math.min(100, Math.round((p.best_rank / 10500) * 100));
-      const gap = Math.max(0, 10000 - p.best_rank);
+    // 2. 5 位置最高评分底座
+    const posSummaryEl = $("pos-base-summary") || $("pos-10k-summary");
+    if (posSummaryEl) {
+      posSummaryEl.textContent = !coveredPos.length
+        ? "暂无位置记录"
+        : coveredPos.length === 5
+        ? `5 位置均分 ${avgPosBest.toLocaleString()}`
+        : `已覆盖 ${coveredPos.length} / 5 位 · 均分 ${avgPosBest.toLocaleString()}`;
+    }
+    const maxPosRank = Math.max(0, ...positions.map((p) => p.best_rank || 0));
+    $("overview-positions").innerHTML = positions.map((p) => {
+      const hasRank = p.best_rank > 0;
+      const pct = maxPosRank > 0 && hasRank ? Math.min(100, Math.round((p.best_rank / maxPosRank) * 100)) : 0;
+      const isBest = maxPosRank > 0 && p.best_rank === maxPosRank;
+      const cardCls = !hasRank ? "is-empty" : isBest ? "is-best" : "";
       return `
-        <div class="pos-card ${p.is_10k ? "is-10k" : "need-10k"}" data-run-id="${esc(p.best_run_id)}">
+        <div class="pos-card ${cardCls}" data-run-id="${esc(p.best_run_id)}">
           <div class="pos-top">
             <span class="pos-code">${esc(p.pos)} · ${esc(p.pos_cn)}</span>
-            <span class="badge ${p.is_10k ? "badge-champ" : "badge-orange"}">${p.is_10k ? "★ 已破万" : "差 " + gap}</span>
           </div>
           <div class="pos-who">
             ${avatarHtml(p.best_head, p.best_char)}
             <div>
-              <div class="pos-score num">${p.best_rank ? p.best_rank.toLocaleString() : "—"}</div>
+              <div class="pos-score num">${hasRank ? p.best_rank.toLocaleString() : "—"}</div>
               <div class="pos-name">${esc(p.best_char || "暂无记录")}</div>
             </div>
           </div>
           <div class="pos-bar"><div class="pos-bar-fill" style="width:${pct}%"></div></div>
           <div class="pos-foot">
-            <span>托管估 ~${p.auto_est || "—"}</span>
+            <span>托管估 ~${p.auto_est ? p.auto_est.toLocaleString() : "—"}</span>
             <span>${p.run_count} 局</span>
           </div>
         </div>
@@ -298,11 +354,11 @@
       gradTop: pick("--chart-grad-top", isDark ? "rgba(77,141,255,0.30)" : "rgba(27,92,255,0.22)"),
       gradBot: pick("--chart-grad-bot", isDark ? "rgba(77,141,255,0.02)" : "rgba(27,92,255,0.02)"),
       dotStroke: pick("--chart-dot-stroke", isDark ? "#131f38" : "#ffffff"),
-      line10k: pick("--chart-10k-line", isDark ? "#ffb703" : "#e68a00"),
-      label10k: pick("--chart-10k-label", isDark ? "#ffc83d" : "#b86700"),
-      dot10k: pick("--chart-10k-dot", isDark ? "#ffb703" : "#ff8a00"),
-      dot10kStroke: pick("--chart-10k-dot-stroke", isDark ? "#131f38" : "#101b33"),
-      pillBg10k: pick("--chart-10k-pill-bg", isDark ? "rgba(255,183,3,0.18)" : "#fff4d1"),
+      refLine: pick("--chart-ref-line", isDark ? "#ffb703" : "#e68a00"),
+      refLabel: pick("--chart-ref-label", isDark ? "#ffc83d" : "#b86700"),
+      refPillBg: pick("--chart-ref-pill-bg", isDark ? "rgba(255,183,3,0.18)" : "#fff4d1"),
+      peakDot: pick("--chart-peak-dot", isDark ? "#ffb703" : "#ff8a00"),
+      peakDotStroke: pick("--chart-peak-dot-stroke", isDark ? "#131f38" : "#101b33"),
     };
   }
 
@@ -334,21 +390,20 @@
     const plotH = H - padT - padB;
 
     const scores = runs.map((r) => r.final_rank);
-    const minY = Math.floor((Math.min(...scores, 8500) - 200) / 500) * 500;
-    const maxY = Math.ceil((Math.max(...scores, 10200) + 200) / 500) * 500;
+    const minScore = Math.min(...scores);
+    const maxScore = Math.max(...scores);
+    const avgScore = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+    let minY = Math.max(0, Math.floor((minScore - 200) / 500) * 500);
+    let maxY = Math.ceil((maxScore + 200) / 500) * 500;
+    if (maxY - minY < 500) {
+      maxY = minY + 500;
+    }
     const spanY = Math.max(500, maxY - minY);
 
     const xOf = (i) => padL + (runs.length === 1 ? plotW / 2 : (i / (runs.length - 1)) * plotW);
     const yOf = (v) => padT + plotH - ((v - minY) / spanY) * plotH;
 
-    // 水平参考线（10,000 破万标签自动避让高分点，放到较空的一侧）
-    const qLen = Math.max(1, Math.ceil(runs.length * 0.28));
-    const leftMax = Math.max(...scores.slice(0, qLen));
-    const rightMax = Math.max(...scores.slice(-qLen));
-    const pillOnLeft = leftMax <= rightMax;
-    const pillW = 92;
-    const pillX = pillOnLeft ? (padL + 10) : (W - padR - pillW - 4);
-
+    // 水平网格线
     const ticks = [];
     const step = spanY > 3500 ? 1000 : 500;
     for (let v = minY; v <= maxY; v += step) {
@@ -357,23 +412,32 @@
     const gridSvg = ticks.map((v) => {
       const y = yOf(v);
       const yStr = y.toFixed(1);
-      const is10k = v === 10000;
-      const badge10k = is10k ? `
-        <rect x="${pillX}" y="${(y - 21).toFixed(1)}" width="${pillW}" height="18" rx="9"
-              fill="${pal.pillBg10k}" stroke="${pal.line10k}" stroke-width="1.3" />
-        <text x="${pillX + pillW / 2}" y="${(y - 8.5).toFixed(1)}" text-anchor="middle"
-              fill="${pal.label10k}" font-size="10.5" font-weight="800">★ 10,000 破万</text>
-      ` : "";
       return `
         <line x1="${padL}" y1="${yStr}" x2="${W - padR}" y2="${yStr}"
-              stroke="${is10k ? pal.line10k : pal.grid}"
-              stroke-dasharray="${is10k ? "6 4" : "none"}"
-              stroke-width="${is10k ? 1.8 : 1}" />
+              stroke="${pal.grid}" stroke-width="1" />
         <text x="${padL - 9}" y="${(y + 4).toFixed(1)}" text-anchor="end"
-              fill="${is10k ? pal.label10k : pal.axis}" font-size="11" font-weight="${is10k ? 800 : 600}">${v.toLocaleString()}</text>
-        ${badge10k}
+              fill="${pal.axis}" font-size="11" font-weight="600">${v.toLocaleString()}</text>
       `;
     }).join("");
+
+    // 动态均分参考线（标签自动避让高分侧）
+    const qLen = Math.max(1, Math.ceil(runs.length * 0.28));
+    const leftAvg = scores.slice(0, qLen).reduce((a, b) => a + b, 0) / qLen;
+    const rightAvg = scores.slice(-qLen).reduce((a, b) => a + b, 0) / qLen;
+    const pillOnLeft = leftAvg <= rightAvg;
+    const avgLabel = `均分 ${avgScore.toLocaleString()}`;
+    const pillW = Math.max(84, avgLabel.length * 9 + 18);
+    const pillX = pillOnLeft ? (padL + 10) : (W - padR - pillW - 4);
+    const avgY = yOf(avgScore);
+    const avgPillY = Math.max(padT + 2, avgY - 21);
+    const avgRefSvg = `
+      <line x1="${padL}" y1="${avgY.toFixed(1)}" x2="${W - padR}" y2="${avgY.toFixed(1)}"
+            stroke="${pal.refLine}" stroke-dasharray="6 4" stroke-width="1.6" />
+      <rect x="${pillX}" y="${avgPillY.toFixed(1)}" width="${pillW}" height="18" rx="9"
+            fill="${pal.refPillBg}" stroke="${pal.refLine}" stroke-width="1.2" />
+      <text x="${pillX + pillW / 2}" y="${(avgPillY + 12.5).toFixed(1)}" text-anchor="middle"
+            fill="${pal.refLabel}" font-size="10.5" font-weight="800">${avgLabel}</text>
+    `;
 
     // 折线与渐变填充
     const pts = runs.map((r, i) => `${xOf(i).toFixed(1)},${yOf(r.final_rank).toFixed(1)}`).join(" ");
@@ -387,16 +451,28 @@
       xLabels.push(`<text x="${xOf(idx).toFixed(1)}" y="${H - 8}" text-anchor="middle" fill="${pal.axis}" font-size="11" font-weight="600">${esc(runs[idx].date_label.slice(0, 5))}</text>`);
     }
 
+    // 识别本视图最高分与阶段刷新新高（PB）节点
+    const pbFlags = [];
+    let runningBest = -1;
+    for (let i = 0; i < runs.length; i++) {
+      const sc = runs[i].final_rank;
+      const isPb = i > 0 && sc > runningBest;
+      if (sc > runningBest) runningBest = sc;
+      pbFlags.push(isPb);
+    }
+
     // 节点圆点
     const baseRad = runs.length > 60 ? 3.6 : 4.5;
     const dots = runs.map((r, i) => {
       const cx = xOf(i).toFixed(1);
       const cy = yOf(r.final_rank).toFixed(1);
-      const is10k = r.final_rank >= 10000;
-      const col = is10k ? pal.dot10k : pal.line;
-      const stroke = is10k ? pal.dot10kStroke : pal.dotStroke;
-      const rad = is10k ? baseRad + 1.2 : baseRad;
-      return `<circle class="chart-dot" data-idx="${i}" cx="${cx}" cy="${cy}" r="${rad}" fill="${col}" stroke="${stroke}" stroke-width="${is10k ? 1.8 : 1.6}" style="cursor:pointer" />`;
+      const isPeak = r.final_rank === maxScore;
+      const isPb = pbFlags[i];
+      const highlight = isPeak || isPb;
+      const col = highlight ? pal.peakDot : pal.line;
+      const stroke = highlight ? pal.peakDotStroke : pal.dotStroke;
+      const rad = isPeak ? baseRad + 1.6 : isPb ? baseRad + 0.8 : baseRad;
+      return `<circle class="chart-dot" data-idx="${i}" cx="${cx}" cy="${cy}" r="${rad}" fill="${col}" stroke="${stroke}" stroke-width="${highlight ? 1.8 : 1.6}" style="cursor:pointer" />`;
     }).join("");
 
     const gradId = pal.isDark ? "trendGradDark" : "trendGradLight";
@@ -409,6 +485,7 @@
           </linearGradient>
         </defs>
         ${gridSvg}
+        ${avgRefSvg}
         <polygon points="${areaPts}" fill="url(#${gradId})" />
         <polyline points="${pts}" fill="none" stroke="${pal.line}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" />
         ${xLabels.join("")}
@@ -420,9 +497,13 @@
     const wrap = $("trend-chart-wrap");
     host.querySelectorAll(".chart-dot").forEach((dot) => {
       dot.addEventListener("mouseenter", (e) => {
-        const r = runs[Number(dot.dataset.idx)];
+        const idx = Number(dot.dataset.idx);
+        const r = runs[idx];
+        const isPeak = r.final_rank === maxScore;
+        const isPb = pbFlags[idx];
+        const tag = isPeak ? " · ★ 最高" : isPb ? " · ▲ 新高" : "";
         tip.innerHTML = `
-          <div style="font-weight:800;margin-bottom:3px">${esc(r.main_name)} · <span style="color:${r.final_rank >= 10000 ? "var(--gold-text)" : "var(--accent)"}">${r.final_rank.toLocaleString()}</span></div>
+          <div style="font-weight:800;margin-bottom:3px">${esc(r.main_name)} · <span style="color:${(isPeak || isPb) ? "var(--gold-text)" : "var(--accent)"}">${r.final_rank.toLocaleString()}</span><span style="color:var(--gold-text);font-size:11px">${tag}</span></div>
           <div style="color:var(--text-muted)">${esc(r.date_label)} · #${r.seq_no}</div>
           <div style="color:var(--text-muted);margin-top:2px">吻合 ${r.coach_match_pct.toFixed(0)}% · 均亏 ${r.avg_turn_ev_loss.toFixed(1)} EV</div>
         `;
@@ -446,19 +527,22 @@
   function renderRunsList() {
     const ov = state.overview;
     if (!ov) return;
+    const rec = computeRunRecords(ov);
     const kw = state.runSearch.trim().toLowerCase();
     const list = ov.runs
       .slice()
       .reverse()
       .filter((r) => {
         if (state.runChar && r.main_name !== state.runChar) return false;
-        if (state.runOnly10k && r.final_rank < 10000) return false;
         if (kw) {
           const hay = `${r.main_name} ${r.lineup} ${r.date_label} ${r.final_rank}`.toLowerCase();
           if (!hay.includes(kw)) return false;
         }
         return true;
       });
+    if (state.runSortByRank) {
+      list.sort((a, b) => (b.final_rank - a.final_rank) || (b.seq_no - a.seq_no));
+    }
 
     // 更新对比状态栏
     const cLen = state.compareIds.length;
@@ -471,6 +555,7 @@
     $("runs-list").innerHTML = list.length ? list.map((r) => {
       const isActive = state.compareIds.length < 2 && state.selectedRunId === r.run_id;
       const isChecked = state.compareIds.includes(r.run_id);
+      const isRecord = rec.posBestIds.has(r.run_id) || rec.charBestIds.has(r.run_id);
       return `
         <div class="run-item ${isActive ? "active" : ""}" data-rid="${esc(r.run_id)}">
           <input type="checkbox" class="cmp-chk" data-rid="${esc(r.run_id)}" ${isChecked ? "checked" : ""} title="勾选加入双局对比" />
@@ -478,7 +563,7 @@
           <div class="run-item-info">
             <div class="run-item-top">
               <span class="run-item-name">${esc(r.main_name)} <span style="font-weight:400;color:var(--text-dim)">${esc(r.main_pos)}</span></span>
-              <span class="run-item-score num ${r.final_rank >= 10000 ? "is-10k" : ""}">${r.final_rank.toLocaleString()}</span>
+              <span class="run-item-score num ${isRecord ? "is-record" : ""}">${r.final_rank.toLocaleString()}</span>
             </div>
             <div class="run-item-sub">
               <span>${esc(r.date_label)}</span>
@@ -660,6 +745,16 @@
     ` : "";
 
     const notesStr = (d.note_scores || []).length ? d.note_scores.join(" + ") : "—";
+    const rec = computeRunRecords(state.overview);
+    let recordBadge = "";
+    if (d.run_id && d.run_id === rec.globalBestId) {
+      recordBadge = '<span class="badge badge-champ">★ 全号最高</span>';
+    } else if (d.run_id && rec.posBestIds.has(d.run_id)) {
+      recordBadge = `<span class="badge badge-champ">★ ${esc(d.main_pos || "同位")} 最高</span>`;
+    } else if (d.run_id && rec.charBestIds.has(d.run_id)) {
+      recordBadge = '<span class="badge badge-gold">★ 角色最高</span>';
+    }
+    const isRecordRun = Boolean(recordBadge);
 
     area.innerHTML = `
       <section class="panel">
@@ -677,8 +772,8 @@
           </div>
           <div style="text-align:right">
             <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px">
-              ${d.final_rank >= 10000 ? '<span class="badge badge-champ">★ 破万纪录</span>' : ""}
-              <div class="run-hero-score num ${d.final_rank >= 10000 ? "is-10k" : ""}">${d.final_rank.toLocaleString()}</div>
+              ${recordBadge}
+              <div class="run-hero-score num ${isRecordRun ? "is-record" : ""}">${d.final_rank.toLocaleString()}</div>
             </div>
             <div class="panel-sub">六维总和 ${d.stat_sum.toLocaleString()}</div>
           </div>
@@ -1502,8 +1597,15 @@
   }
 
   function ensureCompatReady() {
+    syncCompatModeSeg();
     if (!state.compat) {
-      $("compat-sandbox-slots").innerHTML = '<div class="empty-state">正在加载全角色相性矩阵…</div>';
+      const loadingHtml = '<div class="empty-state">正在加载全角色相性矩阵…</div>';
+      const slotsEl = $("compat-sandbox-slots");
+      const revEl = $("compat-reverse-body");
+      const brEl = $("compat-breeding-body");
+      if (slotsEl) slotsEl.innerHTML = loadingHtml;
+      if (revEl) revEl.innerHTML = loadingHtml;
+      if (brEl) brEl.innerHTML = loadingHtml;
       return;
     }
     if (!getCompatChar(state.compatCoreId) && state.compat.characters.length) {
@@ -1560,17 +1662,36 @@
   }
 
   function syncCompatModeSeg() {
+    const mode = state.compatSubMode || "forward";
     const seg = $("compat-mode-seg");
-    if (!seg) return;
-    seg.querySelectorAll(".seg-btn").forEach((b) => {
-      b.classList.toggle("active", b.dataset.cmode === state.compatSubMode);
+    if (seg) {
+      seg.querySelectorAll("[data-cmode]").forEach((b) => {
+        const isActive = b.dataset.cmode === mode;
+        b.classList.toggle("active", isActive);
+        b.setAttribute("aria-selected", isActive ? "true" : "false");
+      });
+    }
+    const panes = {
+      forward: $("compat-pane-forward"),
+      reverse: $("compat-pane-reverse"),
+      breeding: $("compat-pane-breeding"),
+    };
+    Object.entries(panes).forEach(([key, el]) => {
+      if (el) el.classList.toggle("active", key === mode);
     });
   }
 
   function renderCompatView() {
+    syncCompatModeSeg();
     if (!state.compat) return;
-    renderCompatSandbox();
-    renderCompatWorkspace();
+    if (state.compatSubMode === "forward") {
+      renderCompatSandbox();
+      renderCompatForward();
+    } else if (state.compatSubMode === "reverse") {
+      renderCompatReverse();
+    } else {
+      renderCompatBreeding();
+    }
   }
 
   function renderCompatSandbox() {
@@ -1678,7 +1799,10 @@
         </div>
         <div class="slot-footer">
           <span style="font-size:11.5px;color:var(--text-muted)">历史最高 ${core.best_rank ? core.best_rank.toLocaleString() : "—"} · ${core.has_rainbow_note ? "已有7阶彩" : core.best_own_note_rank ? `${core.best_own_note_rank}阶 ${core.best_own_note_score}` : "无自备笔记"}</span>
-          <button class="mini-btn" type="button" id="btn-compat-goto-planner">配装参谋 →</button>
+          <div style="display:flex;gap:5px;flex-wrap:wrap">
+            <button class="mini-btn" type="button" id="btn-compat-goto-reverse" title="切换到单卡反查，看 TA 的笔记能激活谁">反查 TA →</button>
+            <button class="mini-btn" type="button" id="btn-compat-goto-planner">配装参谋 →</button>
+          </div>
         </div>
       </div>
     ` : "";
@@ -1756,6 +1880,15 @@
         renderCompatView();
       });
     });
+
+    const gotoReverse = $("btn-compat-goto-reverse");
+    if (gotoReverse && core) {
+      gotoReverse.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const bestNote = getBestNoteForActor(core.id, true);
+        openCompatReverseForNote(bestNote ? bestNote.note_id : "", core.id);
+      });
+    }
 
     const gotoPlanner = $("btn-compat-goto-planner");
     if (gotoPlanner && core) {
@@ -1839,28 +1972,18 @@
     `;
   }
 
-  function renderCompatWorkspace() {
-    const mode = state.compatSubMode;
-    const hintEl = $("compat-mode-hint");
-    if (mode === "forward") {
-      if (hintEl) hintEl.textContent = "点击卡片智能填入沙盒槽位；自动训练刷彩优先选【同位刷彩】";
-      renderCompatForward();
-    } else if (mode === "reverse") {
-      if (hintEl) hintEl.textContent = "选一本真实笔记或任意角色，反查它能把谁推上 30【优】/ 40 满档 / 45【极】";
-      renderCompatReverse();
-    } else {
-      if (hintEl) hintEl.textContent = "一键定位 3 人永动互刷彩笔记闭环与下一步最值得练的枢纽种马";
-      renderCompatBreeding();
-    }
-  }
-
   function renderCompatForward() {
     const core = getCompatChar(state.compatCoreId);
-    const host = $("compat-workspace-body");
+    const host = $("compat-forward-body");
+    const titleEl = $("compat-forward-title");
+    const subEl = $("compat-forward-sub");
+    if (!host) return;
     if (!core || !state.compat) {
       host.innerHTML = '<div class="empty-state">暂无角色数据</div>';
       return;
     }
+    if (titleEl) titleEl.textContent = `谁最搭【${core.short_name}】`;
+    if (subEl) subEl.textContent = `按对【${core.short_name}】的基础关系分降序，点击卡片智能填入上方槽位 A/B；自动训练刷彩优先选【同位刷彩】`;
 
     const posFilters = [
       { key: "ALL", label: "全部" },
@@ -2137,8 +2260,8 @@
   }
 
   function renderCompatReverse() {
-    const host = $("compat-workspace-body");
-    if (!state.compat) return;
+    const host = $("compat-reverse-body");
+    if (!state.compat || !host) return;
     if (!state.compatRevData && !state.compatRevLoading) {
       loadCompatReverseData();
       return;
@@ -2193,6 +2316,7 @@
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           ${starBarHtml}
+          ${tn ? `<button id="btn-rev-as-core" class="action-btn" type="button" title="切换到配对试算，以 ${esc(tn.actor_name)} 为主力 C 查看最优搭配">以 TA 为主力试算 →</button>` : ""}
           <button id="btn-rev-pick" class="action-btn action-btn-primary" type="button">▸ 换笔记 / 换角色</button>
         </div>
       </div>
@@ -2248,7 +2372,7 @@
                       <button type="button" class="mini-btn btn-load-rev-pair"
                         data-core="${it.char_id}"
                         data-pnid="${esc(it.partner.note_id || "")}"
-                        data-paid="${it.partner.actor_id}">进沙盒</button>
+                        data-paid="${it.partner.actor_id}">进试算</button>
                     </td>
                   </tr>
                 `).join("")}
@@ -2260,7 +2384,7 @@
     };
 
     const actsHtml = (ownActs.length || borActs.length)
-      ? `<div class="reverse-split">
+      ? `<div class="reverse-split ${ownActs.length && borActs.length ? "" : "is-single"}">
            ${renderActTable("◆ 搭配你的自备笔记直达高相性", ownActs)}
            ${renderActTable("★ 搭配好友助战笔记直达高相性", borActs)}
          </div>`
@@ -2276,7 +2400,7 @@
         <label class="chk-pill"><input type="checkbox" id="compat-rev-owned" ${state.compatRevOnlyOwned ? "checked" : ""} /><span>仅看已拥有角色</span></label>
       </div>
       ${actsHtml}
-      <h3 class="sub-title" style="margin-bottom:10px">◆ 全图鉴单卡相性贡献排行（点任意卡片设为上方主力 C 试算）</h3>
+      <h3 class="sub-title" style="margin-bottom:10px">◆ 全图鉴单卡相性贡献排行（点任意卡片作为主力 C 进入配对试算）</h3>
       <div class="compat-partner-grid">
         ${statics.map((s) => `
           <div class="partner-card" data-rev-setcore="${s.char_id}">
@@ -2297,7 +2421,7 @@
                 ${s.same_pos ? '<span class="badge badge-blue">同位刷彩</span>' : ""}
                 ${s.harmony_bonus ? `<span class="badge badge-gold">${s.harmony_star}★契合</span>` : ""}
               </div>
-              <span style="font-size:11px;color:var(--accent)">设为 C 试算 →</span>
+              <span style="font-size:11px;color:var(--accent)">进试算 →</span>
             </div>
           </div>
         `).join("")}
@@ -2308,6 +2432,15 @@
   }
 
   function bindReverseControls(host) {
+    const asCoreBtn = $("btn-rev-as-core");
+    if (asCoreBtn) {
+      asCoreBtn.addEventListener("click", () => {
+        const d = state.compatRevData;
+        const cid = d && d.target_note ? Number(d.target_note.actor_id) : Number(state.compatRevActorId);
+        if (cid) openCompatForCore(cid, true);
+      });
+    }
+
     const pickBtn = $("btn-rev-pick");
     if (pickBtn) {
       pickBtn.addEventListener("click", () => {
@@ -2378,7 +2511,8 @@
         state.compatCoreId = coreId;
         state.compatSlotA = slotA;
         state.compatSlotB = slotB;
-        renderCompatSandbox();
+        state.compatSubMode = "forward";
+        renderCompatView();
         window.scrollTo({ top: 0, behavior: "smooth" });
       });
     });
@@ -2390,14 +2524,16 @@
         state.compatCoreId = coreId;
         state.compatSlotA = curNote ? makeNoteSlot(curNote) : makeSimSlot(state.compatRevActorId, state.compatRevStar);
         state.compatSlotB = null;
-        renderCompatSandbox();
+        state.compatSubMode = "forward";
+        renderCompatView();
         window.scrollTo({ top: 0, behavior: "smooth" });
       });
     });
   }
 
   function renderCompatBreeding() {
-    const host = $("compat-workspace-body");
+    const host = $("compat-breeding-body");
+    if (!host) return;
     const br = state.compat && state.compat.breeding;
     if (!br) {
       host.innerHTML = '<div class="empty-state">暂无养成循环规划数据</div>';
@@ -2455,7 +2591,7 @@
                 <td><span class="badge ${h.own_status === "missing" ? "badge-red" : h.own_status === "good" ? "badge-green" : "badge-gold"}">${esc(h.own_tag)}</span></td>
                 <td class="num"><strong>${h.top8_avg}</strong> / ${h.high_15_cnt}人</td>
                 <td style="font-size:12px;color:var(--text-muted)">${(h.top_targets || []).slice(0, 4).map((x) => `${esc(x.actor_name)}(+${x.rel})`).join("、")}</td>
-                <td><button type="button" class="mini-btn btn-hub-sandbox" data-cid="${h.actor_id}">进沙盒</button></td>
+                <td><button type="button" class="mini-btn btn-hub-sandbox" data-cid="${h.actor_id}">进试算</button></td>
               </tr>
             `).join("")}
           </tbody>
@@ -2497,7 +2633,8 @@
         const nB = getBestNoteForActor(bId, true);
         state.compatSlotA = nA ? makeNoteSlot(nA) : makeSimSlot(aId, 0);
         state.compatSlotB = nB ? makeNoteSlot(nB) : makeSimSlot(bId, 0);
-        renderCompatSandbox();
+        state.compatSubMode = "forward";
+        renderCompatView();
         window.scrollTo({ top: 0, behavior: "smooth" });
       });
     });
@@ -3061,10 +3198,13 @@
       state.runChar = e.target.value;
       renderRunsList();
     });
-    $("run-only-10k").addEventListener("change", (e) => {
-      state.runOnly10k = e.target.checked;
-      renderRunsList();
-    });
+    const sortRankEl = $("run-sort-rank");
+    if (sortRankEl) {
+      sortRankEl.addEventListener("change", (e) => {
+        state.runSortByRank = e.target.checked;
+        renderRunsList();
+      });
+    }
     $("btn-clear-compare").addEventListener("click", () => {
       state.compareIds = [];
       renderRunsList();
@@ -3152,11 +3292,10 @@
       state.compatSlotB = null;
       renderCompatView();
     });
-    $("compat-mode-seg").querySelectorAll(".seg-btn").forEach((b) => {
+    $("compat-mode-seg").querySelectorAll("[data-cmode]").forEach((b) => {
       b.addEventListener("click", () => {
         state.compatSubMode = b.dataset.cmode;
-        syncCompatModeSeg();
-        renderCompatWorkspace();
+        renderCompatView();
       });
     });
 

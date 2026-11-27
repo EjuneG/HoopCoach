@@ -13,20 +13,20 @@ import json
 import os
 import re
 import sys
+import threading
 from typing import Any, Optional
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_SRC_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SRC_DIR not in sys.path:
+    sys.path.insert(0, _SRC_DIR)
+
+from platform_compat import BASE_DIR, resolve_game_dirs
+
 GUIDE_DB_FILE = os.path.join(BASE_DIR, "data", "equipment_guide_db.json")
 EQUIP_POOL_FILE = os.path.join(BASE_DIR, "data", "equip_pool.json")
 CHARS_FILE = os.path.join(BASE_DIR, "data", "hoopgirls", "characters.json")
 ICONS_DIR = os.path.join(BASE_DIR, "data", "hoopgirls", "equipment_icons")
-
-# 从育成日志 [EDU_MODEL] / 开局配装包中提取实装上阵器材（字段顺序与 live_coach 解析一致）
-_SUPACTOR_CARD_RE = re.compile(
-    r"awake_level\s*=\s*(\d+)\s*,\s*break_level\s*=\s*(\d+)\s*,\s*card_id\s*=\s*(\d+)\s*,\s*"
-    r"cfg_id\s*=\s*(\d+)\s*,\s*event_progress\s*=\s*\d+\s*,\s*level\s*=\s*(\d+)\s*,\s*trammel\s*=\s*(\d+)",
-    re.S,
-)
+_SYNC_LOCK = threading.Lock()
 
 STAT_NAMES = {101: "投射", 102: "弹跳", 103: "防守", 104: "体能", 105: "运控", 106: "意识"}
 TRAIN_NAME_TO_ID = {v: k for k, v in STAT_NAMES.items()}
@@ -98,92 +98,6 @@ def load_equip_data(force_reload: bool = False) -> tuple[dict, dict, dict]:
     return _CACHED_DATA
 
 
-def sync_equip_pool_from_logs(log_dir: str, force_rescan: bool = False) -> dict:
-    """
-    从游戏 Logs 中增量提取曾实装上阵的器材，写入 data/equip_pool.json。
-    说明：登录包 card.sc_supactor_dict 在日志里常被折叠为 {...}，因此以育成
-    [EDU_MODEL] 展开的上阵卡为准——覆盖「常用主力卡」，不是完整背包图鉴。
-    """
-    global _CACHED_DATA, _CACHED_MTIMES
-    if not log_dir or not os.path.isdir(log_dir):
-        raise FileNotFoundError(f"游戏日志目录无效：{log_dir!r}")
-
-    cached: dict[str, Any] = {
-        "owned_cards": {},
-        "borrowed_cards": {},
-        "scanned_logs": {},
-        "total_owned_card_ids_in_cache": 0,
-        "source": "edu_log_loadout",
-    }
-    if os.path.exists(EQUIP_POOL_FILE) and not force_rescan:
-        try:
-            with open(EQUIP_POOL_FILE, "r", encoding="utf-8") as f:
-                loaded = json.load(f)
-            if isinstance(loaded, dict):
-                cached.update(loaded)
-                cached.setdefault("owned_cards", {})
-                cached.setdefault("borrowed_cards", {})
-                cached.setdefault("scanned_logs", {})
-        except Exception:
-            pass
-
-    guide_db, _, _ = load_equip_data(force_reload=True)
-    equips = guide_db.get("equipments") or {}
-    owned = dict(cached.get("owned_cards") or {})
-    scanned_logs = {} if force_rescan else dict(cached.get("scanned_logs") or {})
-    if force_rescan:
-        owned = {}
-
-    logs = sorted(glob.glob(os.path.join(log_dir, "*.txt")), key=os.path.getmtime)
-    for lp in logs:
-        bn = os.path.basename(lp)
-        try:
-            st = os.stat(lp)
-            sig = {"mtime": round(st.st_mtime, 6), "size": int(st.st_size)}
-        except OSError:
-            continue
-        if not force_rescan and scanned_logs.get(bn) == sig:
-            continue
-        try:
-            with open(lp, "r", encoding="utf-8", errors="ignore") as f:
-                txt = f.read()
-        except Exception:
-            continue
-        scanned_logs[bn] = sig
-        for m in _SUPACTOR_CARD_RE.finditer(txt):
-            awake, brk, _card_id, cfg, level, _tram = (int(x) for x in m.groups())
-            if not (10000 <= cfg <= 99999):
-                continue
-            key = str(cfg)
-            eq = equips.get(key) or {}
-            prev = owned.get(key) or {}
-            owned[key] = {
-                "cfg_id": cfg,
-                "name": eq.get("name") or prev.get("name") or key,
-                "level": max(int(prev.get("level") or 0), level),
-                "break_level": max(int(prev.get("break_level") or 0), brk),
-                "awake_level": max(int(prev.get("awake_level") or 0), awake),
-                "seen_count": int(prev.get("seen_count") or 0) + 1,
-            }
-
-    result = {
-        "owned_cards": owned,
-        "borrowed_cards": dict(cached.get("borrowed_cards") or {}),
-        "scanned_logs": scanned_logs,
-        "total_owned_card_ids_in_cache": len(owned),
-        "source": "edu_log_loadout",
-    }
-    try:
-        os.makedirs(os.path.dirname(EQUIP_POOL_FILE), exist_ok=True)
-        with open(EQUIP_POOL_FILE, "w", encoding="utf-8") as f:
-            json.dump(result, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
-    _CACHED_DATA = None
-    _CACHED_MTIMES = None
-    return result
-
-
 def get_equip_icon_path(eq: dict) -> str:
     fn = eq.get("icon_file") or ""
     if fn:
@@ -191,6 +105,197 @@ def get_equip_icon_path(eq: dict) -> str:
         if os.path.exists(p):
             return p
     return ""
+
+
+def _resolve_equip_sync_dirs(
+    docs_dir: Optional[str] = None,
+    log_dir: Optional[str] = None,
+) -> tuple[str, str]:
+    if docs_dir is not None or log_dir is not None:
+        d_dir = str(docs_dir or "").strip()
+        l_dir = str(log_dir or "").strip()
+        if l_dir and not d_dir:
+            norm_l = os.path.normpath(l_dir)
+            d_dir = os.path.dirname(norm_l) if os.path.basename(norm_l).lower() == "logs" else norm_l
+        elif d_dir and not l_dir:
+            cand_l = os.path.join(d_dir, "Logs")
+            if os.path.isdir(cand_l):
+                l_dir = cand_l
+        return d_dir, l_dir
+    return resolve_game_dirs(interactive_on_missing=False)
+
+
+def sync_equip_pool(
+    docs_dir: Optional[str] = None,
+    log_dir: Optional[str] = None,
+    force_rescan: bool = False,
+    max_logs: int = 20,
+) -> dict:
+    """
+    只读扫描游戏本地 ob_*/new_supactor.json、last_edu_supactor_*.json 与近期日志中的 supactor_dict，
+    增量同步玩家自有器材与常借助战器材至 data/equip_pool.json（线程安全 + 原子写）。
+    """
+    global _CACHED_DATA, _CACHED_MTIMES
+    with _SYNC_LOCK:
+        active_docs_dir, active_log_dir = _resolve_equip_sync_dirs(docs_dir=docs_dir, log_dir=log_dir)
+        has_valid_docs = bool(active_docs_dir and os.path.isdir(active_docs_dir))
+        has_valid_logs = bool(active_log_dir and os.path.isdir(active_log_dir))
+
+        cached = {
+            "total_owned_card_ids_in_cache": 0,
+            "owned_cards": {},
+            "borrowed_cards": {},
+            "last_edu_supactor": [],
+            "scanned_logs": {},
+        }
+        has_existing_cache = os.path.exists(EQUIP_POOL_FILE)
+        if has_existing_cache:
+            try:
+                with open(EQUIP_POOL_FILE, "r", encoding="utf-8") as f:
+                    loaded = json.load(f)
+                if isinstance(loaded, dict):
+                    cached.update(loaded)
+            except Exception:
+                pass
+
+        if not has_valid_docs and not has_valid_logs and not has_existing_cache:
+            return cached
+
+        guide_db, _, _ = load_equip_data()
+        id_to_name: dict[int, str] = {}
+        for k, eq in (guide_db.get("equipments") or {}).items():
+            if isinstance(eq, dict):
+                eid = int(eq.get("id") or k)
+                id_to_name[eid] = str(eq.get("name") or f"器材{eid}")
+
+        own_card_ids: set[int] = set()
+        last_loadout: list = list(cached.get("last_edu_supactor") or []) if not force_rescan else []
+
+        if has_valid_docs:
+            for ob_path in sorted(glob.glob(os.path.join(active_docs_dir, "ob_*"))):
+                if not os.path.isdir(ob_path):
+                    continue
+                ns_file = os.path.join(ob_path, "new_supactor.json")
+                if os.path.isfile(ns_file):
+                    try:
+                        with open(ns_file, "r", encoding="utf-8") as f:
+                            ns = json.load(f)
+                        if isinstance(ns, dict):
+                            for k in ns.keys():
+                                if str(k).isdigit():
+                                    own_card_ids.add(int(k))
+                        elif isinstance(ns, list):
+                            for k in ns:
+                                if str(k).isdigit():
+                                    own_card_ids.add(int(k))
+                    except Exception:
+                        pass
+                for ls_file in sorted(glob.glob(os.path.join(ob_path, "last_edu_supactor_*.json")), key=os.path.getmtime):
+                    try:
+                        with open(ls_file, "r", encoding="utf-8") as f:
+                            ls = json.load(f)
+                        if isinstance(ls, list) and ls:
+                            last_loadout = ls
+                    except Exception:
+                        pass
+
+        owned_resolved: dict[str, dict] = {} if force_rescan else {
+            str(k): dict(v) for k, v in (cached.get("owned_cards") or {}).items() if isinstance(v, dict)
+        }
+        borrowed_seen: dict[str, dict] = {} if force_rescan else {
+            str(k): dict(v) for k, v in (cached.get("borrowed_cards") or {}).items() if isinstance(v, dict)
+        }
+        scanned_logs: dict[str, dict] = {} if force_rescan else dict(cached.get("scanned_logs") or {})
+
+        seen_cards: dict[int, dict] = {}
+        if has_valid_logs:
+            logs = sorted(glob.glob(os.path.join(active_log_dir, "*.txt")), key=os.path.getmtime, reverse=True)
+            if max_logs > 0:
+                logs = logs[:max_logs]
+            entry_re = re.compile(
+                r"\{\s*awake_level\s*=\s*(\d+).*?break_level\s*=\s*(\d+).*?card_id\s*=\s*(\d+).*?cfg_id\s*=\s*(\d+).*?level\s*=\s*(\d+)",
+                re.S,
+            )
+            for lp in reversed(logs):
+                log_name = os.path.basename(lp)
+                try:
+                    st = os.stat(lp)
+                    log_sig = {"mtime": round(st.st_mtime, 6), "size": int(st.st_size)}
+                except OSError:
+                    continue
+                if not force_rescan and scanned_logs.get(log_name) == log_sig:
+                    continue
+                try:
+                    with open(lp, "r", encoding="utf-8", errors="ignore") as f:
+                        in_sup = False
+                        buf: list[str] = []
+                        for line in f:
+                            if "supactor_dict" in line:
+                                in_sup = True
+                                buf = [line]
+                            elif in_sup:
+                                buf.append(line)
+                                if len(buf) > 95 or "trammel_dict" in line or "note_dict" in line:
+                                    blk = "".join(buf)
+                                    for m in entry_re.finditer(blk):
+                                        aw, br, cid, cfg, lv = map(int, m.groups())
+                                        prev = seen_cards.get(cid)
+                                        if not prev or (lv, br, aw) > (
+                                            prev["level"],
+                                            prev["break_level"],
+                                            prev["awake_level"],
+                                        ):
+                                            seen_cards[cid] = {
+                                                "card_id": cid,
+                                                "cfg_id": cfg,
+                                                "name": id_to_name.get(cfg, f"器材{cfg}"),
+                                                "level": lv,
+                                                "break_level": br,
+                                                "awake_level": aw,
+                                            }
+                                    in_sup = False
+                    scanned_logs[log_name] = log_sig
+                except Exception:
+                    continue
+
+        borrow_cids = {
+            int(x["id"])
+            for x in last_loadout
+            if isinstance(x, dict) and x.get("source_type") == 2 and str(x.get("id", "")).isdigit()
+        }
+
+        for cid, info in seen_cards.items():
+            cfg = info["cfg_id"]
+            is_own = (cid in own_card_ids) and (cid not in borrow_cids)
+            if not own_card_ids and cfg != 11004:
+                is_own = True
+            target = owned_resolved if is_own else borrowed_seen
+            prev = target.get(str(cfg))
+            if not prev or (info["level"], info["break_level"], info["awake_level"]) > (
+                int(prev.get("level") or 0),
+                int(prev.get("break_level") or 0),
+                int(prev.get("awake_level") or 0),
+            ):
+                target[str(cfg)] = info
+
+        result = {
+            "total_owned_card_ids_in_cache": max(len(own_card_ids), int(cached.get("total_owned_card_ids_in_cache") or 0) if not force_rescan else 0),
+            "owned_cards": owned_resolved,
+            "borrowed_cards": borrowed_seen,
+            "last_edu_supactor": last_loadout,
+            "scanned_logs": scanned_logs,
+        }
+        try:
+            os.makedirs(os.path.dirname(EQUIP_POOL_FILE), exist_ok=True)
+            tmp_path = f"{EQUIP_POOL_FILE}.tmp.{os.getpid()}.{threading.get_ident()}"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(result, f, indent=2, ensure_ascii=False)
+            os.replace(tmp_path, EQUIP_POOL_FILE)
+            _CACHED_DATA = None
+            _CACHED_MTIMES = None
+        except Exception:
+            pass
+        return result
 
 
 def evaluate_skill_match(eq: dict, char_obj: dict) -> dict:

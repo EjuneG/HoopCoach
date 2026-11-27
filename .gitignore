@@ -8,6 +8,7 @@ dist/
 
 # Local runtime config, logs, and personal run archives
 config/local_paths.json
+config/note_overrides.json
 config/assets_state.json
 _update_staging/
 _update_backup/
@@ -18,5 +19,6 @@ data/equip_pool.json
 data/account_snapshot.json
 data/daily_queue.json
 dashboard/data/
+worker/.wrangler/
 *.log
 *.tmp

@@ -68,11 +68,11 @@ if _THIS_DIR not in sys.path:
 
 import analyzer
 import dashboard_server
-import equipment_advisor as ea
+import equipment_advisor
 import issue_reporter
 import live_coach as lc
 from log_mirror import LiveLogMirror
-import note_advisor as na
+import note_advisor
 import platform_compat as pc
 from skill_advisor import evaluate_skill_choices
 import updater
@@ -381,6 +381,7 @@ class LQSNCoachDesktopApp:
 
         self._closing = False
         self._attaching_log = False
+        self._syncing_pools = False
         self._scanning_runs = False
         self._checking_updates = False
         self._latest_update_res = None
@@ -1684,6 +1685,7 @@ class LQSNCoachDesktopApp:
         if not chosen:
             return
         self.docs_dir, self.log_dir = chosen
+        analyzer.LOG_DIR = self.log_dir
         self.var_dir_display.set(self.log_dir)
         if self._dashboard_monitor is not None:
             self._dashboard_monitor.set_log_dir(self.log_dir)
@@ -1692,10 +1694,63 @@ class LQSNCoachDesktopApp:
             self.mirror = None
         self._last_rendered_sig = ""
         self._start_attach_latest_async()
+        self._start_sync_pools_async()
+
+    def _start_sync_pools_async(self, force_rescan: bool = False) -> None:
+        if self._syncing_pools:
+            return
+        docs_dir = self.docs_dir
+        log_dir = self.log_dir
+        if not ((docs_dir and os.path.isdir(docs_dir)) or (log_dir and os.path.isdir(log_dir))):
+            return
+        self._syncing_pools = True
+
+        def _worker():
+            err: Optional[Exception] = None
+            try:
+                chars, _, _, entries_cat = self._get_note_static_db()
+                note_advisor.sync_note_and_actor_pool(
+                    chars,
+                    entries_cat,
+                    force_rescan=force_rescan,
+                    docs_dir=docs_dir,
+                    log_dir=log_dir,
+                )
+            except Exception as e:
+                err = e
+            try:
+                equipment_advisor.sync_equip_pool(
+                    docs_dir=docs_dir,
+                    log_dir=log_dir,
+                    force_rescan=force_rescan,
+                )
+            except Exception as e:
+                if err is None:
+                    err = e
+            self.root.after(0, lambda: self._on_sync_pools_done(err))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_sync_pools_done(self, err: Optional[Exception]) -> None:
+        self._syncing_pools = False
+        if self._closing:
+            return
+        if err is not None:
+            self._record_runtime_error("自动同步本地角色/笔记/器材池", err)
+        self._note_pool_mtime = -2.0
+        if self._dashboard_engine is not None:
+            try:
+                self._dashboard_engine.invalidate_caches()
+            except Exception:
+                pass
+        if self.mirror is not None:
+            self._last_rendered_sig = ""
+            self._render_current_state(force=True)
 
     def _start_attach_latest_async(self) -> None:
         if self._attaching_log or not self.log_dir or not os.path.isdir(self.log_dir):
             return
+        self._start_sync_pools_async()
         self._attaching_log = True
         self._set_connection_status("warn", "正在读取最新游戏日志...")
 
@@ -2019,6 +2074,7 @@ class LQSNCoachDesktopApp:
                     host="127.0.0.1",
                     port=8765,
                     log_dir=self.log_dir,
+                    docs_dir=self.docs_dir,
                 )
                 self._dashboard_srv = srv
                 self._dashboard_url = url
@@ -2042,14 +2098,42 @@ class LQSNCoachDesktopApp:
 
         def _worker():
             try:
-                # 必须用控制台已绑定的日志目录，避免模块导入时的 LOG_DIR 为空/过期
-                # 导致 schema 升级全量重算时扫到空目录并写出空归档
+                # 显式传入当前控制台绑定的日志目录，避免首次启动未识别导致 analyzer.LOG_DIR 为空
                 analyzer.LOG_DIR = self.log_dir
-                runs = analyzer.extract_all_runs(strategy_name=self.strategy_name, force_rebuild=False)
+                runs = analyzer.extract_all_runs(
+                    strategy_name=self.strategy_name,
+                    force_rebuild=False,
+                    log_dir=self.log_dir,
+                )
                 n = len(runs or [])
 
-                # 同步角色/笔记/器材个人池，供作战室「笔记与配装」「相性查询」使用
-                pool_msg = self._sync_personal_pools()
+                pool_parts: list[str] = []
+                try:
+                    chars, _, _, entries_cat = self._get_note_static_db()
+                    note_pool = note_advisor.sync_note_and_actor_pool(
+                        chars,
+                        entries_cat,
+                        docs_dir=self.docs_dir,
+                        log_dir=self.log_dir,
+                    )
+                    n_act = len((note_pool or {}).get("owned_actors") or [])
+                    n_own = len((note_pool or {}).get("own_notes") or {})
+                    n_bor = len((note_pool or {}).get("borrowed_notes") or {})
+                    pool_parts.append(f"角色{n_act}/笔记{n_own}+借{n_bor}")
+                except Exception as e:
+                    self._record_runtime_error("同步笔记角色池", e)
+
+                try:
+                    eq_pool = equipment_advisor.sync_equip_pool(
+                        docs_dir=self.docs_dir,
+                        log_dir=self.log_dir,
+                    )
+                    n_eq = len((eq_pool or {}).get("owned_cards") or {})
+                    pool_parts.append(f"器材{n_eq}")
+                except Exception as e:
+                    self._record_runtime_error("同步器材池", e)
+
+                self._note_pool_mtime = -2.0
                 if self._dashboard_engine is not None:
                     self._dashboard_engine.invalidate_caches()
                 if n == 0:
@@ -2060,8 +2144,8 @@ class LQSNCoachDesktopApp:
                         msg = "日志目录内没有 .txt 文件"
                 else:
                     msg = f"已归档 {n} 局战绩"
-                if pool_msg:
-                    msg = f"{msg} · {pool_msg}"
+                if pool_parts:
+                    msg = f"{msg} · 池 {' '.join(pool_parts)}"
             except Exception as e:
                 msg = f"扫描失败：{e}"
                 self._record_runtime_error("扫描历史战绩", e)
@@ -2085,38 +2169,6 @@ class LQSNCoachDesktopApp:
             self._note_static_db = lc.load_note_static_db()
         return self._note_static_db
 
-    def _sync_personal_pools(self) -> str:
-        """从日志增量同步笔记池与器材池；返回简短状态文案。"""
-        if not self.log_dir or not os.path.isdir(self.log_dir):
-            return ""
-        parts: list[str] = []
-        try:
-            docs_dir = self.docs_dir or os.path.dirname(self.log_dir)
-            na.DOCS_DIR = docs_dir
-            na.LOG_DIR = self.log_dir
-            chars, _rules, _rel, entries_cat = self._get_note_static_db()
-            pool = na.sync_note_and_actor_pool(chars, entries_cat, force_rescan=False)
-            self._note_pool_cache = pool if isinstance(pool, dict) else {}
-            try:
-                self._note_pool_mtime = os.path.getmtime(
-                    os.path.join(pc.BASE_DIR, "data", "note_pool.json")
-                )
-            except OSError:
-                self._note_pool_mtime = -1.0
-            n_own = len((pool or {}).get("own_notes") or {})
-            n_bor = len((pool or {}).get("borrowed_notes") or {})
-            n_act = len((pool or {}).get("owned_actors") or [])
-            parts.append(f"角色{n_act}/笔记{n_own}+借{n_bor}")
-        except Exception as e:
-            self._record_runtime_error("同步笔记角色池", e)
-        try:
-            eq_pool = ea.sync_equip_pool_from_logs(self.log_dir, force_rescan=False)
-            n_eq = len((eq_pool or {}).get("owned_cards") or {})
-            parts.append(f"器材{n_eq}")
-        except Exception as e:
-            self._record_runtime_error("同步器材池", e)
-        return "池 " + " ".join(parts) if parts else ""
-
     def _get_note_pool(self) -> dict:
         pool_path = os.path.join(pc.BASE_DIR, "data", "note_pool.json")
         try:
@@ -2126,13 +2178,6 @@ class LQSNCoachDesktopApp:
         if mt == self._note_pool_mtime:
             return self._note_pool_cache
         if mt < 0:
-            # 冷启动：尚无笔记池文件时，尝试从日志同步一次
-            if self.log_dir and os.path.isdir(self.log_dir):
-                try:
-                    self._sync_personal_pools()
-                    return self._note_pool_cache
-                except Exception as e:
-                    self._record_runtime_error("冷启动同步笔记池", e)
             self._note_pool_cache = {}
             self._note_pool_mtime = -1.0
             return self._note_pool_cache
