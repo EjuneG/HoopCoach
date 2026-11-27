@@ -68,9 +68,11 @@ if _THIS_DIR not in sys.path:
 
 import analyzer
 import dashboard_server
+import equipment_advisor as ea
 import issue_reporter
 import live_coach as lc
 from log_mirror import LiveLogMirror
+import note_advisor as na
 import platform_compat as pc
 from skill_advisor import evaluate_skill_choices
 import updater
@@ -2040,13 +2042,29 @@ class LQSNCoachDesktopApp:
 
         def _worker():
             try:
+                # 必须用控制台已绑定的日志目录，避免模块导入时的 LOG_DIR 为空/过期
+                # 导致 schema 升级全量重算时扫到空目录并写出空归档
+                analyzer.LOG_DIR = self.log_dir
                 runs = analyzer.extract_all_runs(strategy_name=self.strategy_name, force_rebuild=False)
                 n = len(runs or [])
+
+                # 同步角色/笔记/器材个人池，供作战室「笔记与配装」「相性查询」使用
+                pool_msg = self._sync_personal_pools()
                 if self._dashboard_engine is not None:
                     self._dashboard_engine.invalidate_caches()
-                msg = f"已归档 {n} 局战绩"
+                if n == 0:
+                    log_n = len(glob.glob(os.path.join(self.log_dir, "*.txt")))
+                    if log_n > 0:
+                        msg = f"未解析到完赛局（日志 {log_n} 个）。可再试一次或查看 runtime_error.log"
+                    else:
+                        msg = "日志目录内没有 .txt 文件"
+                else:
+                    msg = f"已归档 {n} 局战绩"
+                if pool_msg:
+                    msg = f"{msg} · {pool_msg}"
             except Exception as e:
                 msg = f"扫描失败：{e}"
+                self._record_runtime_error("扫描历史战绩", e)
             self.root.after(0, lambda: self._on_scan_done(msg))
 
         threading.Thread(target=_worker, daemon=True).start()
@@ -2067,6 +2085,38 @@ class LQSNCoachDesktopApp:
             self._note_static_db = lc.load_note_static_db()
         return self._note_static_db
 
+    def _sync_personal_pools(self) -> str:
+        """从日志增量同步笔记池与器材池；返回简短状态文案。"""
+        if not self.log_dir or not os.path.isdir(self.log_dir):
+            return ""
+        parts: list[str] = []
+        try:
+            docs_dir = self.docs_dir or os.path.dirname(self.log_dir)
+            na.DOCS_DIR = docs_dir
+            na.LOG_DIR = self.log_dir
+            chars, _rules, _rel, entries_cat = self._get_note_static_db()
+            pool = na.sync_note_and_actor_pool(chars, entries_cat, force_rescan=False)
+            self._note_pool_cache = pool if isinstance(pool, dict) else {}
+            try:
+                self._note_pool_mtime = os.path.getmtime(
+                    os.path.join(pc.BASE_DIR, "data", "note_pool.json")
+                )
+            except OSError:
+                self._note_pool_mtime = -1.0
+            n_own = len((pool or {}).get("own_notes") or {})
+            n_bor = len((pool or {}).get("borrowed_notes") or {})
+            n_act = len((pool or {}).get("owned_actors") or [])
+            parts.append(f"角色{n_act}/笔记{n_own}+借{n_bor}")
+        except Exception as e:
+            self._record_runtime_error("同步笔记角色池", e)
+        try:
+            eq_pool = ea.sync_equip_pool_from_logs(self.log_dir, force_rescan=False)
+            n_eq = len((eq_pool or {}).get("owned_cards") or {})
+            parts.append(f"器材{n_eq}")
+        except Exception as e:
+            self._record_runtime_error("同步器材池", e)
+        return "池 " + " ".join(parts) if parts else ""
+
     def _get_note_pool(self) -> dict:
         pool_path = os.path.join(pc.BASE_DIR, "data", "note_pool.json")
         try:
@@ -2076,6 +2126,13 @@ class LQSNCoachDesktopApp:
         if mt == self._note_pool_mtime:
             return self._note_pool_cache
         if mt < 0:
+            # 冷启动：尚无笔记池文件时，尝试从日志同步一次
+            if self.log_dir and os.path.isdir(self.log_dir):
+                try:
+                    self._sync_personal_pools()
+                    return self._note_pool_cache
+                except Exception as e:
+                    self._record_runtime_error("冷启动同步笔记池", e)
             self._note_pool_cache = {}
             self._note_pool_mtime = -1.0
             return self._note_pool_cache

@@ -7,6 +7,7 @@
 """
 
 import argparse
+import glob
 import html
 import json
 import os
@@ -19,6 +20,13 @@ GUIDE_DB_FILE = os.path.join(BASE_DIR, "data", "equipment_guide_db.json")
 EQUIP_POOL_FILE = os.path.join(BASE_DIR, "data", "equip_pool.json")
 CHARS_FILE = os.path.join(BASE_DIR, "data", "hoopgirls", "characters.json")
 ICONS_DIR = os.path.join(BASE_DIR, "data", "hoopgirls", "equipment_icons")
+
+# 从育成日志 [EDU_MODEL] / 开局配装包中提取实装上阵器材（字段顺序与 live_coach 解析一致）
+_SUPACTOR_CARD_RE = re.compile(
+    r"awake_level\s*=\s*(\d+)\s*,\s*break_level\s*=\s*(\d+)\s*,\s*card_id\s*=\s*(\d+)\s*,\s*"
+    r"cfg_id\s*=\s*(\d+)\s*,\s*event_progress\s*=\s*\d+\s*,\s*level\s*=\s*(\d+)\s*,\s*trammel\s*=\s*(\d+)",
+    re.S,
+)
 
 STAT_NAMES = {101: "投射", 102: "弹跳", 103: "防守", 104: "体能", 105: "运控", 106: "意识"}
 TRAIN_NAME_TO_ID = {v: k for k, v in STAT_NAMES.items()}
@@ -88,6 +96,92 @@ def load_equip_data(force_reload: bool = False) -> tuple[dict, dict, dict]:
     _CACHED_DATA = (guide_db, equip_pool, chars_by_id)
     _CACHED_MTIMES = cur_mtimes
     return _CACHED_DATA
+
+
+def sync_equip_pool_from_logs(log_dir: str, force_rescan: bool = False) -> dict:
+    """
+    从游戏 Logs 中增量提取曾实装上阵的器材，写入 data/equip_pool.json。
+    说明：登录包 card.sc_supactor_dict 在日志里常被折叠为 {...}，因此以育成
+    [EDU_MODEL] 展开的上阵卡为准——覆盖「常用主力卡」，不是完整背包图鉴。
+    """
+    global _CACHED_DATA, _CACHED_MTIMES
+    if not log_dir or not os.path.isdir(log_dir):
+        raise FileNotFoundError(f"游戏日志目录无效：{log_dir!r}")
+
+    cached: dict[str, Any] = {
+        "owned_cards": {},
+        "borrowed_cards": {},
+        "scanned_logs": {},
+        "total_owned_card_ids_in_cache": 0,
+        "source": "edu_log_loadout",
+    }
+    if os.path.exists(EQUIP_POOL_FILE) and not force_rescan:
+        try:
+            with open(EQUIP_POOL_FILE, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+            if isinstance(loaded, dict):
+                cached.update(loaded)
+                cached.setdefault("owned_cards", {})
+                cached.setdefault("borrowed_cards", {})
+                cached.setdefault("scanned_logs", {})
+        except Exception:
+            pass
+
+    guide_db, _, _ = load_equip_data(force_reload=True)
+    equips = guide_db.get("equipments") or {}
+    owned = dict(cached.get("owned_cards") or {})
+    scanned_logs = {} if force_rescan else dict(cached.get("scanned_logs") or {})
+    if force_rescan:
+        owned = {}
+
+    logs = sorted(glob.glob(os.path.join(log_dir, "*.txt")), key=os.path.getmtime)
+    for lp in logs:
+        bn = os.path.basename(lp)
+        try:
+            st = os.stat(lp)
+            sig = {"mtime": round(st.st_mtime, 6), "size": int(st.st_size)}
+        except OSError:
+            continue
+        if not force_rescan and scanned_logs.get(bn) == sig:
+            continue
+        try:
+            with open(lp, "r", encoding="utf-8", errors="ignore") as f:
+                txt = f.read()
+        except Exception:
+            continue
+        scanned_logs[bn] = sig
+        for m in _SUPACTOR_CARD_RE.finditer(txt):
+            awake, brk, _card_id, cfg, level, _tram = (int(x) for x in m.groups())
+            if not (10000 <= cfg <= 99999):
+                continue
+            key = str(cfg)
+            eq = equips.get(key) or {}
+            prev = owned.get(key) or {}
+            owned[key] = {
+                "cfg_id": cfg,
+                "name": eq.get("name") or prev.get("name") or key,
+                "level": max(int(prev.get("level") or 0), level),
+                "break_level": max(int(prev.get("break_level") or 0), brk),
+                "awake_level": max(int(prev.get("awake_level") or 0), awake),
+                "seen_count": int(prev.get("seen_count") or 0) + 1,
+            }
+
+    result = {
+        "owned_cards": owned,
+        "borrowed_cards": dict(cached.get("borrowed_cards") or {}),
+        "scanned_logs": scanned_logs,
+        "total_owned_card_ids_in_cache": len(owned),
+        "source": "edu_log_loadout",
+    }
+    try:
+        os.makedirs(os.path.dirname(EQUIP_POOL_FILE), exist_ok=True)
+        with open(EQUIP_POOL_FILE, "w", encoding="utf-8") as f:
+            json.dump(result, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+    _CACHED_DATA = None
+    _CACHED_MTIMES = None
+    return result
 
 
 def get_equip_icon_path(eq: dict) -> str:
