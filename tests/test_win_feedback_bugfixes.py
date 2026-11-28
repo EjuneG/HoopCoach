@@ -529,5 +529,90 @@ class TestReportedBugfixes(unittest.TestCase):
                 self.assertEqual(res["runs_total"], 1)
                 self.assertEqual(len(eng.get_overview()["runs"]), 1)
                 self.assertTrue(os.path.isfile(snap_js))
+
+    def test_win_launcher_initial_geometry_and_combobox_wheel_guard(self):
+        import win_launcher as wl
+        from unittest.mock import MagicMock
+
+        if wl.tk is None:
+            self.skipTest("tkinter unavailable")
+
+        app = None
+        try:
+            with (
+                patch.object(wl.pc, "resolve_game_dirs", return_value=("", "")),
+                patch.object(wl.pc, "WindowsFloatingHUD", return_value=MagicMock(diegetic_mode=True)),
+                patch.object(wl.LQSNCoachDesktopApp, "_prompt_first_time_dir", lambda self: None),
+                patch.object(wl.LQSNCoachDesktopApp, "_start_check_updates", lambda self, silent=True: None),
+            ):
+                try:
+                    app = wl.LQSNCoachDesktopApp()
+                except Exception as exc:
+                    if "display" in str(exc).lower() or "tclerror" in type(exc).__name__.lower():
+                        self.skipTest(f"headless display unavailable: {exc}")
+                    raise
+
+                # 移到屏幕外完成真实布局测量与事件派发，避免测试闪烁抢焦点
+                cur_size = app.root.geometry().split("+")[0]
+                app.root.geometry(f"{cur_size}+10000+10000")
+                app.root.update()
+
+                avail_w, avail_h = app._get_screen_work_area()
+                if avail_h >= 780:
+                    self.assertFalse(
+                        bool(app._scroll_bar.winfo_ismapped()),
+                        "常规桌面分辨率下初始窗口应完整展示首页卡片，无需出现滚动条",
+                    )
+                    btn_bottom = (
+                        app.btn_open_dashboard.winfo_rooty()
+                        - app._scroll_canvas.winfo_rooty()
+                        + app.btn_open_dashboard.winfo_height()
+                    )
+                    self.assertLessEqual(
+                        btn_bottom,
+                        app._scroll_canvas.winfo_height() + 2,
+                        "『打开作战室网页』按钮在初始窗口中必须无需滚动直接可见",
+                    )
+
+                # 验证鼠标滚轮划过中间三个下拉框时绝不篡改当前选中项
+                strat_before = app.var_strategy.get()
+                fstat_before = app.var_focus_stat.get()
+                fbonus_before = app.var_focus_bonus.get()
+                for cb in (app.cb_strategy, app.cb_focus_stat, app.cb_focus_bonus):
+                    self.assertIsNotNone(cb)
+                    res = app._on_combobox_mousewheel(
+                        type("Ev", (), {"widget": cb, "delta": -120, "num": None})()
+                    )
+                    self.assertEqual(res, "break")
+                    cb.event_generate("<MouseWheel>", delta=-120)
+                    cb.event_generate("<MouseWheel>", delta=120)
+                    app.root.update()
+
+                self.assertEqual(app.var_strategy.get(), strat_before)
+                self.assertEqual(app.var_focus_stat.get(), fstat_before)
+                self.assertEqual(app.var_focus_bonus.get(), fbonus_before)
+
+                # 当窗口被手动压矮需要滚动时，在中间下拉框上滚轮应顺畅滚动外层页面且仍不改值
+                app.root.minsize(468, 400)
+                app.root.geometry("520x420+10000+10000")
+                app.root.update()
+                app._sync_scroll_layout()
+                app.root.update()
+                y0 = app._scroll_canvas.yview()[0]
+                app._on_combobox_mousewheel(
+                    type("Ev", (), {"widget": app.cb_strategy, "delta": -120, "num": None})()
+                )
+                y1 = app._scroll_canvas.yview()[0]
+                self.assertGreater(y1, y0)
+                self.assertEqual(app.var_strategy.get(), strat_before)
+        finally:
+            if app is not None:
+                app._closing = True
+                try:
+                    app.root.destroy()
+                except Exception:
+                    pass
+
+
 if __name__ == "__main__":
     unittest.main()

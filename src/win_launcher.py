@@ -369,12 +369,12 @@ class LQSNCoachDesktopApp:
 
         self.root = tk.Tk()
         self.root.title("HoopCoach · 星奈军师")
-        screen_h = int(self.root.winfo_screenheight() or 900)
-        screen_w = int(self.root.winfo_screenwidth() or 1440)
-        init_w = min(532, max(472, screen_w - 40))
-        init_h = min(584, max(500, screen_h - 90))
+        self._dpi_scale = self._detect_dpi_scale()
+        avail_w, avail_h = self._get_screen_work_area()
+        init_w = min(int(round(560 * (1.0 + (self._dpi_scale - 1.0) * 0.55))), max(472, avail_w - 32))
+        init_h = min(int(round(760 * (1.0 + (self._dpi_scale - 1.0) * 0.65))), max(520, avail_h - 36))
         self.root.geometry(f"{init_w}x{init_h}")
-        self.root.minsize(468, min(500, init_h))
+        self.root.minsize(468, min(520, init_h))
         self.root.configure(bg=THEME["bg"])
         self._apply_window_icon()
         self._use_bold_cjk = self._detect_bold_cjk_support()
@@ -395,6 +395,10 @@ class LQSNCoachDesktopApp:
         self._note_pool_mtime: float = -2.0
         self._event_db: Optional[dict] = None
         self._logged_runtime_errors: set[tuple[str, str, str]] = set()
+        self._accent_bar: Optional[tk.Frame] = None
+        self._header_shell: Optional[tk.Frame] = None
+        self._bottom_wrap: Optional[tk.Frame] = None
+        self._scroll_wrap: Optional[tk.Frame] = None
         self._scroll_canvas = None
         self._scroll_bar = None
         self._scroll_window_id = None
@@ -406,6 +410,10 @@ class LQSNCoachDesktopApp:
         self._wrap_labels: list[tuple[tk.Label, int]] = []
         self._status_dot_lbl: Optional[tk.Label] = None
         self._btn_update_settings: Optional[tk.Button] = None
+        self.btn_open_dashboard: Optional[tk.Button] = None
+        self.cb_strategy: Optional[ttk.Combobox] = None
+        self.cb_focus_stat: Optional[ttk.Combobox] = None
+        self.cb_focus_bonus: Optional[ttk.Combobox] = None
         self._update_highlighted = False
         self._mascot_items: list[dict] = discover_mascot_stickers(pc.BASE_DIR)
         self._mascot_index: int = self._resolve_initial_mascot_index()
@@ -481,6 +489,7 @@ class LQSNCoachDesktopApp:
         self.var_diegetic_mode.set("diegetic" if self.hud.diegetic_mode else "compact")
         self._sync_mode_segment_styles()
         self._refresh_hud_hint_text()
+        self._apply_initial_window_geometry()
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -493,6 +502,94 @@ class LQSNCoachDesktopApp:
         self.root.after(220, self._poll_log_tick)
         if self.var_auto_check_updates.get():
             self.root.after(1800, lambda: self._start_check_updates(silent=True))
+
+    def _detect_dpi_scale(self) -> float:
+        """读取当前 Tk 缩放比并换算相对 96 DPI (100%) 的物理倍率（1.0~3.0）。"""
+        try:
+            tk_scaling = float(self.root.tk.call("tk", "scaling") or (96.0 / 72.0))
+            return max(1.0, min(3.0, tk_scaling / (96.0 / 72.0)))
+        except Exception:
+            return 1.0
+
+    def _get_screen_work_area(self) -> tuple[int, int]:
+        """获取除去任务栏后的屏幕可用工作区宽高（物理像素）。"""
+        screen_w = int(self.root.winfo_screenwidth() or 1440)
+        screen_h = int(self.root.winfo_screenheight() or 900)
+        if pc.IS_WINDOWS:
+            try:
+                class _WinRect(ctypes.Structure):
+                    _fields_ = [
+                        ("left", ctypes.c_long),
+                        ("top", ctypes.c_long),
+                        ("right", ctypes.c_long),
+                        ("bottom", ctypes.c_long),
+                    ]
+
+                rect = _WinRect()
+                if ctypes.windll.user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(rect), 0):
+                    w = int(rect.right - rect.left)
+                    h = int(rect.bottom - rect.top)
+                    if w >= 480 and h >= 480:
+                        return w, h
+            except Exception:
+                pass
+        dpi_scale = getattr(self, "_dpi_scale", 1.0)
+        return screen_w, max(480, screen_h - int(round(72 * dpi_scale)))
+
+    def _apply_initial_window_geometry(self) -> None:
+        """根据实际组件测量高度与当前屏幕 DPI 自适应计算初始窗口尺寸，确保首页主按钮（如打开作战室网页）无需下拉即可完整展示。"""
+        try:
+            dpi_scale = getattr(self, "_dpi_scale", 1.0)
+            avail_w, avail_h = self._get_screen_work_area()
+            self.root.update_idletasks()
+
+            hdr_req_w = self._header_shell.winfo_reqwidth() if self._header_shell is not None else 0
+            bot_req_w = (self._bottom_wrap.winfo_reqwidth() + 40) if self._bottom_wrap is not None else 0
+            home_frame = self._tab_frames.get("home")
+            settings_frame = self._tab_frames.get("settings")
+            home_req_w = (home_frame.winfo_reqwidth() + 24) if home_frame is not None else 0
+            settings_req_w = (settings_frame.winfo_reqwidth() + 24) if settings_frame is not None else 0
+
+            design_w = int(round(548 * (1.0 + (dpi_scale - 1.0) * 0.55)))
+            max_w = max(468, avail_w - int(round(32 * dpi_scale)))
+            init_w = min(max_w, max(design_w, hdr_req_w + 16, bot_req_w, home_req_w, settings_req_w))
+
+            if self._scroll_canvas is not None and self._scroll_window_id is not None:
+                self._scroll_canvas.itemconfigure(self._scroll_window_id, width=init_w)
+            for lbl, inset in self._wrap_labels:
+                try:
+                    lbl.configure(wraplength=max(240, init_w - inset))
+                except Exception:
+                    pass
+            self.root.update_idletasks()
+
+            accent_h = self._accent_bar.winfo_reqheight() if self._accent_bar is not None else 4
+            header_h = self._header_shell.winfo_reqheight() if self._header_shell is not None else 70
+            bottom_h = (self._bottom_wrap.winfo_reqheight() + 19) if self._bottom_wrap is not None else 84
+            scroll_pad_h = 12
+            breathing_h = int(round(22 * dpi_scale))
+            chrome_h = accent_h + header_h + bottom_h + scroll_pad_h + breathing_h
+
+            cards_h = self._cards_host.winfo_reqheight() if self._cards_host is not None else 0
+            home_h = max(cards_h, home_frame.winfo_reqheight() if home_frame is not None else 0)
+            settings_h = settings_frame.winfo_reqheight() if settings_frame is not None else 0
+
+            design_h = int(round(640 * (1.0 + (dpi_scale - 1.0) * 0.62)))
+            home_needed_h = chrome_h + home_h
+            both_needed_h = chrome_h + max(home_h, settings_h)
+            max_h = max(500, avail_h - int(round(36 * dpi_scale)))
+
+            desired_h = both_needed_h if both_needed_h <= max_h else home_needed_h
+            init_h = min(max_h, max(design_h, desired_h))
+
+            min_w = min(init_w, max(468, int(round(468 * min(dpi_scale, 1.35)))))
+            min_h = min(init_h, max(500, int(round(520 * min(dpi_scale, 1.35)))))
+            self.root.geometry(f"{init_w}x{init_h}")
+            self.root.minsize(min_w, min_h)
+            self.root.update_idletasks()
+            self._sync_scroll_layout()
+        except Exception:
+            pass
 
     def _apply_window_icon(self) -> None:
         """Windows 控制台窗口接入专属篮球 .ico 图标（Linux / 缺失时静默跳过）。"""
@@ -685,6 +782,13 @@ class LQSNCoachDesktopApp:
             self.root.option_add("*TCombobox*Listbox.font", self._font(9))
         except Exception:
             pass
+        # 禁用 TCombobox 等中间选项控件默认的鼠标滚轮切项行为，防止滚动页面时误改策略/偏科配置
+        for cls_name in ("TCombobox", "TSpinbox", "TScale"):
+            for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+                try:
+                    self.root.unbind_class(cls_name, seq)
+                except Exception:
+                    pass
         style.configure(
             "Anime.Vertical.TScrollbar",
             background=THEME["scroll_thumb"],
@@ -726,13 +830,34 @@ class LQSNCoachDesktopApp:
         except Exception:
             pass
 
+    def _on_combobox_mousewheel(self, event) -> str:
+        """收起态下拉框上的滚轮事件只滚动外层页面（若需要），绝不篡改当前选中的选项。"""
+        self._on_mousewheel(event)
+        return "break"
+
+    def _guard_combobox_wheel(self, cb: ttk.Combobox) -> None:
+        for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+            cb.bind(seq, self._on_combobox_mousewheel)
+        cb.bind(
+            "<<ComboboxSelected>>",
+            lambda _e, w=cb: (w.selection_clear(), self.root.focus_set()),
+            add="+",
+        )
+
     def _on_mousewheel(self, event) -> None:
         if self._scroll_canvas is None or self._cards_host is None:
             return
         try:
-            # 仅在内容高度超出视口时滚动，且避免干扰下拉列表自身滚轮
-            if isinstance(event.widget, ttk.Combobox):
-                return
+            w = getattr(event, "widget", None)
+            # 展开后的下拉弹出列表（Tcl popdown Listbox）或独立子窗口滚动时，不联动主面板滚动条
+            if isinstance(w, str):
+                if "popdown" in w.lower():
+                    return
+            elif isinstance(w, tk.Misc):
+                if w.winfo_toplevel() != self.root:
+                    return
+                if str(w.winfo_class()) in ("Listbox", "Text"):
+                    return
             if self._cards_host.winfo_reqheight() <= self._scroll_canvas.winfo_height() + 2:
                 return
             if getattr(event, "num", None) == 4:
@@ -923,12 +1048,14 @@ class LQSNCoachDesktopApp:
         accent_bar = tk.Frame(self.root, bg=THEME["blue"], height=4)
         accent_bar.pack(fill="x")
         accent_bar.pack_propagate(False)
+        self._accent_bar = accent_bar
         tk.Frame(accent_bar, bg=THEME["primary"], width=124, height=4).pack(side="left")
         tk.Frame(accent_bar, bg=THEME["gold"], width=28, height=4).pack(side="left")
 
         # ── 1. 顶栏（白底墨蓝边 + 可点击轮换 Q 版看板娘 + 品牌标题 + 双页签胶囊） ──
         header_shell = tk.Frame(self.root, bg=THEME["surface"])
         header_shell.pack(fill="x")
+        self._header_shell = header_shell
         top = tk.Frame(header_shell, bg=THEME["surface"])
         top.pack(fill="x", padx=20, pady=(11, 11))
         tk.Frame(header_shell, bg=THEME["ink"], height=2).pack(fill="x")
@@ -1049,6 +1176,7 @@ class LQSNCoachDesktopApp:
         # ── 2. 底部固定栏（实时建议速览 + 轻量更新/反馈入口） ──
         bottom_wrap = tk.Frame(self.root, bg=THEME["bg"])
         bottom_wrap.pack(fill="x", side="bottom", padx=20, pady=(6, 13))
+        self._bottom_wrap = bottom_wrap
 
         preview_pill = tk.Frame(
             bottom_wrap,
@@ -1131,6 +1259,7 @@ class LQSNCoachDesktopApp:
         # ── 3. 中间自适应内容区（大屏零滚动条，高 DPI 小屏自动显现亮色细滚动条） ──
         scroll_wrap = tk.Frame(self.root, bg=THEME["bg"])
         scroll_wrap.pack(fill="both", expand=True, pady=(12, 0))
+        self._scroll_wrap = scroll_wrap
         self._scroll_canvas = tk.Canvas(
             scroll_wrap,
             bg=THEME["bg"],
@@ -1322,6 +1451,8 @@ class LQSNCoachDesktopApp:
         )
         cb_strat.pack(side="left", fill="x", expand=True)
         cb_strat.bind("<<ComboboxSelected>>", self._on_strategy_changed)
+        self._guard_combobox_wheel(cb_strat)
+        self.cb_strategy = cb_strat
 
         row_focus = tk.Frame(c2, bg=THEME["surface"])
         row_focus.pack(fill="x", pady=(0, 10))
@@ -1344,6 +1475,8 @@ class LQSNCoachDesktopApp:
         )
         cb_fstat.pack(side="left", fill="x", expand=True, padx=(0, 8))
         cb_fstat.bind("<<ComboboxSelected>>", self._on_focus_changed)
+        self._guard_combobox_wheel(cb_fstat)
+        self.cb_focus_stat = cb_fstat
 
         cb_fbonus = ttk.Combobox(
             row_focus,
@@ -1355,6 +1488,8 @@ class LQSNCoachDesktopApp:
         )
         cb_fbonus.pack(side="right")
         cb_fbonus.bind("<<ComboboxSelected>>", self._on_focus_changed)
+        self._guard_combobox_wheel(cb_fbonus)
+        self.cb_focus_bonus = cb_fbonus
 
         # 模块开关摘要桥接条（点击直达第二页）
         mod_bridge = tk.Frame(c2, bg=THEME["surface"])
@@ -1416,6 +1551,7 @@ class LQSNCoachDesktopApp:
         )
         btn_dash.pack(side="left", fill="x", expand=True, padx=(0, 10))
         self._bind_hover(btn_dash, THEME["primary"], THEME["primary_hover"])
+        self.btn_open_dashboard = btn_dash
 
         self.btn_scan_runs = tk.Button(
             tool_row,
