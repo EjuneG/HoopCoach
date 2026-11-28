@@ -55,6 +55,7 @@ ISSUE_CATEGORIES = [
     ("bug", "🐛 Bug 反馈", "[Bug]", "bug"),
     ("badge_offset", "📐 角标位置偏移", "[角标偏移]", "bug,ui"),
     ("feature", "💡 功能改进建议", "[建议]", "enhancement"),
+    ("crash", "🚨 程序异常自动上报", "[自动报错]", "bug,auto-report"),
 ]
 
 _COMPACT_LOG_SKIP_PREFIXES = (
@@ -508,15 +509,19 @@ def build_issue_markdown(
     *,
     include_diag: bool = True,
     zip_filename: str = "",
+    reporter_note: str = "",
 ) -> str:
     """生成结构清晰的 GitHub Issue Markdown 正文（已自动脱敏）。"""
     cat_label = next((lbl for k, lbl, _pfx, _lb in ISSUE_CATEGORIES if k == category_key), "🐛 Bug 反馈")
     clean_desc = sanitize_text((description or "").strip()) or "（请在此补充问题描述与复现步骤）"
+    clean_note = sanitize_text((reporter_note or "").strip())
 
     sections = [
         f"### 反馈类型\n{cat_label}",
         f"### 问题描述 / 建议内容\n{clean_desc}",
     ]
+    if clean_note:
+        sections.append(f"### 联系方式 / 昵称\n{clean_note}")
     if include_diag and diag_info:
         sections.append("### 自动采集的脱敏环境信息\n" + _format_env_lines(diag_info))
 
@@ -530,6 +535,46 @@ def build_issue_markdown(
     return "\n\n".join(sections) + "\n"
 
 
+def build_auto_error_payload(
+    context: str,
+    exc_or_detail: object,
+    *,
+    traceback_text: str = "",
+) -> dict:
+    """将运行期或启动期异常构造为严格脱敏的自动报错预填包（title / description / category）。"""
+    clean_ctx = sanitize_text(str(context or "未知阶段")).strip() or "未知阶段"
+    if isinstance(exc_or_detail, BaseException):
+        exc_type = type(exc_or_detail).__name__
+        exc_msg = sanitize_text(str(exc_or_detail)).strip()
+    else:
+        exc_type = "Error"
+        exc_msg = sanitize_text(str(exc_or_detail or "")).strip()
+
+    first_line = (exc_msg.splitlines()[0] if exc_msg else "").strip()[:90]
+    title = sanitize_text(f"{clean_ctx}异常 ({exc_type}{(': ' + first_line) if first_line else ''})")[:115]
+
+    desc_parts = [
+        f"自动捕获到运行异常，触发环节：**{clean_ctx}**",
+        f"- 异常类型：`{exc_type}`",
+    ]
+    if exc_msg:
+        desc_parts.append(f"- 异常信息：`{exc_msg[:400]}`")
+    clean_tb = sanitize_text((traceback_text or "").strip())
+    if clean_tb:
+        if len(clean_tb) > 2200:
+            clean_tb = "...(truncated)\n" + clean_tb[-2200:]
+        desc_parts.append(f"\n脱敏堆栈摘要：\n```text\n{clean_tb}\n```")
+    desc_parts.append("\n（如需补充你当时正在进行的操作，可直接写在这里）")
+
+    return {
+        "category": "crash",
+        "context": clean_ctx,
+        "exc_type": exc_type,
+        "title": title,
+        "description": sanitize_text("\n".join(desc_parts)),
+    }
+
+
 def build_chat_summary(
     category_key: str,
     title: str,
@@ -537,7 +582,7 @@ def build_chat_summary(
     diag_info: Optional[dict] = None,
     zip_filename: str = "",
 ) -> str:
-    """生成适合直接粘贴到微信/QQ 群聊的精简脱敏反馈摘要。"""
+    """生成适合粘贴分享或附带到 Issue 的精简脱敏诊断摘要。"""
     prefix = next((pfx for k, _lbl, pfx, _lb in ISSUE_CATEGORIES if k == category_key), "[Bug]")
     safe_d = _sanitize_recursive(diag_info or {})
     clean_title = sanitize_text((title or "").strip()) or "未填标题"
@@ -548,7 +593,7 @@ def build_chat_summary(
         f"说明：{clean_desc}",
     ]
     if zip_filename:
-        lines.append(f"现场诊断包：{sanitize_text(os.path.basename(zip_filename))}（请顺手拖进聊天窗口发送）")
+        lines.append(f"现场诊断包：{sanitize_text(os.path.basename(zip_filename))}（可一并附带至 GitHub Issue）")
     return "\n".join(lines)
 
 
@@ -699,8 +744,15 @@ def reveal_file_in_explorer(file_path: str) -> None:
 def open_feedback_dialog(
     parent,
     get_context_fn: Optional[Callable[[], dict]] = None,
+    *,
+    initial_category: str = "bug",
+    initial_title: str = "",
+    initial_description: str = "",
+    initial_reporter_note: str = "",
+    auto_error_banner: str = "",
+    show_mute_session_cb: Optional[Callable[[bool], None]] = None,
 ):
-    """打开「反馈 Bug / 提建议」快捷弹窗（亮色校园篮球番主题，支持 Worker 免登直投 + 超级现场包 + 群聊摘要）。"""
+    """打开「反馈 Bug / 提建议 / 自动报错」快捷弹窗（亮色校园篮球番主题，支持 Worker 免登直投 + 现场包）。"""
     if tk is None:
         raise RuntimeError("当前环境缺少 tkinter")
 
@@ -725,11 +777,17 @@ def open_feedback_dialog(
     C_BLUE_DARK = "#1242C4"
     C_ORANGE = "#FF5A1F"
     C_ORANGE_DARK = "#DE440C"
+    C_ERR_BG = "#FFF0F3"
+    C_ERR_BORDER = "#E11D48"
+    C_ERR_FG = "#9F1239"
+
+    valid_cats = {k for k, *_ in ISSUE_CATEGORIES}
+    init_cat = initial_category if initial_category in valid_cats else "bug"
 
     dlg = tk.Toplevel(parent)
-    dlg.title("反馈 Bug / 提改进建议 — HoopCoach")
-    dlg.geometry("560x610")
-    dlg.minsize(510, 560)
+    dlg.title("程序异常一键上报 — HoopCoach" if auto_error_banner else "反馈 Bug / 提改进建议 — HoopCoach")
+    dlg.geometry("580x690" if auto_error_banner else "580x655")
+    dlg.minsize(520, 580)
     dlg.configure(bg=C_BG)
     dlg.transient(parent)
     try:
@@ -737,18 +795,20 @@ def open_feedback_dialog(
     except Exception:
         pass
 
-    var_cat = tk.StringVar(value="bug")
-    var_title = tk.StringVar(value="")
+    var_cat = tk.StringVar(value=init_cat)
+    var_title = tk.StringVar(value=sanitize_text(initial_title or ""))
+    var_reporter_note = tk.StringVar(value=sanitize_text(initial_reporter_note or ""))
     var_include_diag = tk.BooleanVar(value=True)
     var_include_shot = tk.BooleanVar(value=bool(game_rect))
+    var_mute_session = tk.BooleanVar(value=False)
     var_status = tk.StringVar(
         value=(
             "已启用免登直投 · 提交时自动附带脱敏环境、状态快照与本局精简日志"
             if worker_url
             else (
-                f"目标仓库：{meta['github_repo']} · 零 Token 预填跳转，或一键导出完整现场包发群聊"
+                f"目标仓库：{meta['github_repo']} · 零 Token 预填跳转，或一键导出完整现场诊断包"
                 if meta.get("github_repo")
-                else "可一键导出完整脱敏现场包或复制群聊摘要直接发给开发者"
+                else "可一键导出完整脱敏诊断包或复制精简诊断摘要提交给开发者"
             )
         )
     )
@@ -760,9 +820,9 @@ def open_feedback_dialog(
     hdr.pack(fill="x", padx=16, pady=(14, 8))
     tk.Label(
         hdr,
-        text="反馈 Bug / 提改进建议",
+        text="程序异常一键上报" if auto_error_banner else "反馈 Bug / 提改进建议",
         bg=C_BG,
-        fg=C_INK,
+        fg=C_ERR_FG if auto_error_banner else C_INK,
         font=("Microsoft YaHei UI", 13, "bold"),
     ).pack(side="left")
     badge_txt = f"{meta['version']} · 免登直投" if worker_url else f"{meta['version']} · 自动脱敏"
@@ -776,11 +836,32 @@ def open_feedback_dialog(
         pady=3,
     ).pack(side="right")
 
+    if auto_error_banner:
+        banner = tk.Frame(
+            dlg,
+            bg=C_ERR_BG,
+            highlightbackground=C_ERR_BORDER,
+            highlightthickness=1,
+            padx=10,
+            pady=7,
+        )
+        banner.pack(fill="x", padx=16, pady=(0, 8))
+        tk.Label(
+            banner,
+            text=sanitize_text(auto_error_banner),
+            bg=C_ERR_BG,
+            fg=C_ERR_FG,
+            font=("Microsoft YaHei UI", 8, "bold"),
+            anchor="w",
+            justify="left",
+            wraplength=520,
+        ).pack(fill="x")
+
     # 卡片主体
     card = tk.Frame(dlg, bg=C_CARD, highlightbackground=C_BORDER, highlightthickness=1)
     card.pack(fill="both", expand=True, padx=16, pady=(0, 10))
 
-    # 1. 反馈类型
+    # 1. 反馈类型（2×2 整齐网格）
     tk.Label(
         card,
         text="1. 反馈类型",
@@ -789,11 +870,14 @@ def open_feedback_dialog(
         font=("Microsoft YaHei UI", 9, "bold"),
         anchor="w",
     ).pack(fill="x", padx=12, pady=(10, 4))
-    cat_row = tk.Frame(card, bg=C_CARD)
-    cat_row.pack(fill="x", padx=12, pady=(0, 8))
-    for key, label, _pfx, _lb in ISSUE_CATEGORIES:
+    cat_grid = tk.Frame(card, bg=C_CARD)
+    cat_grid.pack(fill="x", padx=12, pady=(0, 6))
+    cat_grid.columnconfigure(0, weight=1)
+    cat_grid.columnconfigure(1, weight=1)
+    for idx_c, (key, label, _pfx, _lb) in enumerate(ISSUE_CATEGORIES):
+        r_c, c_c = divmod(idx_c, 2)
         tk.Radiobutton(
-            cat_row,
+            cat_grid,
             text=label,
             variable=var_cat,
             value=key,
@@ -803,8 +887,9 @@ def open_feedback_dialog(
             activebackground=C_CARD,
             activeforeground=C_BLUE,
             font=("Microsoft YaHei UI", 9),
+            anchor="w",
             cursor="hand2",
-        ).pack(side="left", padx=(0, 14))
+        ).grid(row=r_c, column=c_c, sticky="w", padx=(0, 10), pady=1)
 
     # 2. 简短标题
     tk.Label(
@@ -814,7 +899,7 @@ def open_feedback_dialog(
         fg=C_BLUE_DARK,
         font=("Microsoft YaHei UI", 9, "bold"),
         anchor="w",
-    ).pack(fill="x", padx=12, pady=(0, 4))
+    ).pack(fill="x", padx=12, pady=(2, 4))
     ent_title = tk.Entry(
         card,
         textvariable=var_title,
@@ -826,7 +911,7 @@ def open_feedback_dialog(
         highlightthickness=1,
         font=("Microsoft YaHei UI", 10),
     )
-    ent_title.pack(fill="x", padx=12, pady=(0, 10), ipady=5)
+    ent_title.pack(fill="x", padx=12, pady=(0, 8), ipady=5)
 
     # 3. 详细说明
     tk.Label(
@@ -846,14 +931,38 @@ def open_feedback_dialog(
         highlightbackground=C_BORDER,
         highlightthickness=1,
         font=("Microsoft YaHei UI", 9),
-        height=7,
+        height=6,
         wrap="word",
         padx=8,
         pady=6,
     )
     txt_desc.pack(fill="both", expand=True, padx=12, pady=(0, 8))
+    if initial_description:
+        txt_desc.insert("1.0", sanitize_text(initial_description))
 
-    # 4. 现场诊断信息选项
+    # 4. 联系方式 / 昵称（选填）
+    tk.Label(
+        card,
+        text="4. 联系方式 / 昵称（选填，便于修复后回复）",
+        bg=C_CARD,
+        fg=C_BLUE_DARK,
+        font=("Microsoft YaHei UI", 9, "bold"),
+        anchor="w",
+    ).pack(fill="x", padx=12, pady=(0, 4))
+    ent_note = tk.Entry(
+        card,
+        textvariable=var_reporter_note,
+        bg=C_WELL,
+        fg=C_INK,
+        insertbackground=C_INK,
+        relief="flat",
+        highlightbackground=C_BORDER,
+        highlightthickness=1,
+        font=("Microsoft YaHei UI", 9),
+    )
+    ent_note.pack(fill="x", padx=12, pady=(0, 8), ipady=4)
+
+    # 5. 现场诊断信息选项
     tk.Checkbutton(
         card,
         text="附带自动脱敏的环境信息、内存状态快照与本局精简日志（不含本机路径或账号）",
@@ -878,7 +987,22 @@ def open_feedback_dialog(
         activeforeground=C_BLUE,
         font=("Microsoft YaHei UI", 8),
         anchor="w",
-    ).pack(fill="x", padx=10, pady=(0, 6))
+    ).pack(fill="x", padx=10, pady=(0, 4))
+
+    if callable(show_mute_session_cb):
+        tk.Checkbutton(
+            card,
+            text="本次运行不再自动弹出异常提示（仍可在控制台红条手动上报）",
+            variable=var_mute_session,
+            command=lambda: show_mute_session_cb(bool(var_mute_session.get())),
+            bg=C_CARD,
+            fg=C_ERR_FG,
+            selectcolor=C_ERR_BG,
+            activebackground=C_CARD,
+            activeforeground=C_ERR_FG,
+            font=("Microsoft YaHei UI", 8, "bold"),
+            anchor="w",
+        ).pack(fill="x", padx=10, pady=(0, 4))
 
     env_preview = (
         f"版本 {diag_info['version']} · {diag_info['os']} · 屏幕 {diag_info['screen_resolution']} "
@@ -894,10 +1018,10 @@ def open_feedback_dialog(
         font=("Microsoft YaHei UI", 8),
         anchor="w",
         justify="left",
-        wraplength=500,
+        wraplength=520,
         padx=8,
         pady=6,
-    ).pack(fill="x", padx=12, pady=(0, 10))
+    ).pack(fill="x", padx=12, pady=(2, 10))
 
     def _copy_to_clipboard(text: str) -> None:
         try:
@@ -915,6 +1039,7 @@ def open_feedback_dialog(
             diag_info,
             include_diag=var_include_diag.get(),
             zip_filename=exported_zip[0],
+            reporter_note=var_reporter_note.get(),
         )
 
     def _on_export_zip() -> None:
@@ -929,7 +1054,7 @@ def open_feedback_dialog(
                 game_rect=tuple(game_rect) if game_rect else None,
             )
             exported_zip[0] = zpath
-            var_status.set(f"✅ 已导出完整现场包：{os.path.basename(zpath)}（可直接发群聊或拖进 Issue）")
+            var_status.set(f"✅ 已导出完整诊断包：{os.path.basename(zpath)}（可直接拖入 GitHub Issue）")
             reveal_file_in_explorer(zpath)
         except Exception as e:
             messagebox.showerror("导出诊断包失败", str(e), parent=dlg)
@@ -943,7 +1068,7 @@ def open_feedback_dialog(
             zip_filename=exported_zip[0],
         )
         _copy_to_clipboard(summary)
-        var_status.set("✅ 已复制群聊/微信精简摘要到剪贴板，可直接粘贴发送！")
+        var_status.set("✅ 已复制精简诊断摘要到剪贴板，可直接粘贴反馈！")
 
     def _fallback_open_github() -> None:
         md = _build_current_md()
@@ -987,6 +1112,7 @@ def open_feedback_dialog(
         desc_s = txt_desc.get("1.0", "end-1c")
         cat_s = var_cat.get()
         inc_diag = var_include_diag.get()
+        note_s = var_reporter_note.get().strip()
 
         def _worker():
             ok, res = submit_feedback_via_worker(
@@ -999,6 +1125,7 @@ def open_feedback_dialog(
                 state_snapshot=(state_snapshot if inc_diag else None),
                 log_path=(log_path if inc_diag else ""),
                 runtime_error_path=(runtime_error_path if inc_diag else ""),
+                reporter_note=note_s,
                 app_key=app_key,
             )
             dlg.after(0, lambda: _on_worker_done(ok, res))
@@ -1029,7 +1156,7 @@ def open_feedback_dialog(
                 "免登直投暂时不可用",
                 f"直连反馈服务失败：{err}\n\n"
                 "点击「是」改为自动复制反馈并尝试打开 GitHub 网页；\n"
-                "点击「否」可点左下角「导出完整现场包」直接发群聊。",
+                "点击「否」可点左下角「导出完整现场包」或「复制精简诊断摘要」。",
                 parent=dlg,
             ):
                 _fallback_open_github()
@@ -1056,7 +1183,7 @@ def open_feedback_dialog(
 
     tk.Button(
         btn_bar,
-        text="💬 复制群聊摘要",
+        text="📋 复制精简诊断摘要",
         command=_on_copy_chat,
         bg="#FFFFFF",
         fg=C_INK,
@@ -1095,7 +1222,7 @@ def open_feedback_dialog(
         font=("Microsoft YaHei UI", 8),
         anchor="w",
         justify="left",
-        wraplength=524,
+        wraplength=540,
     ).pack(fill="x", padx=16, pady=(0, 12))
 
     return dlg

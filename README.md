@@ -21,7 +21,8 @@
 
 ## 3 步快速上手（Windows 免装 Python）
 
-1. 前往 [**Releases 最新版**](https://github.com/EjuneG/HoopCoach/releases/latest) 下载 `HoopCoach-Windows-*.zip`，**完整解压**到任意目录（勿在压缩包内直接双击）。
+1. 前往 [**Releases 最新版**](https://github.com/EjuneG/HoopCoach/releases/latest) 下载 `HoopCoach-Windows-*.zip`，**完整解压**到任意目录（勿在压缩包内直接双击）。  
+   <sub>下载慢可前往 [在线主页](https://ejuneg.github.io/HoopCoach/) 点「国内加速镜像」（基于 `ghfast.top` 自动加速）。</sub>
 2. 双击 **`HoopCoach.exe`**，首次启动自动识别游戏目录；未识别时点 **「选择目录」** 选中游戏文件夹即可。
 3. 正常打开游戏（建议**无边框窗口化**）开始育成，角标会自动贴在按钮旁。
 
@@ -55,10 +56,14 @@
 
 - **Windows Defender 提示“已保护你的电脑”？**  
   个人开源打包未购置商业签名证书，点 **「更多信息」→「仍要运行」** 即可；也可直接拉源码运行或通过 GitHub Actions 自行构建。
+- **需要手动录入角色、笔记和 SSR 器材吗？**  
+  不用。正常开游戏或在控制台/作战室点一下 **「扫描历史战绩」**，就会自动从本地日志同步你的已有角色、自备/好友笔记与器材练度。
 - **进游戏后没看到悬浮角标？**  
   1. 先确认控制台顶部显示 **「✅ 已连接」**；
   2. 大厅、纯剧情、加载与比赛界面会自动隐藏，进入选人或训练页即显示；
   3. 游戏建议设为 **无边框窗口化 / 窗口化**（副屏使用可关闭「仅游戏前台显示」）。
+
+> **自带 AI 助手玩法（可选）**：根目录内置轻量 [`AGENTS.md`](AGENTS.md)，如果你平时使用 Claude Code / Cursor / Codex / Antigravity 等 AI Agent，可直接让它只读分析你的本地战绩与库存，在 `docs/*_plan.md` 生成专属养成计划，作战室「计划与攻略」页会自动渲染。
 
 ---
 

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-LQSNCoach 私人作战室本地后端服务与静态快照导出器 (src/dashboard_server.py)
+HoopCoach 本地作战室后端服务与静态快照导出器 (src/dashboard_server.py)
 
 定位：
-- 仅服务于本地个人账号的战绩复盘、实盘笔记/器材配对与后台挂机实时监控；
+- 提供本地历史战绩复盘、实盘笔记/器材配对、相性沙盒、计划攻略与实时对局面板；
 - 严格只读访问本地归档与游戏明文日志（零内存注入、零进程侵入）；
-- 复盘与配对 100% 复用 note_advisor / equipment_advisor / live_coach / auto_driver 真值引擎。
+- 复盘与配对 100% 复用 note_advisor / equipment_advisor / live_coach 真值引擎。
 
 用法：
   python3 src/dashboard_server.py                 # 启动本地服务 http://127.0.0.1:8765
@@ -465,9 +465,99 @@ class DashboardEngine:
             out["runs_error"] = runs_error
         return out
 
+    def _compute_sync_status(
+        self,
+        runs: Optional[list[dict]] = None,
+        note_pool: Optional[dict] = None,
+        equip_pool: Optional[dict] = None,
+        log_dir: Optional[str] = None,
+    ) -> dict[str, Any]:
+        runs_list = runs if runs is not None else self._get_runs_enriched()
+        npool = note_pool if isinstance(note_pool, dict) else (_safe_read_json(NOTE_POOL_FILE, {}) or {})
+        epool = equip_pool if isinstance(equip_pool, dict) else (_safe_read_json(EQUIP_POOL_FILE, {}) or {})
+        ld = log_dir or ""
+        if not ld:
+            try:
+                _, ld = platform_compat.resolve_game_dirs(interactive_on_missing=False)
+            except Exception:
+                ld = ""
+        log_dir_ok = bool(ld and os.path.isdir(ld))
+        return {
+            "log_dir_ok": log_dir_ok,
+            "runs_count": len(runs_list),
+            "owned_actors": len(npool.get("owned_actors") or []),
+            "own_notes": len(npool.get("own_notes") or {}),
+            "borrowed_notes": len(npool.get("borrowed_notes") or {}),
+            "owned_equips": len(epool.get("owned_cards") or {}),
+        }
+
+    def scan_runs_and_sync_pools(
+        self,
+        docs_dir: Optional[str] = None,
+        log_dir: Optional[str] = None,
+        force_rescan: bool = False,
+    ) -> dict[str, Any]:
+        """触发增量扫描历史战绩 + 同步本地角色/笔记/器材池，返回最新计数与同步状态。"""
+        d_dir, l_dir = docs_dir, log_dir
+        if not l_dir or not d_dir:
+            try:
+                rd, rl = platform_compat.resolve_game_dirs(interactive_on_missing=False)
+                d_dir = d_dir or rd
+                l_dir = l_dir or rl
+            except Exception:
+                pass
+
+        scan_err = ""
+        runs_scanned = 0
+        if l_dir and os.path.isdir(l_dir):
+            try:
+                import analyzer as _az
+
+                _az.LOG_DIR = l_dir
+                cfg = lc.load_hud_config()
+                strat_name = str(cfg.get("strategy_name") or "training_flow")
+                extracted = _az.extract_all_runs(
+                    strategy_name=strat_name,
+                    force_rebuild=False,
+                    log_dir=l_dir,
+                )
+                runs_scanned = len(extracted or [])
+            except Exception as e:
+                scan_err = str(e)
+
+        pool_res = self.sync_local_pools(docs_dir=d_dir, log_dir=l_dir, force_rescan=force_rescan)
+        self.invalidate_caches()
+        sync_status = self._compute_sync_status(log_dir=l_dir)
+        try:
+            export_static_snapshot(self)
+        except Exception:
+            pass
+
+        ok = bool(sync_status["log_dir_ok"] and not scan_err)
+        if not sync_status["log_dir_ok"]:
+            msg = "尚未绑定游戏日志目录，请先在桌面控制台选择游戏文件夹。"
+        elif scan_err:
+            msg = f"战绩扫描出现异常：{scan_err}"
+        else:
+            msg = (
+                f"已归档 {sync_status['runs_count']} 局 · "
+                f"识别 {sync_status['owned_actors']} 角色 / {sync_status['own_notes']} 自备笔记 / "
+                f"{sync_status['owned_equips']} SSR 器材"
+            )
+        return {
+            "ok": ok,
+            "message": msg,
+            "runs_scanned": runs_scanned,
+            "scan_error": scan_err,
+            "pool_sync": pool_res,
+            "sync_status": sync_status,
+            "scanned_at": time.strftime("%H:%M:%S"),
+        }
+
     def get_overview(self) -> dict:
         runs = self._get_runs_enriched()
         note_pool = _safe_read_json(NOTE_POOL_FILE, {})
+        equip_pool = _safe_read_json(EQUIP_POOL_FILE, {})
         daily_queue = _safe_read_json(DAILY_QUEUE_FILE, {})
         account_meta = _parse_account_diamonds()
 
@@ -576,9 +666,56 @@ class DashboardEngine:
                 "reason": q.get("reason", ""),
             })
 
-        # 4. 筛选下拉所需的已出场角色列表
+        # 4. 筛选下拉所需的已出场角色列表 + 主力战绩速览墙数据
         played_chars = []
         seen_c = set()
+        char_agg: dict[str, dict[str, Any]] = {}
+        for r in runs:
+            mn = r["main_name"]
+            cid = r["main_char_id"]
+            rk = int(r.get("final_rank") or 0)
+            key = str(cid) if cid else mn
+            if not key:
+                continue
+            ag = char_agg.get(key)
+            if ag is None:
+                ag = {
+                    "char_id": cid,
+                    "name": mn,
+                    "pos": r["main_pos"],
+                    "head": r["main_head"],
+                    "best_rank": 0,
+                    "best_run_id": "",
+                    "rank_sum": 0,
+                    "valid_runs": 0,
+                    "run_count": 0,
+                    "has_rainbow_note": bool(cid and cid in rainbow_chars),
+                }
+                char_agg[key] = ag
+            ag["run_count"] += 1
+            if rk > 0:
+                ag["rank_sum"] += rk
+                ag["valid_runs"] += 1
+                if rk > ag["best_rank"]:
+                    ag["best_rank"] = rk
+                    ag["best_run_id"] = r["run_id"]
+
+        char_records = []
+        for ag in char_agg.values():
+            avg_rk = round(ag["rank_sum"] / ag["valid_runs"]) if ag["valid_runs"] > 0 else 0
+            char_records.append({
+                "char_id": ag["char_id"],
+                "name": ag["name"],
+                "pos": ag["pos"],
+                "head": ag["head"],
+                "best_rank": ag["best_rank"],
+                "avg_rank": avg_rk,
+                "run_count": ag["run_count"],
+                "best_run_id": ag["best_run_id"],
+                "has_rainbow_note": ag["has_rainbow_note"],
+            })
+        char_records.sort(key=lambda x: (-x["best_rank"], -x["run_count"], x["name"]))
+
         for r in reversed(runs):
             mn = r["main_name"]
             if mn and mn not in seen_c:
@@ -590,8 +727,12 @@ class DashboardEngine:
                     "head": r["main_head"],
                 })
 
+        sync_status = self._compute_sync_status(runs=runs, note_pool=note_pool, equip_pool=equip_pool)
+
         return {
             "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "sync_status": sync_status,
+            "char_records": char_records,
             "kpi": {
                 "total_runs": total_runs,
                 "best_rank": best_run["final_rank"] if best_run else 0,
@@ -1043,15 +1184,26 @@ class DashboardEngine:
     def get_plans(self) -> dict:
         """扫描 docs/*_plan.md 与 docs/*_guide.md，汇总个人养成计划与攻略文档。"""
         items: list[dict] = []
-        if not os.path.isdir(DOCS_DIR):
+        candidates_set = set()
+        if os.path.isdir(DOCS_DIR):
+            candidates_set |= set(glob.glob(os.path.join(DOCS_DIR, "*_plan.md")))
+            candidates_set |= set(glob.glob(os.path.join(DOCS_DIR, "*_guide.md")))
+        # 若当前 docs 目录未包含 quickstart_guide.md，则依次兜底检查程序自带的 docs/ 或 packaging/
+        has_quickstart = any(os.path.basename(p) == "quickstart_guide.md" for p in candidates_set)
+        if not has_quickstart:
+            for fallback_qs in (
+                os.path.join(BASE_DIR, "docs", "quickstart_guide.md"),
+                os.path.join(BASE_DIR, "packaging", "quickstart_guide.md"),
+            ):
+                if os.path.isfile(fallback_qs):
+                    candidates_set.add(fallback_qs)
+                    break
+        if not candidates_set:
             return {"generated_at": time.strftime("%Y-%m-%d %H:%M:%S"), "plans": items}
 
         char_db = self.chars
         head_map = self.head_map
-        candidates = sorted(
-            set(glob.glob(os.path.join(DOCS_DIR, "*_plan.md")))
-            | set(glob.glob(os.path.join(DOCS_DIR, "*_guide.md")))
-        )
+        candidates = sorted(candidates_set)
         for path in candidates:
             fname = os.path.basename(path)
             slug = os.path.splitext(fname)[0]
@@ -1460,6 +1612,14 @@ def make_handler(engine: DashboardEngine, live_monitor: LiveMonitor):
             parsed = urllib.parse.urlparse(self.path)
             if parsed.path == "/api/refresh":
                 res = engine.refresh_all(log_dir=getattr(live_monitor, "log_dir", None))
+                self._send_json(res)
+                return
+            if parsed.path == "/api/scan":
+                ld = getattr(live_monitor, "log_dir", None) or engine.log_dir
+                dd = engine.docs_dir or (
+                    os.path.dirname(ld) if (ld and os.path.basename(ld).lower() == "logs") else None
+                )
+                res = engine.scan_runs_and_sync_pools(docs_dir=dd, log_dir=ld)
                 self._send_json(res)
                 return
             self.send_error(HTTPStatus.NOT_FOUND)

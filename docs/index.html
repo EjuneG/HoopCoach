@@ -304,7 +304,29 @@
       flex-wrap: wrap;
       align-items: center;
       gap: 14px;
-      margin-bottom: 28px;
+      margin-bottom: 10px;
+    }
+
+    .dl-mirror-note {
+      font-size: 12.5px;
+      color: var(--ink-muted);
+      margin-bottom: 24px;
+    }
+
+    .dl-mirror-note a {
+      color: var(--blue);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      font-weight: 600;
+    }
+
+    .dl-mirror-note a:hover { color: var(--orange); }
+
+    .bottom-cta-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
     }
 
     .btn {
@@ -1245,6 +1267,9 @@
             GitHub
           </a>
         </div>
+        <div class="dl-mirror-note">
+          下载慢？<a data-dl-mirror href="https://github.com/EjuneG/HoopCoach/releases/latest" target="_blank" rel="noopener">国内加速镜像</a>
+        </div>
 
         <div class="roster-strip">
           <div class="avatar-stack">
@@ -1280,7 +1305,7 @@
             <div class="hud-topbar">
               <span class="hud-status-text">第 3 年 1 月 · 体力 68/130 · ¥145</span>
               <span class="diegetic-pill">
-                <span class="lead lead-sky">星奈</span>
+                <span class="lead lead-sky">HoopCoach</span>
                 <span class="val">R22 哨子 2/3 · 下回彩圈留体</span>
               </span>
             </div>
@@ -1498,9 +1523,14 @@
             <p>开源免费，有 Bug 或想法欢迎来 GitHub 留言～</p>
           </div>
         </div>
-        <div class="cta-row" style="margin-bottom: 0;">
-          <a class="btn btn-primary" data-dl-btn="bottom" href="https://github.com/EjuneG/HoopCoach/releases/latest" target="_blank" rel="noopener"><span data-dl-label>下载最新版</span></a>
-          <a class="btn btn-secondary" href="https://github.com/EjuneG/HoopCoach/issues" target="_blank" rel="noopener">留言 / 反馈</a>
+        <div class="bottom-cta-actions">
+          <div class="cta-row" style="margin-bottom: 0;">
+            <a class="btn btn-primary" data-dl-btn="bottom" href="https://github.com/EjuneG/HoopCoach/releases/latest" target="_blank" rel="noopener"><span data-dl-label>下载最新版</span></a>
+            <a class="btn btn-secondary" href="https://github.com/EjuneG/HoopCoach/issues" target="_blank" rel="noopener">留言 / 反馈</a>
+          </div>
+          <div class="dl-mirror-note" style="margin-bottom: 0;">
+            下载慢？<a data-dl-mirror href="https://github.com/EjuneG/HoopCoach/releases/latest" target="_blank" rel="noopener">国内加速镜像</a>
+          </div>
         </div>
       </div>
     </section>
@@ -1670,6 +1700,14 @@
           else if (kind === "bottom") label.textContent = `下载 ${ver}`;
           else if (kind === "nav") label.textContent = `下载 ${ver}`;
         });
+        if (winZip && winZip.browser_download_url) {
+          const mirrorUrl = `https://ghfast.top/${winZip.browser_download_url}`;
+          document.querySelectorAll("[data-dl-mirror]").forEach((el) => {
+            el.href = mirrorUrl;
+            el.removeAttribute("target");
+            if (ver) el.textContent = `国内加速镜像 (${ver})`;
+          });
+        }
       })
       .catch(() => {});
   </script>

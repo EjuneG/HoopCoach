@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
 """
-LQSNCoach — 实时育成军师悬浮 HUD & 自动代打助手 (Live Training Advisor & Auto-Player)
+HoopCoach / LQSNCoach — 实时育成军师悬浮 HUD (Read-Only Live Training Advisor)
 用法：
-  1. 实时军师模式（默认弹出屏幕右上角置顶悬浮窗 HUD + 终端同步输出）：
+  1. 实时军师模式（默认弹出贴身角标 HUD + 终端同步输出）：
      python3 src/live_coach.py
-  2. 校准 1~6 号训练键坐标（首次开启自动代打前跑一次，耗时 10 秒）：
-     python3 src/live_coach.py --calibrate
-  3. 自动代打模式（悬浮 HUD + 星奈算出最优训练后自动帮你点训练键）：
-     python3 src/live_coach.py --auto
-  4. 复盘最近一局日志中的训练选择：
+  2. 复盘最近一局日志中的训练选择：
      python3 src/live_coach.py --replay-latest
 """
 
@@ -41,7 +37,6 @@ from note_advisor import (
     capture_game_screenshot,
     screenshot_diff_score,
     scan_notes_from_screen,
-    scan_notes_scrolling,
 )
 from equipment_advisor import check_lineup_and_equip_synergy
 try:
@@ -63,8 +58,6 @@ from platform_compat import (
     IS_WINDOWS,
     WindowsFloatingHUD,
     resolve_game_dirs,
-    win32_click_at,
-    win32_get_mouse_location,
 )
 from hud_badges import (
     ACCENT_PALETTES as SHARED_ACCENT_PALETTES,
@@ -7876,90 +7869,6 @@ def parse_state_and_turns_from_text(text: str, return_final_state: bool = False)
     return turns
 
 
-# =====================================================================
-# 自动代打 (Auto-Play via xdotool) & 坐标校准模块
-# =====================================================================
-
-def get_mouse_location():
-    if IS_WINDOWS:
-        return win32_get_mouse_location()
-    out = subprocess.check_output(["xdotool", "getmouselocation", "--shell"], text=True)
-    info = {}
-    for line in out.strip().splitlines():
-        if "=" in line:
-            k, v = line.split("=", 1)
-            info[k.strip()] = int(v.strip())
-    return info
-
-
-def calibrate_buttons():
-    os.makedirs(CONFIG_DIR, exist_ok=True)
-    print("=" * 72)
-    print("🎯 【LQSNCoach 自动代打坐标校准向导】")
-    if not IS_WINDOWS:
-        print("提示：首次触发 xdotool 点击时，COSMIC 桌面可能会弹出一次『允许远程控制』确认框，点允许即可。")
-    print("=" * 72)
-    input("\n👉 第一步：请切到游戏训练界面，把鼠标悬停在最左边【1号·投射训练】按钮正中央，然后回终端按 [Enter]...")
-    p1 = get_mouse_location()
-    print(f"   ✅ 已记录 1 号键坐标: X={p1['X']}, Y={p1['Y']} (Window={p1.get('WINDOW', 0)})")
-
-    input("\n👉 第二步：请把鼠标悬停在最右边【6号·意识训练】按钮正中央，然后回终端按 [Enter]...")
-    p6 = get_mouse_location()
-    print(f"   ✅ 已记录 6 号键坐标: X={p6['X']}, Y={p6['Y']} (Window={p6.get('WINDOW', 0)})")
-
-    double_click_ans = input("\n👉 游戏里点训练键需要【连点两下】（第一下预览、第二下执行）吗？[Y/n，默认 Y]: ").strip().lower()
-    double_click = double_click_ans not in ("n", "no")
-
-    buttons = {}
-    for idx in range(1, 7):
-        ratio = (idx - 1) / 5.0
-        bx = int(round(p1["X"] + (p6["X"] - p1["X"]) * ratio))
-        by = int(round(p1["Y"] + (p6["Y"] - p1["Y"]) * ratio))
-        buttons[str(idx)] = {"x": bx, "y": by}
-
-    cfg = {
-        "window_id": p6.get("WINDOW", 0),
-        "double_click_to_confirm": double_click,
-        "click_interval_sec": 0.35,
-        "pre_action_delay_sec": 1.2,
-        "train_buttons": buttons,
-    }
-    with open(COORDS_FILE, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, indent=2, ensure_ascii=False)
-
-    print("\n🎉 校准完成！6 个训练键坐标已保存至:", COORDS_FILE)
-    for idx in range(1, 7):
-        b = buttons[str(idx)]
-        print(f"   - {TRAIN_NAMES[idx]}: ({b['x']}, {b['y']})")
-
-
-def auto_click_training(idx: int, coords_cfg: dict):
-    btn = coords_cfg.get("train_buttons", {}).get(str(idx))
-    if not btn:
-        print(f"⚠️ 未找到 {idx} 号训练键坐标，请先运行 --calibrate！")
-        return
-
-    delay = coords_cfg.get("pre_action_delay_sec", 1.2)
-    print(f"🤖 [星奈代打] 等待 {delay:.1f}s 动画稳定后，自动点击 👉 【{TRAIN_NAMES.get(idx)}】 ({btn['x']}, {btn['y']})...")
-    time.sleep(delay)
-
-    if IS_WINDOWS:
-        win32_click_at(
-            int(btn["x"]),
-            int(btn["y"]),
-            double_click=coords_cfg.get("double_click_to_confirm", True),
-            interval_sec=coords_cfg.get("click_interval_sec", 0.35),
-        )
-        return
-
-    subprocess.run(["xdotool", "mousemove", "--sync", str(btn["x"]), str(btn["y"])], check=False)
-    subprocess.run(["xdotool", "click", "1"], check=False)
-
-    if coords_cfg.get("double_click_to_confirm", True):
-        time.sleep(coords_cfg.get("click_interval_sec", 0.35))
-        subprocess.run(["xdotool", "click", "1"], check=False)
-
-
 def print_weekend_advice(state: dict, wk: dict, title_prefix: str = "🌴 【周末出行 & 商店参谋】"):
     print("\n" + "=" * 80)
     print(f"{title_prefix} [{wk['day_tag']}] ⚡精力: {wk['ps']}/130 | 💰金币: {wk['gold']} 金")
@@ -8479,6 +8388,8 @@ def get_default_hud_config() -> dict:
     return {
         "diegetic_mode": True,
         "auto_check_updates": True,
+        "strategy_name": "training_flow",
+        "follow_game_focus": True,
         "recommendations": {key: True for key, *_ in HUD_RECOMMENDATION_SPECS},
         "focus": {
             "stat": None,
@@ -8500,6 +8411,10 @@ def load_hud_config() -> dict:
                     cfg["diegetic_mode"] = bool(disk["diegetic_mode"])
                 if "auto_check_updates" in disk:
                     cfg["auto_check_updates"] = bool(disk["auto_check_updates"])
+                if isinstance(disk.get("strategy_name"), str) and disk["strategy_name"].strip():
+                    cfg["strategy_name"] = disk["strategy_name"].strip()
+                if "follow_game_focus" in disk:
+                    cfg["follow_game_focus"] = bool(disk["follow_game_focus"])
                 recs = disk.get("recommendations", disk)
                 if isinstance(recs, dict):
                     for key, *_ in HUD_RECOMMENDATION_SPECS:
@@ -8520,6 +8435,10 @@ def save_hud_config(cfg: dict) -> dict:
         normalized["diegetic_mode"] = bool(cfg["diegetic_mode"])
     if isinstance(cfg, dict) and "auto_check_updates" in cfg:
         normalized["auto_check_updates"] = bool(cfg["auto_check_updates"])
+    if isinstance(cfg, dict) and isinstance(cfg.get("strategy_name"), str) and cfg["strategy_name"].strip():
+        normalized["strategy_name"] = cfg["strategy_name"].strip()
+    if isinstance(cfg, dict) and "follow_game_focus" in cfg:
+        normalized["follow_game_focus"] = bool(cfg["follow_game_focus"])
     recs = cfg.get("recommendations", cfg) if isinstance(cfg, dict) else {}
     if isinstance(recs, dict):
         for key, *_ in HUD_RECOMMENDATION_SPECS:
@@ -11231,21 +11150,13 @@ def watch_live(strategy_name="training_flow", auto_play=False, use_gui=True):
     event_db = load_event_db()
     hud_cfg = load_hud_config()
     hud_cfg_mtime = os.path.getmtime(HUD_CONFIG_FILE) if os.path.exists(HUD_CONFIG_FILE) else 0.0
-    coords_cfg = None
-    if auto_play:
-        if not os.path.exists(COORDS_FILE):
-            print("⚠️ 开启 --auto 自动代打前需要先校准一次按钮坐标！正在启动 10 秒校准向导...")
-            calibrate_buttons()
-        with open(COORDS_FILE, "r", encoding="utf-8") as f:
-            coords_cfg = json.load(f)
 
     logs = sorted(glob.glob(os.path.join(LOG_DIR, "*.txt")))
     if not logs:
         print(f"未找到游戏日志（当前查找目录: {LOG_DIR}）。请先启动游戏或检查 config/local_paths.json。")
         return
     latest_log = logs[-1]
-    mode_tag = "🤖 自动代打模式 (--auto)" if auto_play else "📡 实时军师 HUD 模式"
-    print(f"{mode_tag} 已启动！当前流派：【{strategy['name']}】")
+    print(f"📡 实时军师 HUD 模式已启动！当前流派：【{strategy['name']}】")
     disabled_init = [k for k, *_ in HUD_RECOMMENDATION_SPECS if not is_hud_rec_enabled(hud_cfg, k)]
     if disabled_init:
         print(f"⚙️ 当前已关闭的 HUD 推荐：{', '.join(disabled_init)}（可用 hud on/off/cfg 随时切换）")
@@ -11430,12 +11341,24 @@ def watch_live(strategy_name="training_flow", auto_play=False, use_gui=True):
         def _bg():
             nonlocal auto_scan_running, note_pool, note_pool_mtime
             try:
+                try:
+                    _scan_notes_scrolling = __import__("note_auto_scanner").scan_notes_scrolling
+                except Exception:
+                    _scan_notes_scrolling = None
+                if _scan_notes_scrolling is None:
+                    note_pool = sync_note_and_actor_pool(note_chars, note_entries_cat)
+                    if cur_pre_edu_cid and hud:
+                        adv_n = recommend_notes_for_character(
+                            cur_pre_edu_cid, note_chars, note_rules, note_rel_scores, note_pool
+                        )
+                        hud.GLib.idle_add(hud.render_note_selection, adv_n, "✅日志已同步", "纯只读模式：已从游戏日志刷新笔记池")
+                    return
                 if hud:
                     hud.GLib.idle_add(
                         hud._update_header,
                         "<span weight='bold' foreground='#fde047'>🤖 正在自动切换【我的/好友/协会】归零并翻到底抓屏（请勿动鼠标）...</span>",
                     )
-                res = scan_notes_scrolling(
+                res = _scan_notes_scrolling(
                     10,
                     note_chars,
                     note_entries_cat,
@@ -11871,9 +11794,6 @@ def watch_live(strategy_name="training_flow", auto_play=False, use_gui=True):
                                 hud.render_turn(state, scored, shop_tip)
                                 ui_mode_dirty = False
 
-                            if auto_play and coords_cfg and not is_shop_refresh:
-                                auto_click_training(scored[0]["idx"], coords_cfg)
-
             if hud and hasattr(hud, "refresh_scene_overlay"):
                 final_batch_mode = compute_active_hud_view_mode(state)
                 mode_desynced = final_batch_mode != getattr(hud, "_active_view_mode", None)
@@ -11965,8 +11885,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--strategy", default="training_flow", help="流派策略文件名（不含.json）")
     parser.add_argument("--replay-latest", nargs="?", const=1, type=int, metavar="N", help="复盘倒数第 N 局育成决策（默认 1 为最近一局）")
-    parser.add_argument("--calibrate", action="store_true", help="10秒校准游戏窗口中 1~6 号训练键的屏幕坐标")
-    parser.add_argument("--auto", action="store_true", help="开启自动代打模式（由星奈通过 xdotool 自动点击最优训练键）")
     parser.add_argument("--no-gui", action="store_true", help="仅使用终端输出，不弹出屏幕置顶悬浮窗")
     parser.add_argument("--config", action="store_true", help="查看当前 HUD 推荐开关状态")
     parser.add_argument("--on", nargs="*", metavar="ITEM", help="开启指定 HUD 推荐项并保存（支持中英文名或 all）")
@@ -11991,9 +11909,7 @@ if __name__ == "__main__":
         sys.exit(apply_hud_config_cli_action("only", args.only))
     elif args.config:
         sys.exit(apply_hud_config_cli_action("show"))
-    elif args.calibrate:
-        calibrate_buttons()
     elif args.replay_latest is not None:
         replay_last_run(args.strategy, run_offset=args.replay_latest)
     else:
-        watch_live(args.strategy, auto_play=args.auto, use_gui=not args.no_gui)
+        watch_live(args.strategy, auto_play=False, use_gui=not args.no_gui)

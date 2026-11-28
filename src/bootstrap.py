@@ -72,7 +72,7 @@ IS_FROZEN = bool(getattr(sys, "frozen", False))
 STAGING_DIR_NAME = "_update_staging"
 BACKUP_DIR_NAME = "_update_backup"
 SINGLE_INSTANCE_MUTEX_NAME = "Local\\HoopCoach_SingleInstance_Mutex"
-MAIN_WINDOW_TITLE = "🏀 HoopCoach · 星奈育成军师"
+MAIN_WINDOW_TITLE = "HoopCoach · 实时军师"
 
 _MUTEX_HANDLE = None
 
@@ -404,6 +404,115 @@ def apply_staged_patch_update(base_dir: str) -> tuple[bool, str]:
         return False, f"热更新失败并已自动回滚：{e}"
 
 
+def _basic_sanitize(text: str) -> str:
+    if not text:
+        return ""
+    out = str(text)
+    try:
+        home_dir = os.path.expanduser("~")
+        if home_dir and home_dir not in ("/", "~", "\\"):
+            out = out.replace(home_dir, "<HOME>").replace(home_dir.replace("\\", "/"), "<HOME>")
+    except Exception:
+        pass
+    out = re.sub(r"(?i)([A-Z]:\\Users\\)([^\\/\r\n\"'<>]+)", r"\1<USER>", out)
+    out = re.sub(r"(?i)([A-Z]:/Users/)([^\\/\r\n\"'<>]+)", r"\1<USER>", out)
+    out = re.sub(r"(/home/)([^/\r\n\"'<>:\s]+)", r"\1<USER>", out)
+    out = re.sub(r"(/Users/)([^/\r\n\"'<>:\s]+)", r"\1<USER>", out)
+    out = re.sub(r"\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{12,}\b", "<REDACTED_TOKEN>", out)
+    out = re.sub(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b", "<REDACTED_TOKEN>", out)
+    out = re.sub(r"\bsk-[A-Za-z0-9_\-]{16,}\b", "<REDACTED_KEY>", out)
+    return out
+
+
+def build_fatal_error_report(base_dir: str, title: str, detail: str) -> dict:
+    """构造启动致命崩溃的脱敏上报数据包（供崩溃窗与单元测试复用）。"""
+    src_dir = os.path.join(base_dir, "src")
+    for p in (base_dir, src_dir):
+        if os.path.isdir(p) and p not in sys.path:
+            sys.path.insert(0, p)
+
+    meta = {
+        "app_name": "HoopCoach",
+        "version": "unknown",
+        "github_repo": "",
+        "feedback_worker_url": "",
+        "feedback_app_key": "",
+    }
+    meta_file = os.path.join(base_dir, "config", "app_meta.json")
+    if os.path.isfile(meta_file):
+        try:
+            with open(meta_file, "r", encoding="utf-8") as f:
+                disk = json.load(f)
+            if isinstance(disk, dict):
+                for k in meta:
+                    if isinstance(disk.get(k), str):
+                        meta[k] = disk[k].strip()
+        except Exception:
+            pass
+
+    sanitize_fn = _basic_sanitize
+    diag_info = {
+        "app_name": meta["app_name"],
+        "version": meta["version"],
+        "frozen_exe": IS_FROZEN,
+        "os": f"{platform.system()} {platform.release()} ({platform.machine()})",
+        "python": platform.python_version(),
+        "hud_mode": "bootstrap",
+        "active_view_mode": "startup",
+        "round": 0,
+        "exp_round": 0,
+    }
+    try:
+        import issue_reporter as ir
+
+        sanitize_fn = ir.sanitize_text
+        diag_info = ir.collect_diagnostic_info({"active_view_mode": "startup", "hud_mode": "bootstrap"})
+        meta.update(ir.load_app_meta())
+    except Exception:
+        pass
+
+    clean_title = sanitize_fn((title or "HoopCoach 启动失败").strip())
+    clean_detail = sanitize_fn((detail or "").strip())
+    last_err_line = ""
+    for ln in reversed(clean_detail.splitlines()):
+        s = ln.strip()
+        if s:
+            last_err_line = s[:80]
+            break
+    report_title = sanitize_fn(f"{clean_title}: {last_err_line}" if last_err_line else clean_title)[:115]
+    summary_clip = clean_detail[-2600:] if len(clean_detail) > 2600 else clean_detail
+    description = (
+        f"程序启动阶段发生致命异常：**{clean_title}**\n\n"
+        f"脱敏堆栈：\n```text\n{summary_clip}\n```"
+    )
+    return {
+        "category": "crash",
+        "title": report_title,
+        "description": sanitize_fn(description),
+        "sanitized_detail": clean_detail,
+        "diag_info": diag_info,
+        "worker_url": meta.get("feedback_worker_url", ""),
+        "app_key": meta.get("feedback_app_key", ""),
+        "github_repo": meta.get("github_repo", ""),
+        "version": meta.get("version", "unknown"),
+    }
+
+
+def _open_log_location(log_path: str, base_dir: str) -> None:
+    try:
+        if IS_WINDOWS:
+            if os.path.isfile(log_path):
+                subprocess.Popen(["explorer", "/select,", os.path.normpath(log_path)])
+            else:
+                subprocess.Popen(["explorer", os.path.normpath(base_dir)])
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", base_dir])
+        else:
+            subprocess.Popen(["xdg-open", base_dir])
+    except Exception:
+        pass
+
+
 def _show_fatal_error(base_dir: str, title: str, detail: str) -> None:
     log_path = os.path.join(base_dir, "bootstrap_error.log")
     try:
@@ -411,13 +520,205 @@ def _show_fatal_error(base_dir: str, title: str, detail: str) -> None:
             f.write(detail)
     except Exception:
         pass
+
+    report = build_fatal_error_report(base_dir, title, detail)
+
+    if tk is not None:
+        try:
+            root = tk.Tk()
+            root.title(f"{title} — HoopCoach")
+            root.geometry("580x440")
+            root.minsize(500, 380)
+            root.configure(bg="#F3F8FF")
+
+            top = tk.Frame(root, bg="#FFF0F3", highlightbackground="#E11D48", highlightthickness=1, padx=14, pady=10)
+            top.pack(fill="x", padx=14, pady=(14, 10))
+            tk.Label(
+                top,
+                text=f"🚨 {title}",
+                bg="#FFF0F3",
+                fg="#9F1239",
+                font=("Microsoft YaHei UI", 12, "bold"),
+                anchor="w",
+            ).pack(fill="x")
+            tk.Label(
+                top,
+                text="完整日志已写入本机 bootstrap_error.log；可一键免登发送脱敏错误报告帮助修复。",
+                bg="#FFF0F3",
+                fg="#4B5E82",
+                font=("Microsoft YaHei UI", 9),
+                anchor="w",
+                wraplength=520,
+                justify="left",
+            ).pack(fill="x", pady=(4, 0))
+
+            txt_wrap = tk.Frame(root, bg="#FFFFFF", highlightbackground="#C8DAF5", highlightthickness=1)
+            txt_wrap.pack(fill="both", expand=True, padx=14, pady=(0, 10))
+            txt = tk.Text(
+                txt_wrap,
+                bg="#FFFFFF",
+                fg="#142342",
+                font=("Consolas", 9),
+                relief="flat",
+                wrap="word",
+                padx=8,
+                pady=8,
+            )
+            txt.insert("1.0", report["sanitized_detail"][:3500])
+            txt.configure(state="disabled")
+            txt.pack(fill="both", expand=True)
+
+            var_status = tk.StringVar(value=f"日志位置：{log_path}")
+            submitting = [False]
+
+            def _fallback_github_or_copy() -> None:
+                fallback_md = f"### {report['title']}\n\n{report['description']}\n"
+                try:
+                    root.clipboard_clear()
+                    root.clipboard_append(fallback_md)
+                    root.update()
+                except Exception:
+                    pass
+                try:
+                    import issue_reporter as ir
+
+                    url, _trunc = ir.build_github_issue_url(
+                        report["github_repo"], "crash", report["title"], fallback_md
+                    )
+                    if url:
+                        webbrowser.open(url)
+                        var_status.set("✅ 已复制脱敏报告并在浏览器打开 GitHub Issue 页面")
+                        return
+                except Exception:
+                    pass
+                var_status.set("✅ 已复制脱敏错误报告到剪贴板，可粘贴反馈给开发者")
+
+            def _on_send_report() -> None:
+                if submitting[0]:
+                    return
+                if not report["worker_url"]:
+                    _fallback_github_or_copy()
+                    return
+                submitting[0] = True
+                btn_send.configure(state="disabled", text="正在发送...")
+                var_status.set("⏳ 正在安全提交脱敏启动错误报告...")
+
+                def _worker() -> None:
+                    ok = False
+                    res: dict = {"error": "issue_reporter 不可用"}
+                    try:
+                        import issue_reporter as ir
+
+                        ok, res = ir.submit_feedback_via_worker(
+                            report["worker_url"],
+                            "crash",
+                            report["title"],
+                            report["description"],
+                            report["diag_info"],
+                            include_diag=True,
+                            runtime_error_path=log_path,
+                            app_key=report["app_key"],
+                        )
+                    except Exception as e:
+                        res = {"error": _basic_sanitize(str(e))}
+                    try:
+                        root.after(0, lambda: _on_done(ok, res))
+                    except Exception:
+                        pass
+
+                threading.Thread(target=_worker, daemon=True).start()
+
+            def _on_done(ok: bool, res: dict) -> None:
+                submitting[0] = False
+                try:
+                    btn_send.configure(state="normal", text="🚀 一键免登发送错误报告")
+                except Exception:
+                    return
+                if ok:
+                    issue_no = res.get("issue_number", "")
+                    issue_url = str(res.get("issue_url") or "")
+                    var_status.set(f"🎉 已提交错误报告 Issue #{issue_no}！感谢反馈")
+                    if issue_url and messagebox is not None:
+                        if messagebox.askyesno("错误报告已发送", f"已生成 Issue #{issue_no}。\n\n是否在浏览器打开查看？", parent=root):
+                            webbrowser.open(issue_url)
+                else:
+                    err = res.get("error", "网络异常")
+                    var_status.set(f"⚠️ 免登直投失败（{err}），已改为复制并尝试打开 GitHub")
+                    _fallback_github_or_copy()
+
+            bar = tk.Frame(root, bg="#F3F8FF")
+            bar.pack(fill="x", padx=14, pady=(0, 6))
+            btn_send = tk.Button(
+                bar,
+                text="🚀 一键免登发送错误报告" if report["worker_url"] else "🚀 打开 GitHub 发送错误报告",
+                command=_on_send_report,
+                bg="#FF5A1F",
+                fg="#FFFFFF",
+                activebackground="#DE440C",
+                activeforeground="#FFFFFF",
+                relief="flat",
+                font=("Microsoft YaHei UI", 9, "bold"),
+                padx=12,
+                pady=7,
+                cursor="hand2",
+            )
+            btn_send.pack(side="left", padx=(0, 8))
+
+            tk.Button(
+                bar,
+                text="📂 打开日志目录",
+                command=lambda: _open_log_location(log_path, base_dir),
+                bg="#FFFFFF",
+                fg="#142342",
+                activebackground="#E2EEFF",
+                relief="flat",
+                highlightbackground="#C8DAF5",
+                highlightthickness=1,
+                font=("Microsoft YaHei UI", 9),
+                padx=10,
+                pady=7,
+                cursor="hand2",
+            ).pack(side="left", padx=(0, 8))
+
+            tk.Button(
+                bar,
+                text="关闭",
+                command=root.destroy,
+                bg="#FFFFFF",
+                fg="#4B5E82",
+                activebackground="#E2EEFF",
+                relief="flat",
+                highlightbackground="#C8DAF5",
+                highlightthickness=1,
+                font=("Microsoft YaHei UI", 9),
+                padx=12,
+                pady=7,
+                cursor="hand2",
+            ).pack(side="right")
+
+            tk.Label(
+                root,
+                textvariable=var_status,
+                bg="#F3F8FF",
+                fg="#4B5E82",
+                font=("Microsoft YaHei UI", 8),
+                anchor="w",
+                wraplength=548,
+                justify="left",
+            ).pack(fill="x", padx=14, pady=(0, 12))
+
+            root.mainloop()
+            return
+        except Exception:
+            pass
+
     if messagebox is not None and tk is not None:
         try:
             root = tk.Tk()
             root.withdraw()
             messagebox.showerror(
                 title,
-                f"{detail[:900]}\n\n完整错误日志已写入：\n{log_path}",
+                f"{report['sanitized_detail'][:900]}\n\n完整错误日志已写入：\n{log_path}",
                 parent=root,
             )
             root.destroy()

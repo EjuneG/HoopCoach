@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-win_launcher.py — HoopCoach · 星奈军师桌面控制台与实时悬浮军师入口
+win_launcher.py — HoopCoach · 实时军师桌面控制台与实时悬浮军师入口
 
 设计目标：
 - 双击 HoopCoach.exe 即可使用，清爽直观掌控实时护航与战绩复盘
@@ -25,6 +25,7 @@ import os
 import re
 import sys
 import threading
+import time
 import traceback
 import webbrowser
 from typing import Optional
@@ -368,7 +369,7 @@ class LQSNCoachDesktopApp:
                 pass
 
         self.root = tk.Tk()
-        self.root.title("HoopCoach · 星奈军师")
+        self.root.title("HoopCoach · 实时军师")
         self._dpi_scale = self._detect_dpi_scale()
         avail_w, avail_h = self._get_screen_work_area()
         init_w = min(int(round(560 * (1.0 + (self._dpi_scale - 1.0) * 0.55))), max(472, avail_w - 32))
@@ -395,6 +396,12 @@ class LQSNCoachDesktopApp:
         self._note_pool_mtime: float = -2.0
         self._event_db: Optional[dict] = None
         self._logged_runtime_errors: set[tuple[str, str, str]] = set()
+        self._mute_runtime_error_prompts: bool = False
+        self._last_error_prompt_ts: float = 0.0
+        self._error_prompt_cooldown_sec: float = 60.0
+        self._active_runtime_error: Optional[dict] = None
+        self._error_banner_frame: Optional[tk.Frame] = None
+        self.var_error_banner = tk.StringVar(value="")
         self._accent_bar: Optional[tk.Frame] = None
         self._header_shell: Optional[tk.Frame] = None
         self._bottom_wrap: Optional[tk.Frame] = None
@@ -428,7 +435,9 @@ class LQSNCoachDesktopApp:
 
         self.docs_dir, self.log_dir = pc.resolve_game_dirs(interactive_on_missing=False)
         self.hud_cfg = lc.load_hud_config()
-        self.strategy_name = "training_flow"
+        valid_strat_keys = {k for k, _ in STRATEGY_OPTIONS}
+        saved_strat = str(self.hud_cfg.get("strategy_name") or "training_flow").strip()
+        self.strategy_name = saved_strat if saved_strat in valid_strat_keys else "training_flow"
         self.strategy = lc.load_strategy(self.strategy_name)
 
         self.mirror: Optional[LiveLogMirror] = None
@@ -438,7 +447,9 @@ class LQSNCoachDesktopApp:
 
         # Tk 控制变量
         self.var_hud_enabled = tk.BooleanVar(value=True)
-        self.var_follow_focus = tk.BooleanVar(value=True)
+        self.var_follow_focus = tk.BooleanVar(
+            value=bool(self.hud_cfg.get("follow_game_focus", True))
+        )
         self.var_auto_check_updates = tk.BooleanVar(
             value=bool(self.hud_cfg.get("auto_check_updates", True))
         )
@@ -446,7 +457,11 @@ class LQSNCoachDesktopApp:
             value="diegetic" if bool(self.hud_cfg.get("diegetic_mode", True)) else "compact"
         )
         self.var_hud_hint = tk.StringVar(value="")
-        self.var_strategy = tk.StringVar(value=STRATEGY_OPTIONS[0][1])
+        init_strat_lbl = next(
+            (lbl for k, lbl in STRATEGY_OPTIONS if k == self.strategy_name),
+            STRATEGY_OPTIONS[0][1],
+        )
+        self.var_strategy = tk.StringVar(value=init_strat_lbl)
         cur_fc = self.hud_cfg.get("focus") or {}
         cur_stat = cur_fc.get("stat")
         cur_bonus = float(cur_fc.get("bonus") or 1.15)
@@ -495,11 +510,12 @@ class LQSNCoachDesktopApp:
 
         if self.log_dir and os.path.isdir(self.log_dir):
             self._start_attach_latest_async()
+            self.root.after(600, lambda: self._maybe_auto_scan_on_first_bind(force=False))
         else:
             self._set_connection_status("warn", "未定位游戏目录，请点击右侧选择")
             self.root.after(350, self._prompt_first_time_dir)
 
-        self.root.after(220, self._poll_log_tick)
+        self.root.after(100, self._poll_log_tick)
         if self.var_auto_check_updates.get():
             self.root.after(1800, lambda: self._start_check_updates(silent=True))
 
@@ -1108,7 +1124,7 @@ class LQSNCoachDesktopApp:
         brand_stack.pack(side="left")
         tk.Label(
             brand_stack,
-            text="HoopCoach · 星奈军师",
+            text="HoopCoach · 实时军师",
             bg=THEME["surface"],
             fg=THEME["ink"],
             font=self._font(11, bold=True),
@@ -1172,6 +1188,76 @@ class LQSNCoachDesktopApp:
             )
             tb.pack(side="left")
             self._tab_buttons[tab_key] = tb
+
+        # ── 1.5 运行期异常非侵入式莓红告警横幅（默认隐藏，捕获异常时亮出，绝不抢游戏焦点） ──
+        self._error_banner_host = tk.Frame(self.root, bg=THEME["bg"])
+        self._error_banner_host.pack(fill="x", padx=20, pady=(0, 0))
+        self._error_banner_frame = tk.Frame(
+            self._error_banner_host,
+            bg="#FFF0F3",
+            highlightbackground="#E11D48",
+            highlightthickness=1,
+            padx=10,
+            pady=6,
+        )
+        lbl_err_b = tk.Label(
+            self._error_banner_frame,
+            textvariable=self.var_error_banner,
+            bg="#FFF0F3",
+            fg="#9F1239",
+            font=self._font(8, bold=True),
+            anchor="w",
+            justify="left",
+            wraplength=250,
+        )
+        lbl_err_b.pack(side="left", fill="x", expand=True)
+        err_btns = tk.Frame(self._error_banner_frame, bg="#FFF0F3")
+        err_btns.pack(side="right", padx=(6, 0))
+        tk.Button(
+            err_btns,
+            text="一键上报",
+            command=self._on_report_active_runtime_error,
+            bg="#E11D48",
+            fg="#FFFFFF",
+            activebackground="#BE123C",
+            activeforeground="#FFFFFF",
+            relief="flat",
+            bd=0,
+            font=self._font(8, bold=True),
+            padx=8,
+            pady=2,
+            cursor="hand2",
+        ).pack(side="left", padx=(0, 4))
+        tk.Button(
+            err_btns,
+            text="忽略",
+            command=self._on_dismiss_error_banner,
+            bg="#FFFFFF",
+            fg="#9F1239",
+            activebackground="#FFE4E9",
+            relief="flat",
+            bd=0,
+            highlightbackground="#FDA4AF",
+            highlightthickness=1,
+            font=self._font(8),
+            padx=6,
+            pady=2,
+            cursor="hand2",
+        ).pack(side="left", padx=(0, 4))
+        tk.Button(
+            err_btns,
+            text="本次不再提示",
+            command=self._on_mute_runtime_error_prompts,
+            bg="#FFF0F3",
+            fg="#9F1239",
+            activebackground="#FFE4E9",
+            relief="flat",
+            bd=0,
+            font=self._font(8),
+            padx=4,
+            pady=2,
+            cursor="hand2",
+        ).pack(side="left")
 
         # ── 2. 底部固定栏（实时建议速览 + 轻量更新/反馈入口） ──
         bottom_wrap = tk.Frame(self.root, bg=THEME["bg"])
@@ -1255,6 +1341,25 @@ class LQSNCoachDesktopApp:
         )
         btn_fb_link.pack(side="right")
         self._bind_hover(btn_fb_link, THEME["bg"], THEME["well"])
+
+        btn_legend = tk.Button(
+            util_row,
+            text="? 上手与角标图例",
+            command=self._on_open_quickstart_legend,
+            bg=THEME["bg"],
+            fg=THEME["blue"],
+            activebackground=THEME["well"],
+            activeforeground=THEME["blue_deep"],
+            relief="flat",
+            bd=0,
+            highlightthickness=0,
+            font=self._font(8, bold=True),
+            padx=6,
+            pady=2,
+            cursor="hand2",
+        )
+        btn_legend.pack(side="right", padx=(0, 6))
+        self._bind_hover(btn_legend, THEME["bg"], THEME["well"])
 
         # ── 3. 中间自适应内容区（大屏零滚动条，高 DPI 小屏自动显现亮色细滚动条） ──
         scroll_wrap = tk.Frame(self.root, bg=THEME["bg"])
@@ -1809,16 +1914,27 @@ class LQSNCoachDesktopApp:
         if self._closing:
             return
         if messagebox.askyesno(
-            "HoopCoach · 星奈军师 — 首次运行",
+            "HoopCoach · 实时军师 — 首次运行",
             "未自动找到《篮球少女：飞跃巅峰》游戏目录。\n\n"
-            "现在选择你的游戏安装文件夹（包含 LQSN.exe 或 _game_data_ / Logs）吗？\n选一次即可永久记住。",
+            "现在选择你的游戏安装文件夹吗？\n"
+            "（小技巧：右键桌面游戏图标 → 打开文件所在的位置，选择那个文件夹即可，选一次永久记住）",
             parent=self.root,
         ):
             self._on_choose_game_dir()
 
     def _on_choose_game_dir(self) -> None:
-        chosen = pc.choose_game_dir_via_dialog(parent=self.root)
+        chosen, selected_raw, err_reason = pc.choose_game_dir_with_status(parent=self.root)
         if not chosen:
+            if selected_raw or err_reason:
+                guide_msg = (
+                    f"{err_reason or '未在所选目录找到游戏日志目录（_game_data_/Documents/Logs）。'}\n\n"
+                    f"你刚才选择的是：\n{selected_raw or '（未识别）'}\n\n"
+                    "找目录小技巧：\n"
+                    "右键桌面游戏图标 →「打开文件所在的位置」，选择那个文件夹即可（或直接选中其中的 _game_data_/Documents/Logs）。"
+                )
+                if messagebox is not None:
+                    messagebox.showwarning("未找到游戏日志目录", guide_msg, parent=self.root)
+                self.var_scan_status.set("所选目录无效 · 请重新选择游戏安装目录")
             return
         self.docs_dir, self.log_dir = chosen
         analyzer.LOG_DIR = self.log_dir
@@ -1832,7 +1948,21 @@ class LQSNCoachDesktopApp:
             self.mirror = None
         self._last_rendered_sig = ""
         self._start_attach_latest_async()
-        self._start_sync_pools_async()
+        self._maybe_auto_scan_on_first_bind(force=True)
+
+    def _maybe_auto_scan_on_first_bind(self, force: bool = False) -> None:
+        """首次绑定有效目录或本地尚无 detailed_runs.json 时，后台自动增量扫一次战绩并同步池。"""
+        if self._closing or self._scanning_runs:
+            return
+        if not self.log_dir or not os.path.isdir(self.log_dir):
+            return
+        runs_json = os.path.join(pc.BASE_DIR, "data", "runs", "detailed_runs.json")
+        if not force and os.path.isfile(runs_json):
+            return
+        if not glob.glob(os.path.join(self.log_dir, "*.txt")):
+            self._start_sync_pools_async()
+            return
+        self._on_scan_runs(auto_triggered=True)
 
     def _start_sync_pools_async(self, force_rescan: bool = False) -> None:
         if self._syncing_pools:
@@ -2159,7 +2289,13 @@ class LQSNCoachDesktopApp:
                 )
 
     def _on_toggle_follow_focus(self) -> None:
-        self.hud.set_follow_game_focus(self.var_follow_focus.get())
+        val = bool(self.var_follow_focus.get())
+        self.hud.set_follow_game_focus(val)
+        self.hud_cfg["follow_game_focus"] = val
+        try:
+            self.hud_cfg = lc.save_hud_config(self.hud_cfg)
+        except Exception:
+            pass
 
     def _on_reset_hud_pos(self) -> None:
         self.hud.reset_position()
@@ -2177,10 +2313,114 @@ class LQSNCoachDesktopApp:
                 self._dashboard_engine.strategy_name = self.strategy_name
             if self._dashboard_monitor is not None:
                 self._dashboard_monitor.strategy = self.strategy
+            self.hud_cfg["strategy_name"] = self.strategy_name
+            self.hud_cfg = lc.save_hud_config(self.hud_cfg)
         except Exception as e:
-            messagebox.showerror("加载策略失败", str(e), parent=self.root)
+            if messagebox is not None:
+                messagebox.showerror("加载策略失败", str(e), parent=self.root)
             return
         self._render_current_state(force=True)
+
+    def _on_open_quickstart_legend(self) -> None:
+        """打开 1 屏清爽的「上手与角标图例」卡片窗。"""
+        if tk is None:
+            return
+        dlg = tk.Toplevel(self.root)
+        dlg.title("上手与角标图例 — HoopCoach")
+        dlg.geometry("510x475")
+        dlg.minsize(460, 420)
+        dlg.configure(bg=THEME["bg"])
+        dlg.transient(self.root)
+        try:
+            dlg.grab_set()
+        except Exception:
+            pass
+
+        top = tk.Frame(dlg, bg=THEME["surface"])
+        top.pack(fill="x")
+        tk.Label(
+            top,
+            text="? 1 分钟上手与角标图例",
+            bg=THEME["surface"],
+            fg=THEME["ink"],
+            font=self._font(12, bold=True),
+            anchor="w",
+            padx=16,
+            pady=11,
+        ).pack(fill="x")
+        tk.Frame(top, bg=THEME["ink"], height=2).pack(fill="x")
+
+        body = tk.Frame(dlg, bg=THEME["bg"])
+        body.pack(fill="both", expand=True, padx=16, pady=12)
+
+        sections = [
+            (
+                THEME["primary"],
+                "1. 贴身角标怎么看（颜色 / EV / 哨冲）",
+                "• 橙金 ★ 首选：当前综合期望收益 (EV) 最高；灰蓝 🥈/🥉 为次选对比。\n"
+                "• EV 数值：已折算 1200 折半、属性上限与经理充能后的等效属性分。\n"
+                "• 哨冲 / 控体提示：支援口哨快满 70/100 熟度时自动提醒留体或冲线。",
+            ),
+            (
+                THEME["blue"],
+                "2. 个人角色 / 笔记 / 器材池自动同步",
+                "• 无需任何手动录入！正常打开游戏或点「扫描历史战绩」，就会自动从本地日志识别你已有的角色、自备/好友笔记与 SSR 器材。\n"
+                "• 首次进入开局选人页与作战室网页，即可直接看到按你手头库存算出的最优配对。",
+            ),
+            (
+                THEME["ok_dot"],
+                "3. 自动隐身与窗口化小提示",
+                "• 贴身角标 100% 鼠标穿透，切到微信/浏览器或进大厅、过场与比赛时自动隐身。\n"
+                "• 游戏画面内看不到角标时，请确认游戏设为「无边框窗口化」或「窗口化」（独占全屏会压住桌面置顶窗）。",
+            ),
+        ]
+
+        for bar_col, title_txt, desc_txt in sections:
+            card = tk.Frame(
+                body,
+                bg=THEME["surface"],
+                highlightbackground=THEME["ink"],
+                highlightthickness=1,
+            )
+            card.pack(fill="x", pady=(0, 10))
+            tk.Frame(card, bg=bar_col, width=4).pack(side="left", fill="y")
+            inner = tk.Frame(card, bg=THEME["surface"], padx=11, pady=9)
+            inner.pack(side="left", fill="both", expand=True)
+            tk.Label(
+                inner,
+                text=title_txt,
+                bg=THEME["surface"],
+                fg=THEME["ink"],
+                font=self._font(9, bold=True),
+                anchor="w",
+            ).pack(fill="x", pady=(0, 4))
+            tk.Label(
+                inner,
+                text=desc_txt,
+                bg=THEME["surface"],
+                fg=THEME["text_secondary"],
+                font=self._font(8),
+                anchor="w",
+                justify="left",
+                wraplength=435,
+            ).pack(fill="x")
+
+        tk.Button(
+            dlg,
+            text="知道了",
+            command=dlg.destroy,
+            bg=THEME["primary"],
+            fg="#FFFFFF",
+            activebackground=THEME["primary_hover"],
+            activeforeground="#FFFFFF",
+            relief="flat",
+            highlightbackground=THEME["ink"],
+            highlightthickness=2,
+            font=self._font(9, bold=True),
+            padx=22,
+            pady=6,
+            cursor="hand2",
+        ).pack(pady=(0, 14))
 
     def _on_focus_changed(self, _event=None) -> None:
         sel_stat = self.var_focus_stat.get()
@@ -2227,15 +2467,19 @@ class LQSNCoachDesktopApp:
         webbrowser.open(self._dashboard_url)
         self.var_scan_status.set("作战室已在浏览器打开")
 
-    def _on_scan_runs(self) -> None:
+    def _on_scan_runs(self, auto_triggered: bool = False) -> None:
         if self._scanning_runs:
             return
         if not self.log_dir or not os.path.isdir(self.log_dir):
-            messagebox.showwarning("尚未绑定目录", "请先选择《篮球少女》游戏目录后再扫描历史战绩。", parent=self.root)
+            if not auto_triggered and messagebox is not None:
+                messagebox.showwarning("尚未绑定目录", "请先选择《篮球少女》游戏目录后再扫描历史战绩。", parent=self.root)
             return
         self._scanning_runs = True
-        self.btn_scan_runs.configure(state="disabled", text="扫描中...")
-        self.var_scan_status.set("正在增量扫描战绩...")
+        try:
+            self.btn_scan_runs.configure(state="disabled", text="扫描中...")
+        except Exception:
+            pass
+        self.var_scan_status.set("正在自动同步战绩与个人池..." if auto_triggered else "正在增量扫描战绩...")
 
         def _worker():
             try:
@@ -2248,7 +2492,9 @@ class LQSNCoachDesktopApp:
                 )
                 n = len(runs or [])
 
-                pool_parts: list[str] = []
+                n_act = 0
+                n_own = 0
+                n_eq = 0
                 try:
                     chars, _, _, entries_cat = self._get_note_static_db()
                     note_pool = note_advisor.sync_note_and_actor_pool(
@@ -2259,8 +2505,6 @@ class LQSNCoachDesktopApp:
                     )
                     n_act = len((note_pool or {}).get("owned_actors") or [])
                     n_own = len((note_pool or {}).get("own_notes") or {})
-                    n_bor = len((note_pool or {}).get("borrowed_notes") or {})
-                    pool_parts.append(f"角色{n_act}/笔记{n_own}+借{n_bor}")
                 except Exception as e:
                     self._record_runtime_error("同步笔记角色池", e)
 
@@ -2270,7 +2514,6 @@ class LQSNCoachDesktopApp:
                         log_dir=self.log_dir,
                     )
                     n_eq = len((eq_pool or {}).get("owned_cards") or {})
-                    pool_parts.append(f"器材{n_eq}")
                 except Exception as e:
                     self._record_runtime_error("同步器材池", e)
 
@@ -2280,13 +2523,11 @@ class LQSNCoachDesktopApp:
                 if n == 0:
                     log_n = len(glob.glob(os.path.join(self.log_dir, "*.txt")))
                     if log_n > 0:
-                        msg = f"未解析到完赛局（日志 {log_n} 个）。可再试一次或查看 runtime_error.log"
+                        msg = f"暂未解析到完赛局 · 识别 {n_act} 角色 / {n_own} 笔记 / {n_eq} 器材"
                     else:
-                        msg = "日志目录内没有 .txt 文件"
+                        msg = "目录已就绪 · 完成 1 局育成后自动归档"
                 else:
-                    msg = f"已归档 {n} 局战绩"
-                if pool_parts:
-                    msg = f"{msg} · 池 {' '.join(pool_parts)}"
+                    msg = f"已归档 {n} 局 · 识别 {n_act} 角色 / {n_own} 笔记 / {n_eq} 器材"
             except Exception as e:
                 msg = f"扫描失败：{e}"
                 self._record_runtime_error("扫描历史战绩", e)
@@ -2337,12 +2578,79 @@ class LQSNCoachDesktopApp:
             self._event_db = lc.load_event_db() or {}
         return self._event_db
 
+    def _is_game_in_foreground(self) -> bool:
+        """只读检测《篮球少女》游戏窗口当前是否处于前台（避免运行期报错弹窗切屏打断）。"""
+        if not pc.IS_WINDOWS:
+            return False
+        try:
+            ghwnd = pc.win32_find_game_hwnd()
+            if not ghwnd:
+                return False
+            return bool(pc.win32_is_foreground_in({int(ghwnd)}))
+        except Exception:
+            return False
+
+    def _should_auto_popup_runtime_error(self, now_ts: Optional[float] = None) -> bool:
+        """判定是否允许自动轻弹快捷报错窗（严格去重、冷却熔断、游戏前台绝不打断）。"""
+        if getattr(self, "_closing", False) or getattr(self, "_mute_runtime_error_prompts", False):
+            return False
+        now = time.time() if now_ts is None else float(now_ts)
+        cooldown = float(getattr(self, "_error_prompt_cooldown_sec", 60.0))
+        last_ts = float(getattr(self, "_last_error_prompt_ts", 0.0))
+        if last_ts > 0 and (now - last_ts) < cooldown:
+            return False
+        if self._is_game_in_foreground():
+            return False
+        return True
+
+    def _show_error_banner(self, text: str) -> None:
+        try:
+            self.var_error_banner.set(text)
+            if self._error_banner_frame is not None:
+                self._error_banner_frame.pack(fill="x", pady=(8, 0))
+        except Exception:
+            pass
+
+    def _on_dismiss_error_banner(self) -> None:
+        try:
+            if self._error_banner_frame is not None:
+                self._error_banner_frame.pack_forget()
+        except Exception:
+            pass
+
+    def _on_mute_runtime_error_prompts(self, muted: bool = True) -> None:
+        self._mute_runtime_error_prompts = bool(muted)
+        if self._mute_runtime_error_prompts:
+            self._on_dismiss_error_banner()
+
+    def _on_report_active_runtime_error(self) -> None:
+        payload = self._active_runtime_error
+        if not isinstance(payload, dict):
+            self._on_open_feedback()
+            return
+        try:
+            issue_reporter.open_feedback_dialog(
+                self.root,
+                get_context_fn=self._get_feedback_context,
+                initial_category=payload.get("category", "crash"),
+                initial_title=payload.get("title", ""),
+                initial_description=payload.get("description", ""),
+                auto_error_banner=f"! 检测到运行异常（{payload.get('context', '运行期')}），标题与脱敏堆栈已自动预填，核对后点右下角即可一键上报。",
+                show_mute_session_cb=self._on_mute_runtime_error_prompts,
+            )
+        except Exception as e:
+            if messagebox is not None:
+                messagebox.showerror("打开异常上报窗口失败", str(e), parent=self.root)
+
     def _record_runtime_error(self, context: str, exc: Exception) -> None:
         key = (context, type(exc).__name__, str(exc))
         if key in self._logged_runtime_errors:
             return
         self._logged_runtime_errors.add(key)
         log_path = os.path.join(pc.BASE_DIR, "runtime_error.log")
+        tb = traceback.format_exc()
+        if not tb or tb.strip() == "NoneType: None":
+            tb = f"{type(exc).__name__}: {exc}"
         try:
             if os.path.isfile(log_path) and os.path.getsize(log_path) > 512 * 1024:
                 with open(log_path, "r", encoding="utf-8", errors="ignore") as rf:
@@ -2350,15 +2658,26 @@ class LQSNCoachDesktopApp:
                 with open(log_path, "w", encoding="utf-8") as wf:
                     wf.write(tail)
             ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            tb = traceback.format_exc()
             with open(log_path, "a", encoding="utf-8") as f:
                 f.write(f"[{ts}] [{context}] {type(exc).__name__}: {exc}\n{tb}\n")
         except Exception:
             pass
+
+        payload = issue_reporter.build_auto_error_payload(context, exc, traceback_text=tb)
+        self._active_runtime_error = payload
         try:
             self.var_live_preview.set(f"! {context}异常（{type(exc).__name__}），详情已写入 runtime_error.log")
         except Exception:
             pass
+        if not getattr(self, "_mute_runtime_error_prompts", False):
+            self._show_error_banner(f"! 检测到运行异常（{context} · {type(exc).__name__}）")
+            if self._should_auto_popup_runtime_error():
+                self._last_error_prompt_ts = time.time()
+                try:
+                    if hasattr(self, "root") and self.root is not None:
+                        self.root.after(150, self._on_report_active_runtime_error)
+                except Exception:
+                    pass
 
     # ------------------------------------------------------------------
     # 实时日志增量轮询与 HUD 渲染调度

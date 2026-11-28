@@ -44,9 +44,9 @@
         <button class="nav-btn" data-view="runs" role="tab" aria-selected="false" type="button">单局复盘</button>
         <button class="nav-btn" data-view="box" role="tab" aria-selected="false" type="button">笔记与配装</button>
         <button class="nav-btn" data-view="compat" role="tab" aria-selected="false" type="button">相性查询</button>
-        <button class="nav-btn" data-view="plans" role="tab" aria-selected="false" type="button">养成计划</button>
+        <button class="nav-btn" data-view="plans" role="tab" aria-selected="false" type="button">计划与攻略</button>
         <button class="nav-btn" data-view="live" role="tab" aria-selected="false" type="button">
-          <span class="live-indicator" id="nav-live-dot"></span>实时监控
+          <span class="live-indicator" id="nav-live-dot"></span>实时面板
         </button>
       </nav>
 
@@ -117,14 +117,18 @@
         </div>
       </section>
 
-      <section class="panel">
+      <section class="panel" id="overview-bottom-panel">
         <div class="panel-head">
           <div>
-            <h2 class="panel-title">当前冲分目标与瓶颈雷达</h2>
-            <p class="panel-sub">同步自本地养成队列与目标配置，点击目标直接打开实盘配对</p>
+            <h2 class="panel-title" id="overview-bottom-title">主力战绩速览墙</h2>
+            <p class="panel-sub" id="overview-bottom-sub">按历史最高评分降序汇总各主力表现，点击卡片直达对应角色的笔记与配装</p>
           </div>
-          <span class="panel-sub" id="overview-updated"></span>
+          <div class="head-controls">
+            <span class="panel-sub" id="overview-updated"></span>
+            <button id="btn-overview-scan" class="action-btn" type="button" title="扫描本地游戏日志并同步战绩与角色/笔记/器材池">🔄 重新扫描</button>
+          </div>
         </div>
+        <div id="overview-sync-bar"></div>
         <div id="overview-warnings"></div>
         <div class="goal-grid" id="overview-bottlenecks"></div>
       </section>
@@ -307,27 +311,41 @@
       </div>
     </section>
 
-    <!-- ==================== 视图 4.5：养成计划与专题攻略 ==================== -->
+    <!-- ==================== 视图 4.5：计划与攻略（含可选 AI 协作区） ==================== -->
     <section id="view-plans" class="view-panel">
       <div class="plans-layout">
         <aside class="panel plans-sidebar">
           <div class="panel-head" style="margin-bottom:10px">
             <div>
-              <h2 class="panel-title">计划与攻略目录</h2>
-              <p class="panel-sub">自动收录本地养成计划与专题攻略</p>
+              <h2 class="panel-title">计划与攻略</h2>
+              <p class="panel-sub">上手速查、专题攻略与个人养成计划</p>
             </div>
             <span class="pill" id="plans-count-pill">0 份</span>
           </div>
           <div class="plans-list" id="plans-list"></div>
+
+          <details class="ai-collab-box" id="ai-collab-details">
+            <summary class="ai-collab-summary">🤖 用你的 AI Agent 生成专属养成计划（可选）</summary>
+            <div class="ai-collab-body">
+              <p class="ai-collab-desc">
+                如果你平时使用 Claude Code / Cursor / Codex / Antigravity 等 AI 助手，直接把 HoopCoach 文件夹交给它，并复制下方提示词即可：
+              </p>
+              <pre class="ai-collab-prompt" id="ai-collab-prompt-text">请先阅读本目录的 AGENTS.md，再只读分析 data/runs/detailed_runs.json、data/note_pool.json 与 data/equip_pool.json，结合我的历史战绩、已有角色、笔记与 SSR 器材库存，在 docs/my_training_plan.md 生成一份专属的阶段冲分与刷彩笔记计划（顶部按 AGENTS.md 规范写好 plan_tag / plan_status / plan_chars / plan_summary 注释）。</pre>
+              <div class="ai-collab-actions">
+                <button type="button" class="action-btn action-btn-primary" id="btn-copy-ai-prompt">📋 一键复制协作提示词</button>
+                <span class="panel-sub" id="ai-collab-copy-tip">写完后点右上角刷新即可自动渲染</span>
+              </div>
+            </div>
+          </details>
         </aside>
 
         <div class="plans-main" id="plans-detail-area">
-          <div class="panel empty-state">从左侧选择一份养成计划或攻略开始查阅</div>
+          <div class="panel empty-state">从左侧选择一份攻略或养成计划开始查阅</div>
         </div>
       </div>
     </section>
 
-    <!-- ==================== 视图 5：后台挂机实时监控 ==================== -->
+    <!-- ==================== 视图 5：实时对局面板 ==================== -->
     <section id="view-live" class="view-panel">
       <section class="panel live-header-panel">
         <div class="live-status-row">

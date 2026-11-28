@@ -747,8 +747,8 @@ def render_trough_pill_rgba(
         tag_s, body_s = trough_markup.split("｜", 1)
     else:
         plain = strip_markup_to_clean_text(trough_markup)
-        tag_s, body_s = "星奈", (plain or "军师待命")
-    tag_clean = _strip_unsupported_emoji(strip_markup_to_clean_text(tag_s))[:8] or "星奈"
+        tag_s, body_s = "HoopCoach", (plain or "实时参谋待命")
+    tag_clean = _strip_unsupported_emoji(strip_markup_to_clean_text(tag_s))[:10] or "HoopCoach"
     raw_focus = (focus_badge or "").strip()
     clean_focus = _strip_unsupported_emoji(raw_focus).strip()
     if clean_focus and not clean_focus.startswith(("★", "◆", "▸", "●", "✓")):

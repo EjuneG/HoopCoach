@@ -23,6 +23,7 @@ const CATEGORY_META = {
   bug: { prefix: "[Bug]", label: "🐛 Bug 反馈", ghLabels: ["bug", "from-app"] },
   badge_offset: { prefix: "[角标偏移]", label: "📐 角标位置偏移", ghLabels: ["bug", "ui", "from-app"] },
   feature: { prefix: "[建议]", label: "💡 功能改进建议", ghLabels: ["enhancement", "from-app"] },
+  crash: { prefix: "[自动报错]", label: "🚨 程序异常自动上报", ghLabels: ["bug", "auto-report", "from-app"] },
 };
 
 function corsHeaders() {

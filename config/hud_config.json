@@ -1,6 +1,8 @@
 {
   "diegetic_mode": true,
   "auto_check_updates": true,
+  "strategy_name": "training_flow",
+  "follow_game_focus": true,
   "recommendations": {
     "train": true,
     "story": true,

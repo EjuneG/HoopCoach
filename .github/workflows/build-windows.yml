@@ -99,6 +99,16 @@ jobs:
           if (Test-Path "README.md") {
             Copy-Item -Path "README.md" -Destination "$out/使用说明.txt" -Force
           }
+          if (Test-Path "LICENSE") {
+            Copy-Item -Path "LICENSE" -Destination "$out/LICENSE" -Force
+          }
+          if (Test-Path "AGENTS.md") {
+            Copy-Item -Path "AGENTS.md" -Destination "$out/AGENTS.md" -Force
+          }
+          if (Test-Path "docs/quickstart_guide.md") {
+            New-Item -ItemType Directory -Force -Path "$out/docs" | Out-Null
+            Copy-Item -Path "docs/quickstart_guide.md" -Destination "$out/docs/quickstart_guide.md" -Force
+          }
 
           $ver = "${{ inputs.release_version }}"
           if (-not $ver) {

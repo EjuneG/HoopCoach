@@ -377,7 +377,7 @@ class TestWinLauncherReadiness(unittest.TestCase):
         with open(src_path, "r", encoding="utf-8") as f:
             src = f.read()
 
-        self.assertIn("HoopCoach · 星奈军师", src)
+        self.assertIn("HoopCoach · 实时军师", src)
         for forbidden in ("纯只读", "零侵入", "Win32 分层", "免命令行", "🏀", "👑", "📒", "🎯", "📖", "🌴", "⏳", "⚠️"):
             self.assertNotIn(forbidden, src, f"win_launcher.py 不应再包含旧术语或易出豆腐块 Emoji: {forbidden}")
 

@@ -164,6 +164,110 @@ class TestReportedBugfixes(unittest.TestCase):
                     m_after = json.load(mf)
                 self.assertEqual(m_after["schema_version"], az.MANIFEST_SCHEMA_VERSION)
 
+    def test_bug1_schema_upgrade_recovers_archived_runs_and_filters_v3_polluted_orphans(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log_dir = os.path.join(tmp, "Logs")
+            runs_dir = os.path.join(tmp, "runs")
+            arch_dir = os.path.join(runs_dir, "archive")
+            os.makedirs(log_dir)
+            os.makedirs(arch_dir)
+
+            # 现存新日志：1 局正常结算 (9603)
+            log_fp = os.path.join(log_dir, "11_25___00_55_44___log.txt")
+            from test_analyzer_regression import _make_train_cmds_block, _make_opening_notes_block
+
+            parts = [
+                "request_call:    education.cs_start_education    {initactor_cfg_id = 1046}\n",
+                _make_opening_notes_block((620, 610, 600)),
+            ]
+            for turn in range(1, 17):
+                parts.append(_make_train_cmds_block(exp_round=turn, highlight_idx=1))
+                parts.append("request_call:    education.cs_train    {cmd_idx = 1}\n")
+            parts.append(
+                "[11-25 01:10:00]:[INFO]    [NETWORK]    dispatch:    education.sc_education_result    {\n"
+                "  new_rank = 9603,\n"
+                "  new_record = true\n"
+                "}\n"
+            )
+            with open(log_fp, "w", encoding="utf-8") as f:
+                f.write("".join(parts))
+
+            # 1) 原始日志已被游戏轮转清理的合法老归档（希雅 10247）：必须被召回
+            old_good_arch = {
+                "seq_no": 1,
+                "run_id": "11_17___15_27_34_r1",
+                "log": "11_17___15_27_34___log.txt",
+                "end_log": "11_17___15_27_34___log.txt",
+                "final_rank": 10247,
+                "lineup": "⭐希雅+真崎/百目鬼/闪堂/望月",
+                "final_stats": {"101": 1600, "102": 1650, "103": 1700, "104": 1650, "105": 1622, "106": 1650},
+                "stat_sum": 9872,
+            }
+            with open(os.path.join(arch_dir, "11_17___15_27_34_r1.json"), "w", encoding="utf-8") as f:
+                json.dump(old_good_arch, f, ensure_ascii=False)
+
+            # 2) 原始日志已被清理但曾被旧版 v3 误采为队伍总评价 (19865) 的坏归档：必须被过滤
+            old_bad_arch = {
+                "seq_no": 2,
+                "run_id": "11_16___12_00_00_r1",
+                "log": "11_16___12_00_00___log.txt",
+                "end_log": "11_16___12_00_00___log.txt",
+                "final_rank": 19865,
+                "lineup": "⭐希雅+真崎/百目鬼/闪堂/望月",
+                "final_stats": {"101": 1500, "102": 1500, "103": 1500, "104": 1500, "105": 1500, "106": 1500},
+                "stat_sum": 9000,
+            }
+            with open(os.path.join(arch_dir, "11_16___12_00_00_r1.json"), "w", encoding="utf-8") as f:
+                json.dump(old_bad_arch, f, ensure_ascii=False)
+
+            # 3) 对应现存日志但已被新解析器淘汰的幽灵假局归档：不得复活
+            stale_current_ghost = {
+                "seq_no": 3,
+                "run_id": "11_25___00_55_44_r99",
+                "log": "11_25___00_55_44___log.txt",
+                "end_log": "11_25___00_55_44___log.txt",
+                "final_rank": 10500,
+                "lineup": "⭐希雅+真崎/百目鬼/闪堂/望月",
+                "final_stats": {"101": 1700, "102": 1700, "103": 1700, "104": 1700, "105": 1700, "106": 1600},
+                "stat_sum": 10100,
+            }
+            with open(os.path.join(arch_dir, "11_25___00_55_44_r99.json"), "w", encoding="utf-8") as f:
+                json.dump(stale_current_ghost, f, ensure_ascii=False)
+
+            # 模拟旧版 v4 manifest（已把老归档丢掉，仅登记了现存新日志的 1 局）
+            st = os.stat(log_fp)
+            manifest_path = os.path.join(runs_dir, "archive_manifest.json")
+            out_path = os.path.join(runs_dir, "detailed_runs.json")
+            with open(manifest_path, "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "schema_version": 4,
+                        "log_meta": {
+                            "11_25___00_55_44___log.txt": {"mtime": round(st.st_mtime, 2), "size": st.st_size}
+                        },
+                        "runs_order": ["11_25___00_55_44_r1"],
+                        "runs_meta": [
+                            {
+                                "run_id": "11_25___00_55_44_r1",
+                                "log": "11_25___00_55_44___log.txt",
+                                "end_log": "11_25___00_55_44___log.txt",
+                            }
+                        ],
+                    },
+                    f,
+                )
+
+            with patch.object(az, "LOG_DIR", log_dir), \
+                 patch.object(az, "RUNS_DIR", runs_dir), \
+                 patch.object(az, "ARCHIVE_DIR", arch_dir), \
+                 patch.object(az, "MANIFEST_PATH", manifest_path), \
+                 patch.object(az, "OUT_PATH", out_path):
+                runs = az.extract_all_runs(force_rebuild=False)
+                run_ids = [r["run_id"] for r in runs]
+                self.assertEqual(run_ids, ["11_17___15_27_34_r1", "11_25___00_55_44_r1"])
+                self.assertEqual([r["final_rank"] for r in runs], [10247, 9603])
+                self.assertEqual([r["seq_no"] for r in runs], [1, 2])
+
     def test_bug2_and_bug4_log_mirror_resets_run_advances_round_and_marks_fired_70(self):
         with tempfile.TemporaryDirectory() as tmp:
             log_fp = os.path.join(tmp, "11_27___12_00_00___log.txt")
@@ -366,6 +470,93 @@ class TestReportedBugfixes(unittest.TestCase):
             with zipfile.ZipFile(io.BytesIO(zbytes), "r") as zf:
                 self.assertIn("diagnostic_env.json", zf.namelist())
                 self.assertIn("detailed_runs_sanitized.json", zf.namelist())
+
+
+    def test_skill_choice_blue_rarity_and_unknown_slot_guard(self):
+        import skill_advisor as sa
+
+        sa.reload_skill_catalog()
+        # 1. 已知动作蓝卡（210223 灵巧背打）应排在白卡（210408 后段稳定）左侧、金卡（210418 后段稳固）右侧
+        known_cards = [
+            {"skill_id": 210408},  # 白 · 后段稳定
+            {"skill_id": 210223},  # 蓝 · 灵巧背打（动作卡）
+            {"skill_id": 210418},  # 金 · 后段稳固
+        ]
+        evals_known = sa.evaluate_skill_choices(1001, known_cards)
+        self.assertEqual([x["skill_id"] for x in evals_known], [210418, 210223, 210408])
+        self.assertFalse(any(x.get("slot_uncertain") for x in evals_known))
+        specs_k, trough_k = hb.build_badges_for_mode("skill_choice", {"main_char_id": 1001}, last_skill_evals=evals_known)
+        self.assertGreaterEqual(len(specs_k), 1)
+        self.assertIn("后段稳固", trough_k)
+
+        # 2. 含未收录技能时标记 slot_uncertain=True，隐藏可能贴错槽位的卡顶角标，仅在底槽按名称提示已知优选
+        mixed_cards = [
+            {"skill_id": 219999},  # 未收录
+            {"skill_id": 210418},  # 金 · 后段稳固
+            {"skill_id": 210408},  # 白 · 后段稳定
+        ]
+        evals_mixed = sa.evaluate_skill_choices(1001, mixed_cards)
+        self.assertTrue(all(x.get("slot_uncertain") for x in evals_mixed))
+        specs_m, trough_m = hb.build_badges_for_mode("skill_choice", {"main_char_id": 1001}, last_skill_evals=evals_mixed)
+        self.assertEqual(specs_m, [])
+        self.assertIn("后段稳固", trough_m)
+        self.assertIn("免贴错位", trough_m)
+
+    def test_skill_catalog_full_coverage_and_upgrade_chain(self):
+        import skill_advisor as sa
+
+        cat = sa.reload_skill_catalog()
+        skills = cat.get("skills") or {}
+        self.assertGreaterEqual(len(skills), 600)
+        # 校验真值纠偏：200101=投射擅长，210286=速度优势，210413=前期加持，2001001=澪奈被动斗志昂扬
+        self.assertEqual(skills["200101"]["name"], "投射擅长")
+        self.assertEqual(skills["210286"]["name"], "速度优势")
+        self.assertEqual(skills["210413"]["name"], "前期加持")
+        self.assertEqual(skills["2001001"]["name"], "斗志昂扬")
+        self.assertEqual(skills["2001001"]["owner_char_id"], 1001)
+
+        # 1) 已学上位金技 210418(后段稳固) 时，下位白技 210408(后段稳定) 自动识别为 ♻️ 已学上位
+        ev_sup = sa.evaluate_skill_choices(
+            1001,
+            [{"skill_id": 210408}, {"skill_id": 210406}],
+            learned_skills={210418},
+        )
+        by_sid = {x["skill_id"]: x for x in ev_sup}
+        self.assertTrue(by_sid[210408]["is_learned"])
+        self.assertTrue(by_sid[210408]["is_superseded"])
+        self.assertIn("已学上位", by_sid[210408]["badge_text"])
+        self.assertEqual(by_sid[210406]["rank"], 1)
+
+        # 2) 已学下位白技 210408 时，覆盖升级金技 210418(净评+25) 优先级低于全新同档金技 210416(净评+50)
+        ev_upg = sa.evaluate_skill_choices(
+            1001,
+            [{"skill_id": 210418}, {"skill_id": 210416}],
+            learned_skills={210408},
+        )
+        by_upg = {x["skill_id"]: x for x in ev_upg}
+        self.assertTrue(by_upg[210418]["upgrades_learned"])
+        self.assertIn("覆盖下位", by_upg[210418]["reason"])
+        self.assertEqual(by_upg[210416]["rank"], 1)
+        self.assertGreater(by_upg[210416]["score"], by_upg[210418]["score"])
+
+        # 3) 硬性限定（210171 快攻倾向 受组织者天赋加成；203201 篮板倾向 限中锋）对纯得分手小前 1001(澪奈) 判空转，
+        #    但普通跨职责白技（210307 二次手感）不误判空转，仅评分低于契合得分手白技（210296 远投擅长）
+        ev_roles = sa.evaluate_skill_choices(
+            1001,
+            [{"skill_id": 210171}, {"skill_id": 210307}, {"skill_id": 210296}],
+        )
+        by_r = {x["skill_id"]: x for x in ev_roles}
+        self.assertFalse(by_r[210171]["role_match"])
+        self.assertEqual(by_r[210171]["style_key"], "warn")
+        self.assertTrue(by_r[210307]["role_match"])
+        self.assertEqual(by_r[210296]["rank"], 1)
+        self.assertGreater(by_r[210296]["score"], by_r[210307]["score"])
+
+        ev_pos = sa.evaluate_skill_choices(1001, [{"skill_id": 203201}, {"skill_id": 210408}])
+        by_p = {x["skill_id"]: x for x in ev_pos}
+        self.assertFalse(by_p[203201]["role_match"])
+        self.assertFalse(by_p[203201]["pos_match"])
+        self.assertIn("位置不符", by_p[203201]["badge_text"])
 
     def test_cross_day_no_stale_train_cmds_or_sig_swallow_and_partial_line(self):
         import win_launcher as wl
@@ -614,90 +805,5 @@ class TestReportedBugfixes(unittest.TestCase):
                     pass
 
 
-    def test_skill_choice_blue_rarity_and_unknown_slot_guard(self):
-        import skill_advisor as sa
-
-        sa.reload_skill_catalog()
-        # 1. 已知动作蓝卡（210223 灵巧背打）应排在白卡（210408 后段稳定）左侧、金卡（210418 后段稳固）右侧
-        known_cards = [
-            {"skill_id": 210408},  # 白 · 后段稳定
-            {"skill_id": 210223},  # 蓝 · 灵巧背打（动作卡）
-            {"skill_id": 210418},  # 金 · 后段稳固
-        ]
-        evals_known = sa.evaluate_skill_choices(1001, known_cards)
-        self.assertEqual([x["skill_id"] for x in evals_known], [210418, 210223, 210408])
-        self.assertFalse(any(x.get("slot_uncertain") for x in evals_known))
-        specs_k, trough_k = hb.build_badges_for_mode("skill_choice", {"main_char_id": 1001}, last_skill_evals=evals_known)
-        self.assertGreaterEqual(len(specs_k), 1)
-        self.assertIn("后段稳固", trough_k)
-
-        # 2. 含未收录技能时标记 slot_uncertain=True，隐藏可能贴错槽位的卡顶角标，仅在底槽按名称提示已知优选
-        mixed_cards = [
-            {"skill_id": 219999},  # 未收录
-            {"skill_id": 210418},  # 金 · 后段稳固
-            {"skill_id": 210408},  # 白 · 后段稳定
-        ]
-        evals_mixed = sa.evaluate_skill_choices(1001, mixed_cards)
-        self.assertTrue(all(x.get("slot_uncertain") for x in evals_mixed))
-        specs_m, trough_m = hb.build_badges_for_mode("skill_choice", {"main_char_id": 1001}, last_skill_evals=evals_mixed)
-        self.assertEqual(specs_m, [])
-        self.assertIn("后段稳固", trough_m)
-        self.assertIn("免贴错位", trough_m)
-
-    def test_skill_catalog_full_coverage_and_upgrade_chain(self):
-        import skill_advisor as sa
-
-        cat = sa.reload_skill_catalog()
-        skills = cat.get("skills") or {}
-        self.assertGreaterEqual(len(skills), 600)
-        # 校验真值纠偏：200101=投射擅长，210286=速度优势，210413=前期加持，2001001=澪奈被动斗志昂扬
-        self.assertEqual(skills["200101"]["name"], "投射擅长")
-        self.assertEqual(skills["210286"]["name"], "速度优势")
-        self.assertEqual(skills["210413"]["name"], "前期加持")
-        self.assertEqual(skills["2001001"]["name"], "斗志昂扬")
-        self.assertEqual(skills["2001001"]["owner_char_id"], 1001)
-
-        # 1) 已学上位金技 210418(后段稳固) 时，下位白技 210408(后段稳定) 自动识别为 ♻️ 已学上位
-        ev_sup = sa.evaluate_skill_choices(
-            1001,
-            [{"skill_id": 210408}, {"skill_id": 210406}],
-            learned_skills={210418},
-        )
-        by_sid = {x["skill_id"]: x for x in ev_sup}
-        self.assertTrue(by_sid[210408]["is_learned"])
-        self.assertTrue(by_sid[210408]["is_superseded"])
-        self.assertIn("已学上位", by_sid[210408]["badge_text"])
-        self.assertEqual(by_sid[210406]["rank"], 1)
-
-        # 2) 已学下位白技 210408 时，覆盖升级金技 210418(净评+25) 优先级低于全新同档金技 210416(净评+50)
-        ev_upg = sa.evaluate_skill_choices(
-            1001,
-            [{"skill_id": 210418}, {"skill_id": 210416}],
-            learned_skills={210408},
-        )
-        by_upg = {x["skill_id"]: x for x in ev_upg}
-        self.assertTrue(by_upg[210418]["upgrades_learned"])
-        self.assertIn("覆盖下位", by_upg[210418]["reason"])
-        self.assertEqual(by_upg[210416]["rank"], 1)
-        self.assertGreater(by_upg[210416]["score"], by_upg[210418]["score"])
-
-        # 3) 硬性限定（210171 快攻倾向 受组织者天赋加成；203201 篮板倾向 限中锋）对纯得分手小前 1001(澪奈) 判空转，
-        #    但普通跨职责白技（210307 二次手感）不误判空转，仅评分低于契合得分手白技（210296 远投擅长）
-        ev_roles = sa.evaluate_skill_choices(
-            1001,
-            [{"skill_id": 210171}, {"skill_id": 210307}, {"skill_id": 210296}],
-        )
-        by_r = {x["skill_id"]: x for x in ev_roles}
-        self.assertFalse(by_r[210171]["role_match"])
-        self.assertEqual(by_r[210171]["style_key"], "warn")
-        self.assertTrue(by_r[210307]["role_match"])
-        self.assertEqual(by_r[210296]["rank"], 1)
-        self.assertGreater(by_r[210296]["score"], by_r[210307]["score"])
-
-        ev_pos = sa.evaluate_skill_choices(1001, [{"skill_id": 203201}, {"skill_id": 210408}])
-        by_p = {x["skill_id"]: x for x in ev_pos}
-        self.assertFalse(by_p[203201]["role_match"])
-        self.assertFalse(by_p[203201]["pos_match"])
-        self.assertIn("位置不符", by_p[203201]["badge_text"])
 if __name__ == "__main__":
     unittest.main()

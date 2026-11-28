@@ -2671,10 +2671,151 @@ details.fold-block summary:hover {
   font-weight: 800;
 }
 
+/* ---------- 总览冷启动数据就绪卡 & 同步摘要条 ---------- */
+.readiness-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.readiness-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.readiness-item {
+  background: var(--surface-2);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.readiness-item.is-ok {
+  border-color: var(--mint, #12b886);
+  background: var(--surface);
+}
+
+.readiness-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.readiness-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.readiness-val {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.readiness-hint {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.readiness-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.sync-summary-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.sync-summary-strip strong {
+  color: var(--text);
+}
+
+/* ---------- 计划与攻略：默认折叠的可选 AI Agent 协作区 ---------- */
+.ai-collab-box {
+  margin-top: 14px;
+  border-top: 1.5px dashed var(--border);
+  padding-top: 12px;
+}
+
+.ai-collab-summary {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  cursor: pointer;
+  list-style: none;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  transition: border-color 0.14s, color 0.14s;
+}
+
+.ai-collab-summary::-webkit-details-marker {
+  display: none;
+}
+
+.ai-collab-summary:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.ai-collab-body {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-collab-desc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.ai-collab-prompt {
+  margin: 0;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.ai-collab-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 /* ---------- 响应式 ---------- */
 @media (max-width: 1080px) {
   .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pos-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .readiness-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .runs-layout, .plans-layout { grid-template-columns: 1fr; }
   .runs-sidebar, .plans-sidebar { position: static; max-height: 360px; }
   .planner-grid, .live-grid, .reverse-split { grid-template-columns: 1fr; }

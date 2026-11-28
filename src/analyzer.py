@@ -406,7 +406,43 @@ def build_single_run_archive(item: dict, seq_no: int, lc, strategy: dict) -> dic
     return {"summary": summary, "detail": detail}
 
 
-MANIFEST_SCHEMA_VERSION = 4
+MANIFEST_SCHEMA_VERSION = 5
+
+
+def _parse_archive_sort_key(run_id: str, log_name: str = "") -> tuple:
+    src = run_id or log_name or ""
+    m = re.match(r"(\d{2})_(\d{2})___(\d{2})_(\d{2})_(\d{2})(?:_r(\d+))?", src)
+    if m:
+        mo, dy, hh, mm, ss = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4)), int(m.group(5))
+        ridx = int(m.group(6)) if m.group(6) else 0
+        yr_ord = 0 if mo >= 9 else 1
+        return (yr_ord, mo, dy, hh, mm, ss, ridx, src)
+    return (9, 99, 99, 99, 99, 99, 0, src)
+
+
+def _is_plausible_archived_run(arch_data: dict) -> bool:
+    """校验原始日志已清理的历史归档是否合理，过滤旧版 v3 误采队伍总评价/PVP 的假分。"""
+    if not isinstance(arch_data, dict):
+        return False
+    try:
+        rk = int(arch_data.get("final_rank") or 0)
+    except Exception:
+        return False
+    if not (1000 <= rk <= 20000):
+        return False
+    if not str(arch_data.get("lineup") or "").strip():
+        return False
+    fstats = arch_data.get("final_stats")
+    if isinstance(fstats, dict) and fstats:
+        try:
+            stat_sum = sum(int(v or 0) for v in fstats.values())
+        except Exception:
+            stat_sum = 0
+        # 真实育成 (final_rank - stat_sum) 稳定在 +250~+425；放宽至 [-500, +2500] 既不误杀真局，
+        # 又能拦截旧版 v3 误采的队伍总评/PVP 排名假分（如 14000~19999 或异常低分）
+        if stat_sum >= 4000 and not (stat_sum - 500 <= rk <= stat_sum + 2500):
+            return False
+    return True
 
 
 def _load_manifest() -> dict:
@@ -466,13 +502,10 @@ def _extract_all_runs_locked(
     manifest = _load_manifest()
     prev_runs_order = list(manifest.get("runs_order") or [])
     if manifest.get("schema_version") != MANIFEST_SCHEMA_VERSION:
-        # 协议解析升级（如 v4 严格锚定 education.sc_education_result.new_rank）自动触发一次全量重算
-        manifest = {
-            "schema_version": MANIFEST_SCHEMA_VERSION,
-            "log_meta": {},
-            "runs_order": [],
-            "runs_meta": [],
-        }
+        # 协议解析/归档规则升级：清空 log_meta 强制重算当前现存日志，
+        # 同时保留原有 runs_meta 并由下文兜底召回原始日志已被清理的历史归档，不丢失老战绩
+        manifest["schema_version"] = MANIFEST_SCHEMA_VERSION
+        manifest["log_meta"] = {}
         force_rebuild = True
     elif force_rebuild:
         # 强制重建：仅清空日志指纹让现存日志全部重算；保留 runs_meta，
@@ -570,6 +603,8 @@ def _extract_all_runs_locked(
                 try:
                     with open(arch_file, "r", encoding="utf-8") as af:
                         arch_data = json.load(af)
+                    if not _is_plausible_archived_run(arch_data):
+                        continue
                     summ = {
                         k: v
                         for k, v in arch_data.items()
@@ -664,6 +699,50 @@ def _extract_all_runs_locked(
         all_summaries.append(summ)
         runs_order.append(run_id)
         runs_meta.append({"run_id": run_id, "log": item["log"], "end_log": item["end_log"]})
+
+    # 3. 兜底召回：扫描 ARCHIVE_DIR 中尚未登记、且原始日志已不在当前 Logs/ 目录下的合法历史归档
+    #    （修复旧版 schema v4 升级清空 runs_meta 或跨机迁入 archive/ 导致的老战绩丢失；
+    #      若原始日志仍在当前 Logs/ 目录，则严格以 Step 2 最新解析结果为准，不复活被淘汰的假局）
+    cur_log_names = set(log_basenames)
+    seen_ids = set(runs_order)
+    for arch_fp in sorted(glob.glob(os.path.join(ARCHIVE_DIR, "*.json"))):
+        try:
+            with open(arch_fp, "r", encoding="utf-8") as af:
+                arch_data = json.load(af)
+        except Exception:
+            continue
+        rid = str(arch_data.get("run_id") or os.path.splitext(os.path.basename(arch_fp))[0])
+        if not rid or rid in seen_ids:
+            continue
+        arch_log = str(arch_data.get("log") or "")
+        arch_end_log = str(arch_data.get("end_log") or arch_log)
+        if (arch_log and arch_log in cur_log_names) or (arch_end_log and arch_end_log in cur_log_names):
+            continue
+        if not _is_plausible_archived_run(arch_data):
+            continue
+        summ = {
+            k: v
+            for k, v in arch_data.items()
+            if k not in ("weekday_timeline", "weekend_timeline", "top_suboptimal_turns", "story_choices")
+        }
+        summ["run_id"] = rid
+        all_summaries.append(summ)
+        runs_order.append(rid)
+        runs_meta.append({"run_id": rid, "log": arch_log, "end_log": arch_end_log})
+        seen_ids.add(rid)
+
+    # 统一按真实对局时间升序重排并重编 seq_no，保证历史召回局与新解析局时间线一致
+    if all_summaries:
+        combined = list(zip(all_summaries, runs_order, runs_meta))
+        combined.sort(key=lambda t: _parse_archive_sort_key(t[1], t[2].get("log", "")))
+        all_summaries = []
+        runs_order = []
+        runs_meta = []
+        for idx_s, (summ, rid, rm) in enumerate(combined, start=1):
+            summ["seq_no"] = idx_s
+            all_summaries.append(summ)
+            runs_order.append(rid)
+            runs_meta.append(rm)
 
     # 防护：schema 升级/全量重算若意外得到 0 局，但磁盘上原先已有归档，
     # 禁止用空结果覆盖，避免并发扫描或日志目录异常把战绩表清空。

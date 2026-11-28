@@ -296,51 +296,175 @@
     // 4. 折线图
     renderTrendChart();
 
-    // 5. 冲分队列 & 瓶颈
+    // 5. 本地数据就绪卡（0 战绩冷启动）或主力战绩速览墙（有战绩）
     $("overview-updated").textContent = `快照同步 ${ov.generated_at || ""}`;
     $("overview-warnings").innerHTML = (ov.goal_warnings || [])
       .map((w) => `<div class="warn-banner">▲ ${esc(w)}</div>`)
       .join("");
 
-    const bList = (ov.bottlenecks || []).slice(0, 6);
-    $("overview-bottlenecks").innerHTML = bList.length ? bList.map((b) => {
-      const pct = b.target_rank ? Math.min(100, Math.round((b.current_best_rank / b.target_rank) * 100)) : 0;
-      return `
-        <div class="goal-card" data-cid="${b.char_id || ""}">
-          <div class="goal-head">
-            ${avatarHtml(b.head, b.char_name)}
-            <div style="min-width:0;flex:1">
-              <div class="goal-title">
-                <span class="badge badge-blue">P${b.priority}</span>
-                <span>${esc(b.char_name)}</span>
-                <span class="badge">${esc(b.role)}</span>
-                ${b.has_rainbow_note ? '<span class="badge badge-purple">有彩笔记</span>' : '<span class="badge badge-gold">缺彩笔记</span>'}
+    const sync = ov.sync_status || {
+      log_dir_ok: false,
+      runs_count: k.total_runs || 0,
+      owned_actors: 0,
+      own_notes: k.own_notes_total || 0,
+      borrowed_notes: k.borrowed_notes_total || 0,
+      owned_equips: 0,
+    };
+    const charRecords = ov.char_records || [];
+    const titleEl = $("overview-bottom-title");
+    const subEl = $("overview-bottom-sub");
+    const syncBarEl = $("overview-sync-bar");
+    const scanBtnTop = $("btn-overview-scan");
+    const bottomEl = $("overview-bottlenecks");
+
+    if (k.total_runs === 0 || !charRecords.length) {
+      if (titleEl) titleEl.textContent = "本地数据就绪状态";
+      if (subEl) subEl.textContent = "首次打开无需手动录入，一键扫描游戏日志即可同步历史战绩与个人角色/笔记/器材池";
+      if (syncBarEl) syncBarEl.innerHTML = "";
+      if (scanBtnTop) scanBtnTop.classList.add("hidden");
+
+      const statusItems = [
+        {
+          label: "游戏日志目录",
+          val: sync.log_dir_ok ? "已定位" : "未绑定",
+          ok: Boolean(sync.log_dir_ok),
+          hint: sync.log_dir_ok ? "可随时扫描读取" : "请先在桌面控制台选择游戏目录",
+        },
+        {
+          label: "已归档战绩",
+          val: `${sync.runs_count} 局`,
+          ok: sync.runs_count > 0,
+          hint: "完成育成后自动可扫入",
+        },
+        {
+          label: "已有角色",
+          val: `${sync.owned_actors} 人`,
+          ok: sync.owned_actors > 0,
+          hint: "用于过滤自有配对方案",
+        },
+        {
+          label: "笔记库存",
+          val: `${sync.own_notes} 自备 / ${sync.borrowed_notes} 借用`,
+          ok: (sync.own_notes + sync.borrowed_notes) > 0,
+          hint: "开局选人自动计算最优相性",
+        },
+        {
+          label: "SSR 器材库",
+          val: `${sync.owned_equips} 张`,
+          ok: sync.owned_equips > 0,
+          hint: "用于实盘 4+借1 配装推荐",
+        },
+      ];
+
+      bottomEl.className = "readiness-wrap";
+      bottomEl.innerHTML = `
+        <div class="readiness-grid">
+          ${statusItems.map((it) => `
+            <div class="readiness-item ${it.ok ? "is-ok" : ""}">
+              <div class="readiness-top">
+                <span class="readiness-label">${esc(it.label)}</span>
+                <span class="badge ${it.ok ? "badge-green" : ""}">${it.ok ? "就绪" : "待同步"}</span>
               </div>
-              <div class="goal-meta">专项：${esc(b.focus_stat || "均衡")}</div>
+              <div class="readiness-val num">${esc(it.val)}</div>
+              <div class="readiness-hint">${esc(it.hint)}</div>
             </div>
-          </div>
-          <div class="goal-progress-row">
-            <span class="num">当前 <strong>${b.current_best_rank.toLocaleString()}</strong> / 目标 ${b.target_rank.toLocaleString()}</span>
-            <span class="${b.rank_gap === 0 ? "diff-pos" : ""}">${b.rank_gap === 0 ? "已达标" : "差 " + b.rank_gap}</span>
-          </div>
-          <div class="pos-bar"><div class="pos-bar-fill" style="width:${pct}%;background:${b.rank_gap === 0 ? "var(--mint)" : "var(--accent)"}"></div></div>
-          <div class="goal-note">${esc(b.primary_bottleneck || b.advice || "")}</div>
+          `).join("")}
+        </div>
+        <div class="readiness-actions">
+          <button type="button" class="action-btn action-btn-primary" id="btn-coldstart-scan">🔄 立即扫描战绩并同步个人池</button>
+          <span class="panel-sub" id="coldstart-scan-msg">无历史战绩时，也可直接切换到「笔记与配装」或「相性查询」查看全图鉴通用方案。</span>
         </div>
       `;
-    }).join("") : '<div class="empty-state">暂未配置养成队列或同步历史战绩。可先在桌面控制台点击「扫描历史战绩」，或切换到「笔记与配装」查看全角色通用方案。</div>';
 
-    document.querySelectorAll(".goal-card[data-cid]").forEach((el) => {
-      el.addEventListener("click", () => {
-        const cid = Number(el.dataset.cid);
-        if (cid) {
-          state.plannerCharId = cid;
-          const sel = $("planner-char-select");
-          if (sel) sel.value = String(cid);
-          switchView("box");
-          loadPlanner();
-        }
+      const coldBtn = $("btn-coldstart-scan");
+      if (coldBtn) {
+        coldBtn.addEventListener("click", () => triggerOverviewScan(coldBtn, $("coldstart-scan-msg")));
+      }
+    } else {
+      if (titleEl) titleEl.textContent = "主力战绩速览墙";
+      if (subEl) subEl.textContent = "按历史最高评分降序汇总各主力表现，点击卡片直达对应角色的笔记与配装";
+      if (scanBtnTop) scanBtnTop.classList.remove("hidden");
+      if (syncBarEl) {
+        syncBarEl.innerHTML = `
+          <div class="sync-summary-strip">
+            <span class="badge ${sync.log_dir_ok ? "badge-green" : ""}">日志目录 ${sync.log_dir_ok ? "已连接" : "未绑定"}</span>
+            <span>归档 <strong>${sync.runs_count}</strong> 局</span>
+            <span>角色 <strong>${sync.owned_actors}</strong> 人</span>
+            <span>自备笔记 <strong>${sync.own_notes}</strong> 本 · 好友 <strong>${sync.borrowed_notes}</strong> 本</span>
+            <span>SSR 器材 <strong>${sync.owned_equips}</strong> 张</span>
+            <span class="panel-sub" id="overview-scan-inline-msg" style="margin-left:auto"></span>
+          </div>
+        `;
+      }
+
+      bottomEl.className = "goal-grid";
+      bottomEl.innerHTML = charRecords.map((c) => {
+        const is10k = c.best_rank >= 10000;
+        const pct = k.best_rank > 0 ? Math.min(100, Math.round((c.best_rank / k.best_rank) * 100)) : 0;
+        return `
+          <div class="goal-card" data-cid="${c.char_id || ""}">
+            <div class="goal-head">
+              ${avatarHtml(c.head, c.name)}
+              <div style="min-width:0;flex:1">
+                <div class="goal-title">
+                  <span>${esc(c.name)}</span>
+                  ${c.pos ? `<span class="badge badge-blue">${esc(c.pos)}</span>` : ""}
+                  ${c.has_rainbow_note ? '<span class="badge badge-purple">7阶彩笔记</span>' : '<span class="badge">暂无彩笔记</span>'}
+                </div>
+                <div class="goal-meta">均分 ${c.avg_rank ? c.avg_rank.toLocaleString() : "—"} · 累计 ${c.run_count} 局</div>
+              </div>
+            </div>
+            <div class="goal-progress-row">
+              <span class="num">最高 <strong style="color:${is10k ? "var(--gold-deep, var(--gold))" : "inherit"}">${c.best_rank ? c.best_rank.toLocaleString() : "—"}</strong></span>
+              <span class="panel-sub">点击查看配装 →</span>
+            </div>
+            <div class="pos-bar"><div class="pos-bar-fill" style="width:${pct}%;background:${is10k ? "var(--mint)" : "var(--accent)"}"></div></div>
+          </div>
+        `;
+      }).join("");
+
+      document.querySelectorAll(".goal-card[data-cid]").forEach((el) => {
+        el.addEventListener("click", () => {
+          const cid = Number(el.dataset.cid);
+          if (cid) {
+            state.plannerCharId = cid;
+            const sel = $("planner-char-select");
+            if (sel) sel.value = String(cid);
+            switchView("box");
+            loadPlanner();
+          }
+        });
       });
-    });
+    }
+  }
+
+  async function triggerOverviewScan(btnEl, msgEl) {
+    if (!state.online) {
+      alert("当前为离线静态快照模式，请通过桌面控制台打开本地作战室后再执行扫描。");
+      return;
+    }
+    const origText = btnEl ? btnEl.textContent : "";
+    if (btnEl) {
+      btnEl.disabled = true;
+      btnEl.textContent = "扫描中…";
+    }
+    if (msgEl) msgEl.textContent = "正在扫描游戏日志并同步个人库存…";
+    try {
+      const resp = await fetch("/api/scan", { method: "POST" });
+      const data = await resp.json();
+      await loadCoreData();
+      const targetMsg = $("overview-scan-inline-msg") || $("coldstart-scan-msg") || msgEl;
+      if (targetMsg) {
+        targetMsg.textContent = data && data.message ? data.message : "扫描完成";
+      }
+    } catch (e) {
+      if (msgEl) msgEl.textContent = "扫描失败：" + (e.message || e);
+    } finally {
+      if (btnEl) {
+        btnEl.disabled = false;
+        btnEl.textContent = origText || "🔄 重新扫描";
+      }
+    }
   }
 
   function getThemeChartPalette() {
@@ -1251,9 +1375,12 @@
       : (data.error || "暂无日志");
 
     const pr = data.processes || {};
+    const driverBadgeHtml = pr.driver_running
+      ? '<span class="badge badge-blue">托管 运行中</span>'
+      : "";
     $("live-proc-badges").innerHTML = `
       <span class="badge ${pr.game_running ? "badge-green" : ""}">游戏 ${pr.game_running ? "运行中" : "未开"}</span>
-      <span class="badge ${pr.driver_running ? "badge-blue" : ""}">托管 ${pr.driver_running ? "运行中" : "待机"}</span>
+      ${driverBadgeHtml}
       <span class="badge ${pr.hud_running ? "badge-purple" : ""}">HUD ${pr.hud_running ? "开" : "关"}</span>
     `;
 
@@ -3160,6 +3287,38 @@
           return;
         }
         window.location.href = "/api/export-diag";
+      });
+    }
+
+    const btnOverviewScan = $("btn-overview-scan");
+    if (btnOverviewScan) {
+      btnOverviewScan.addEventListener("click", () => {
+        triggerOverviewScan(btnOverviewScan, $("overview-scan-inline-msg"));
+      });
+    }
+
+    const btnCopyAiPrompt = $("btn-copy-ai-prompt");
+    if (btnCopyAiPrompt) {
+      btnCopyAiPrompt.addEventListener("click", async () => {
+        const promptEl = $("ai-collab-prompt-text");
+        const tipEl = $("ai-collab-copy-tip");
+        const txt = promptEl ? promptEl.textContent.trim() : "";
+        if (!txt) return;
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(txt);
+          } else {
+            const ta = document.createElement("textarea");
+            ta.value = txt;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            document.body.removeChild(ta);
+          }
+          if (tipEl) tipEl.textContent = "✅ 已复制！直接粘贴发给你的 AI Agent 即可";
+        } catch (_) {
+          if (tipEl) tipEl.textContent = "请手动选中上方提示词复制";
+        }
       });
     }
 

@@ -12,8 +12,8 @@
         "label": "选项1(稳回精力⚡+10)"
       },
       "2": {
-        "count": 11,
-        "effect_id": 397,
+        "count": 12,
+        "effect_id": 396,
         "ps": 30,
         "coins": 0,
         "props": {},
@@ -26,7 +26,7 @@
     "name": "器材加成-70熟练度",
     "branches": {
       "1": {
-        "count": 79,
+        "count": 81,
         "effect_id": 41004181,
         "ps": 40,
         "coins": 0,
@@ -59,7 +59,7 @@
     "name": "器材加成-100熟练度",
     "branches": {
       "1": {
-        "count": 78,
+        "count": 79,
         "effect_id": 41004184,
         "ps": 70,
         "coins": 0,
@@ -78,7 +78,7 @@
         "random_max_prop": 130
       },
       "3": {
-        "count": 26,
+        "count": 27,
         "effect_id": 41004186,
         "ps": 0,
         "coins": 50,
@@ -478,7 +478,7 @@
     "name": "胜利的仪式",
     "branches": {
       "1": {
-        "count": 20,
+        "count": 21,
         "effect_id": 7000,
         "ps": 10,
         "coins": 0,
@@ -503,7 +503,7 @@
     "name": "绝杀登屏",
     "branches": {
       "1": {
-        "count": 36,
+        "count": 37,
         "effect_id": 7000,
         "ps": 10,
         "coins": 0,
@@ -850,7 +850,7 @@
     "name": "临时替补",
     "branches": {
       "1": {
-        "count": 20,
+        "count": 21,
         "effect_id": 7000,
         "ps": 10,
         "coins": 0,
@@ -900,7 +900,7 @@
     "name": "柠檬攻击",
     "branches": {
       "1": {
-        "count": 38,
+        "count": 39,
         "effect_id": 7000,
         "ps": 10,
         "coins": 0,
@@ -1022,7 +1022,7 @@
     "name": "理事长的神秘理疗",
     "branches": {
       "1": {
-        "count": 70,
+        "count": 71,
         "effect_id": 401,
         "ps": 10,
         "coins": 0,
@@ -1073,7 +1073,7 @@
     "name": "模拟器,启动！",
     "branches": {
       "1": {
-        "count": 13,
+        "count": 14,
         "effect_id": 1,
         "ps": 0,
         "coins": 0,
@@ -1150,7 +1150,7 @@
     "name": "海边的波子汽水",
     "branches": {
       "1": {
-        "count": 24,
+        "count": 25,
         "effect_id": null,
         "ps": 60,
         "coins": 0,
@@ -1205,7 +1205,7 @@
         "label": "选项1(稳拿💪体能+10)"
       },
       "2": {
-        "count": 60,
+        "count": 62,
         "effect_id": 615,
         "ps": 0,
         "coins": 0,
@@ -1342,7 +1342,7 @@
     "name": "惊人的速度",
     "branches": {
       "1": {
-        "count": 17,
+        "count": 18,
         "effect_id": 7000,
         "ps": 10,
         "coins": 0,
@@ -1350,7 +1350,7 @@
         "max_props": {}
       },
       "2": {
-        "count": 2,
+        "count": 3,
         "effect_id": 7171,
         "ps": 0,
         "coins": 0,
@@ -1442,7 +1442,7 @@
     "name": "下一条鱼",
     "branches": {
       "1": {
-        "count": 5,
+        "count": 6,
         "effect_id": 7000,
         "ps": 10,
         "coins": 0,
@@ -1601,7 +1601,7 @@
     "name": "训练计划是",
     "branches": {
       "1": {
-        "count": 11,
+        "count": 12,
         "effect_id": 7000,
         "ps": 10,
         "coins": 0,
@@ -1622,7 +1622,7 @@
         "max_props": {}
       },
       "2": {
-        "count": 3,
+        "count": 4,
         "effect_id": 7140,
         "ps": 0,
         "coins": 0,
@@ -1637,7 +1637,7 @@
     "name": "成绩提升！",
     "branches": {
       "1": {
-        "count": 6,
+        "count": 7,
         "effect_id": 7000,
         "ps": 10,
         "coins": 0,
@@ -1696,7 +1696,7 @@
     "name": "心理辅导",
     "branches": {
       "1": {
-        "count": 5,
+        "count": 6,
         "effect_id": 7000,
         "ps": 10,
         "coins": 0,
@@ -1719,7 +1719,7 @@
     "name": "优质水果",
     "branches": {
       "1": {
-        "count": 5,
+        "count": 6,
         "effect_id": 7000,
         "ps": 10,
         "coins": 0,
@@ -1791,7 +1791,7 @@
     "name": "钥匙遗失",
     "branches": {
       "1": {
-        "count": 6,
+        "count": 7,
         "effect_id": 7000,
         "ps": 10,
         "coins": 0,
@@ -2029,7 +2029,7 @@
         "max_props": {}
       },
       "1": {
-        "count": 1,
+        "count": 2,
         "effect_id": 7000,
         "ps": 10,
         "coins": 0,
@@ -2042,7 +2042,7 @@
     "name": "球队宣传",
     "branches": {
       "1": {
-        "count": 1,
+        "count": 2,
         "effect_id": 7000,
         "ps": 10,
         "coins": 0,

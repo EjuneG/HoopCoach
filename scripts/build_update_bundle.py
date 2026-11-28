@@ -151,6 +151,9 @@ def build_patch_zip(
         _add_dir("strategies", skip_dirs=("__pycache__",))
         _add_dir("dashboard", skip_dirs=("__pycache__", "data"))
         _add_file("packaging/assets/hoopcoach.ico")
+        _add_file("docs/quickstart_guide.md")
+        _add_file("AGENTS.md")
+        _add_file("LICENSE")
 
         if os.path.isfile(os.path.join(repo_root, "README.md")):
             _add_file("README.md", "使用说明.txt")

@@ -87,20 +87,91 @@ def _normalize_game_dirs(candidate_path: str) -> Optional[tuple[str, str]]:
     return None
 
 
+def _scan_windows_registry_uninstall_dirs() -> list[str]:
+    """Windows 下只读查询注册表 Uninstall 项中《篮球少女 / HoopGirls / LQSN》的安装路径。"""
+    if not IS_WINDOWS:
+        return []
+    found: list[str] = []
+    try:
+        winreg = __import__("winreg")
+    except Exception:
+        return found
+
+    hives = (
+        getattr(winreg, "HKEY_LOCAL_MACHINE", None),
+        getattr(winreg, "HKEY_CURRENT_USER", None),
+    )
+    subkeys = (
+        r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+        r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+    )
+    keywords = ("篮球少女", "hoopgirls", "hoop girls", "lqsn")
+
+    for hive in hives:
+        if hive is None:
+            continue
+        for sub in subkeys:
+            try:
+                root_key = winreg.OpenKey(hive, sub)
+            except OSError:
+                continue
+            try:
+                idx = 0
+                while True:
+                    try:
+                        name = winreg.EnumKey(root_key, idx)
+                    except OSError:
+                        break
+                    idx += 1
+                    try:
+                        with winreg.OpenKey(root_key, name) as item_key:
+                            disp_name = ""
+                            try:
+                                disp_name = str(winreg.QueryValueEx(item_key, "DisplayName")[0] or "")
+                            except OSError:
+                                pass
+                            low_name = f"{name} {disp_name}".lower()
+                            if not any(kw in low_name for kw in keywords):
+                                continue
+                            for val_name in ("InstallLocation", "DisplayIcon", "UninstallString"):
+                                try:
+                                    raw_val = str(winreg.QueryValueEx(item_key, val_name)[0] or "").strip().strip('"')
+                                except OSError:
+                                    continue
+                                if not raw_val:
+                                    continue
+                                if "," in raw_val and val_name == "DisplayIcon":
+                                    raw_val = raw_val.split(",", 1)[0].strip().strip('"')
+                                if os.path.isfile(raw_val):
+                                    raw_val = os.path.dirname(raw_val)
+                                if raw_val and os.path.isdir(raw_val) and raw_val not in found:
+                                    found.append(raw_val)
+                    except OSError:
+                        continue
+            finally:
+                try:
+                    winreg.CloseKey(root_key)
+                except Exception:
+                    pass
+    return found
+
+
 def _auto_scan_windows_game_dirs() -> Optional[tuple[str, str]]:
-    """在 Windows 常见盘符与安装位置中快速搜寻 LQSN 日志目录。"""
-    search_roots = [
+    """在 Windows 注册表与常见盘符/安装位置中快速搜寻 LQSN 日志目录。"""
+    search_roots = list(_scan_windows_registry_uninstall_dirs())
+    search_roots.extend([
         os.path.dirname(BASE_DIR),
         os.path.expanduser("~"),
         os.path.join(os.path.expanduser("~"), "Desktop"),
         os.path.join(os.path.expanduser("~"), "Downloads"),
-    ]
+    ])
     for drive in "CDEFGHI":
         drive_root = f"{drive}:\\"
         if os.path.exists(drive_root):
             search_roots.extend([
                 drive_root,
                 os.path.join(drive_root, "Games"),
+                os.path.join(drive_root, "Game"),
                 os.path.join(drive_root, "Program Files"),
                 os.path.join(drive_root, "Program Files (x86)"),
                 os.path.join(drive_root, "SteamLibrary", "steamapps", "common"),
@@ -111,12 +182,19 @@ def _auto_scan_windows_game_dirs() -> Optional[tuple[str, str]]:
         "LQSN",
         "篮球少女",
         "篮球少女：飞跃巅峰",
+        "篮球少女 飞跃巅峰",
+        "篮球少女飞跃巅峰",
         "HoopGirls",
+        "Hoop Girls",
+        os.path.join("HoopGirls", "LQSN"),
+        os.path.join("篮球少女", "LQSN"),
         os.path.join("lqsn-pc", "extracted", "games", "LQSN"),
     ]
+    seen_roots: set[str] = set()
     for root in search_roots:
-        if not os.path.isdir(root):
+        if not root or root in seen_roots or not os.path.isdir(root):
             continue
+        seen_roots.add(root)
         res = _normalize_game_dirs(root)
         if res:
             return res
@@ -149,8 +227,14 @@ def set_game_dir(candidate_path: str) -> Optional[tuple[str, str]]:
     return None
 
 
-def choose_game_dir_via_dialog(parent=None) -> Optional[tuple[str, str]]:
-    """弹出系统文件夹选择器供用户指定游戏目录并保存。"""
+def choose_game_dir_with_status(parent=None) -> tuple[Optional[tuple[str, str]], str, str]:
+    """
+    弹出系统文件夹选择器供用户指定游戏目录并保存。
+    返回 `(resolved_dirs, selected_raw_path, error_reason)`：
+    - 用户取消选择：`(None, "", "")`
+    - 选错目录（未发现 Logs/_game_data_）：`(None, selected_raw_path, reason)`
+    - 绑定成功：`((docs_dir, log_dir), selected_raw_path, "")`
+    """
     try:
         import tkinter as tk
         from tkinter import filedialog
@@ -167,11 +251,24 @@ def choose_game_dir_via_dialog(parent=None) -> Optional[tuple[str, str]]:
         )
         if temp_root is not None:
             temp_root.destroy()
-        if selected:
-            return set_game_dir(selected)
-    except Exception:
-        pass
-    return None
+        if not selected:
+            return None, "", ""
+        res = set_game_dir(selected)
+        if res:
+            return res, selected, ""
+        return (
+            None,
+            selected,
+            "未在所选目录中找到游戏日志文件夹（_game_data_/Documents/Logs）。",
+        )
+    except Exception as e:
+        return None, "", f"打开目录选择框失败：{e}"
+
+
+def choose_game_dir_via_dialog(parent=None) -> Optional[tuple[str, str]]:
+    """弹出系统文件夹选择器供用户指定游戏目录并保存（向后兼容入口）。"""
+    res, _selected, _err = choose_game_dir_with_status(parent=parent)
+    return res
 
 
 def resolve_game_dirs(interactive_on_missing: bool = True) -> tuple[str, str]:
@@ -232,9 +329,9 @@ def _prompt_user_for_game_dir() -> Optional[tuple[str, str]]:
         root.withdraw()
         root.attributes("-topmost", True)
         messagebox.showinfo(
-            "🏀 星奈育成军师 — 首次运行路径设置",
+            "HoopCoach · 首次运行路径设置",
             "未自动定位到《篮球少女：飞跃巅峰》游戏目录。\n\n"
-            "请在接下来的窗口中选择你的游戏安装文件夹（例如包含 LQSN.exe 或 _game_data_ 的文件夹），选一次即可永久记住！",
+            "请在接下来的窗口中选择你的游戏安装文件夹（右键桌面游戏图标 → 打开文件所在的位置，选择那个文件夹即可），选一次即可永久记住！",
         )
         selected = filedialog.askdirectory(title="请选择《篮球少女》游戏安装文件夹 (LQSN)")
         root.destroy()
@@ -272,28 +369,6 @@ class _RECT(ctypes.Structure):
         ("right", ctypes.c_long),
         ("bottom", ctypes.c_long),
     ]
-
-
-def win32_get_mouse_location() -> dict:
-    pt = _POINT()
-    ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
-    hwnd = ctypes.windll.user32.WindowFromPoint(pt)
-    return {"X": int(pt.x), "Y": int(pt.y), "WINDOW": int(hwnd or 0)}
-
-
-def win32_click_at(x: int, y: int, double_click: bool = False, interval_sec: float = 0.35):
-    import time
-
-    user32 = ctypes.windll.user32
-    user32.SetCursorPos(int(x), int(y))
-    MOUSEEVENTF_LEFTDOWN = 0x0002
-    MOUSEEVENTF_LEFTUP = 0x0004
-    user32.mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
-    user32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
-    if double_click:
-        time.sleep(interval_sec)
-        user32.mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
-        user32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
 
 
 def win32_find_game_hwnd(window_title: str = "篮球少女：飞跃巅峰") -> int:
@@ -560,7 +635,7 @@ class WindowsFloatingHUD:
 
         # 主根窗 = 紧凑顶栏 / 贴身模式单行状态胶囊（可拖拽、可右键切换、不抢焦点）
         self.root = tk.Tk() if master is None else tk.Toplevel(master)
-        self.root.title("🏀 星奈育成军师 HUD")
+        self.root.title("HoopCoach · 实时军师 HUD")
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
         self.root.attributes("-alpha", 0.94)
@@ -568,7 +643,7 @@ class WindowsFloatingHUD:
 
         # 独立正文子窗 = 100% 鼠标点击穿透
         self.body_win = tk.Toplevel(self.root)
-        self.body_win.title("🏀 星奈军师正文")
+        self.body_win.title("HoopCoach HUD 正文")
         self.body_win.overrideredirect(True)
         self.body_win.attributes("-topmost", True)
         self.body_win.attributes("-alpha", 0.90)
@@ -588,7 +663,7 @@ class WindowsFloatingHUD:
         self.collapsed = False
         self.full_markup = ""
         self.tip_markup = ""
-        self.mini_markup = "<span foreground='#fbbf24' weight='bold'>🏀 星奈军师待命中...</span>"
+        self.mini_markup = "<span foreground='#fbbf24' weight='bold'>🏀 HoopCoach 待命中...</span>"
         self.custom_offset = None
         self.manual_pos = None
         self.drag_active = False
@@ -660,11 +735,11 @@ class WindowsFloatingHUD:
         self._header_hwnd = _win32_apply_overlay_styles(self.root, click_through=False)
         self._body_hwnd = _win32_apply_overlay_styles(self.body_win, click_through=True)
 
-        mode_str = "🤖自动代打" if auto_play else "实时军师"
-        self._update_header(f"<span weight='bold' foreground='#fbbf24'>🏀 星奈 · {mode_str}</span>")
+        mode_str = "实时军师"
+        self._update_header(f"<span weight='bold' foreground='#fbbf24'>🏀 HoopCoach · {mode_str}</span>")
         init_body = "<span foreground='#cbd5e1'>⏳ 监听中，进入选人或育成自动刷新</span>"
         init_tip = "<span foreground='#94a3b8'>按住顶栏拖动  ·  右键折叠/切模式  ·  正文鼠标穿透</span>"
-        self.set_markup(init_body, mini_summary="🏀 星奈待命", tip_markup=init_tip)
+        self.set_markup(init_body, mini_summary="🏀 HoopCoach 待命", tip_markup=init_tip)
         self.sync_position_and_raise(force=True)
         self.GLib.timeout_add(150, self.sync_position_and_raise)
 
@@ -1089,12 +1164,12 @@ class WindowsFloatingHUD:
             self.root.configure(bg="#9ec2d8")
             self.header_inner.configure(bg="#d8e5ed")
             self.header_text.configure(bg="#d8e5ed", fg="#253b52", width=36)
-            raw_t = self.trough_markup or "星奈｜实时参谋就绪"
+            raw_t = self.trough_markup or "HoopCoach｜实时参谋就绪"
             if "｜" in raw_t:
                 tag_s, body_s = raw_t.split("｜", 1)
             else:
-                tag_s, body_s = "星奈", strip_markup_to_clean_text(raw_t)
-            tag_clean = strip_markup_to_clean_text(tag_s)[:8] or "星奈"
+                tag_s, body_s = "HoopCoach", strip_markup_to_clean_text(raw_t)
+            tag_clean = strip_markup_to_clean_text(tag_s)[:10] or "HoopCoach"
             body_clean = strip_markup_to_clean_text(body_s)[:36]
             slot_mk = (
                 f"<span foreground='#0284c7' weight='bold'>[{html.escape(tag_clean)}]</span> "
@@ -1119,7 +1194,7 @@ class WindowsFloatingHUD:
             else:
                 self._render_pango_to_text_widget(
                     self.header_text,
-                    getattr(self, "_last_header", "🏀 星奈 · 实时军师"),
+                    getattr(self, "_last_header", "🏀 HoopCoach · 实时军师"),
                     is_header=True,
                 )
                 combined = self.full_markup
