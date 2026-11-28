@@ -1925,6 +1925,101 @@ def get_lineup_ps_threshold(state: dict) -> tuple[int, str]:
     return 0, ""
 
 
+def calc_lineup_ps_passive_turn_ev(state: dict, strategy: Optional[dict] = None) -> dict:
+    """
+    按当前阵容实际合训倍率，精确估算望月(1012) / 克拉丽丝(1009)精力阈值被动断档 1 回合的真实 EV 损失：
+    - 望月(1012)：精力 >= th 时全表情基础 Bonus +5%/人，★2 心结精力 >=55 额外主属性基础 +2（均吃 Bingo 独立乘区放大）；
+    - 克拉丽丝(1009)：精力 >= th 时全表情基础 Bonus +4%/人。
+    """
+    th, lbl = get_lineup_ps_threshold(state)
+    if th <= 0:
+        return {"thresh": 0, "label": "", "char_name": "", "turn_loss_ev": 0.0}
+
+    main_cid = state.get("main_char_id")
+    tm_cids = [c for c in (state.get("teammate_char_ids") or []) if c != main_cid]
+    lineup_set = set(tm_cids)
+    if main_cid:
+        lineup_set.add(main_cid)
+    char_talents = state.get("char_talents", {}) or {}
+
+    def _r_scale(cid: int) -> float:
+        if cid == main_cid:
+            return 1.0
+        lv = int(char_talents.get(cid, {}).get(cid * 100 + 1, 5))
+        return {1: 0.70, 2: 0.75, 3: 0.80, 4: 0.85, 5: 0.90}.get(min(5, max(1, lv)), 0.85)
+
+    # 估算当前阶段典型合训的面板底数与 Bingo 期望倍率
+    round_num = int(state.get("round", 1) or 1)
+    typical_panel = 38.0 if round_num <= 10 else (56.0 if round_num <= 20 else 64.0)
+    has_pull = (1046 in lineup_set) or (1035 in lineup_set)
+    typical_mates = 2.6 if has_pull else 1.8
+    bingo_factor = 1.65 if (1007 in lineup_set or 1030 in lineup_set or 1031 in lineup_set) else 1.28
+
+    if 1012 in lineup_set:
+        scale = _r_scale(1012)
+        has_hk2 = int(char_talents.get(1012, {}).get(10122, 0)) > 0
+        # 全表情基础 Bonus +4.5%~5%/人，乘以在场人数与 Bingo 独立乘区
+        emoji_ev = typical_panel * (0.045 * scale * typical_mates) * bingo_factor
+        # ★2 心结：精力 >=55 额外主属性 +2（进 total_bonus 乘区）
+        hk2_ev = (2.0 * scale * 2.4) if has_hk2 else 0.0
+        loss_ev = round(max(12.0, min(40.0, emoji_ev + hk2_ev)), 1)
+        return {"thresh": th, "label": lbl, "char_name": "望月", "turn_loss_ev": loss_ev}
+
+    scale = _r_scale(1009)
+    emoji_ev = typical_panel * (0.04 * scale * typical_mates) * bingo_factor
+    loss_ev = round(max(9.0, min(30.0, emoji_ev)), 1)
+    return {"thresh": th, "label": lbl, "char_name": "克拉丽丝", "turn_loss_ev": loss_ev}
+
+
+def find_best_stamina_potion(
+    store_items: list,
+    gold: int,
+    cur_ps: int,
+    ps_cap: int,
+    target_ps: int,
+    allow_gamble: bool = False,
+) -> Optional[dict]:
+    """
+    从商店可用货架中选出性价比最高且买得起的补体药（优先稳定必回体、优先一次能拉回 >= target_ps 的最小花费药）。
+    """
+    cands = []
+    need_ps = max(1, target_ps - cur_ps)
+    room_ps = max(0, ps_cap - cur_ps)
+    for it in (store_items or []):
+        if int(it.get("num", 0) or 0) <= 0:
+            continue
+        iid = int(it.get("id", 0) or 0)
+        price = int(it.get("price", 0) or 0)
+        meta = STORE_ITEM_CATALOG.get(iid)
+        if not meta or meta.get("cat") != "stamina" or gold < price:
+            continue
+        is_gamble = bool(meta.get("is_gamble", False))
+        if is_gamble and not allow_gamble:
+            continue
+        ps_gain = int(meta.get("ps", 0) or 0)
+        max_ps = int(meta.get("max_ps", ps_gain) or ps_gain)
+        eff_gain = min(ps_gain, room_ps)
+        if eff_gain <= 0:
+            continue
+        reaches_target = (cur_ps + ps_gain) >= target_ps
+        cands.append({
+            "id": iid,
+            "name": meta["name"],
+            "ps": ps_gain,
+            "max_ps": max_ps,
+            "eff_ps": eff_gain,
+            "price": price,
+            "is_gamble": is_gamble,
+            "reaches_target": reaches_target,
+            "unit_cost": price / max(1, eff_gain),
+        })
+    if not cands:
+        return None
+    # 排序：稳定药优先 > 能拉回目标线优先 > 单体性价比最优 > 价格更低
+    cands.sort(key=lambda x: (x["is_gamble"], not x["reaches_target"], x["unit_cost"], x["price"]))
+    return cands[0]
+
+
 def detect_lineup_archetype(state: dict, strategy: Optional[dict] = None) -> dict:
     """
     自动识别本局 5 人阵容（1主控 + 4陪练）所属的育成流派核（源自 2026-11-23 贴吧实测 × characters.json edu_stream 交叉验证）：
@@ -2073,18 +2168,51 @@ def calc_lineup_teammate_ev(
     if main_cid:
         lineup_set.add(main_cid)
 
+    # 辅助：按单维剩余上限空间真实截断队友合训倍率放大后的溢出属性（防逼近上限时虚高）
+    def _apply_cap_truncation(
+        raw_mate_ev: float,
+        s_mult: float,
+        f_main: float,
+        f_sub: float,
+    ) -> tuple[float, int, int]:
+        gains_map = cmd.get("gains") or {}
+        if not gains_map:
+            est_raw = int(round((cmd.get("total_stat_gain", 0) + (f_main + f_sub) * 0.85) * s_mult + f_main + f_sub))
+            return raw_mate_ev, est_raw, 0
+        m_st = 100 + idx
+        s_st = {1: 105, 2: 106, 3: 101, 4: 102, 5: 103, 6: 104}.get(idx, 104)
+        total_raw_extra = 0.0
+        total_real_extra = 0.0
+        for st_k, raw_g in gains_map.items():
+            st_id = int(st_k)
+            cur_v = int(props.get(st_id, 200))
+            max_v = int(prop_max.get(st_id, 1600))
+            room = max(0, max_v - cur_v)
+            base_used = min(float(raw_g), float(room))
+            extra_room = max(0.0, float(room) - base_used)
+            f_add = f_main if st_id == m_st else (f_sub if st_id == s_st else 0.0)
+            raw_extra_st = base_used * s_mult + f_add * (1.0 + 0.85 * s_mult)
+            real_extra_st = min(raw_extra_st, extra_room)
+            total_raw_extra += raw_extra_st
+            total_real_extra += real_extra_st
+        wasted = max(0.0, total_raw_extra - total_real_extra)
+        if total_raw_extra > 1e-6 and wasted > 0.0:
+            keep_ratio = total_real_extra / total_raw_extra
+            return raw_mate_ev * keep_ratio, int(round(total_real_extra)), int(round(wasted))
+        return raw_mate_ev, int(round(total_real_extra)), 0
+
     # 若尚未从日志解析出 5 人阵容，则回退到校准后的基础人数模型
     has_tongxin = 420 in state.get("active_states", set())
     if not lineup_set:
         mult_map = w.get("teammate_skill_mult_by_count", {"1": 1.15, "2": 1.75, "3": 2.45, "4": 2.85})
         skill_mult = float(mult_map.get(str(min(4, max(1, head_cnt))), 2.45)) + (0.05 * head_cnt if has_tongxin else 0.0)
-        mate_skill_ev = stat_ev * skill_mult
+        mate_skill_ev, est_extra_stat, wasted_stat = _apply_cap_truncation(stat_ev * skill_mult, skill_mult, 0.0, 0.0)
         synergy = w.get("teammate_3plus_synergy_bonus", 0.0) if head_cnt >= 3 else 0.0
         mate_growth_ev = mate_cnt * float(w.get("teammate_head_bonus", 0.0)) + synergy
-        est_extra_stat = int(round(cmd["total_stat_gain"] * skill_mult))
         tx_tag = "·🧧同心" if has_tongxin else ""
+        waste_tag = f"·⚠️溢{wasted_stat}" if wasted_stat >= 15 else ""
         lbl = "经理合训" if (mate_cnt == 0 and is_mgr) else f"队友×{head_cnt}"
-        return mate_skill_ev + mate_growth_ev, f"👥{lbl}(+{est_extra_stat}{tx_tag})"
+        return mate_skill_ev + mate_growth_ev, f"👥{lbl}(+{est_extra_stat}{tx_tag}{waste_tag})"
 
     ps = state.get("ps", 130)
     if mate_ids:
@@ -2269,7 +2397,10 @@ def calc_lineup_teammate_ev(
         skill_mult *= 1.0 + (0.20 + 0.025 * (min(5, max(1, lv_1001)) - 1)) * _role_scale(1001)
 
     # 佐久间/望月/表情固定加点属于训练基础值 (train_main_property_add)，同样吃 total_bonus 乘区放大！
-    mate_skill_ev = (stat_ev + flat_talent_ev * 0.85) * skill_mult + flat_talent_ev
+    raw_mate_skill_ev = (stat_ev + flat_talent_ev * 0.85) * skill_mult + flat_talent_ev
+    mate_skill_ev, est_extra_stat, wasted_stat = _apply_cap_truncation(
+        raw_mate_skill_ev, skill_mult, flat_main_add, flat_sub_add
+    )
 
     # 4. 陪练队友自身涨属性不计入主控评价分（百分百通关前提下权重归零，默认 0.0）
     head_bonus = float(w.get("teammate_head_bonus", 0.0))
@@ -2278,13 +2409,13 @@ def calc_lineup_teammate_ev(
     mate_growth_ev = effective_growth_mates * head_bonus + synergy_3plus
 
     total_mate_ev = mate_skill_ev + mate_growth_ev
-    est_extra_stat = int(round((cmd["total_stat_gain"] + (flat_main_add + flat_sub_add) * 0.85) * skill_mult + flat_main_add + flat_sub_add))
     names_str = "/".join(on_btn_names)
     pull_badge = "·拉人" if exp_pulled > 0 else ""
     tx_badge = "·🧧同心" if has_tongxin else ""
+    waste_badge = f"·⚠️溢{wasted_stat}" if wasted_stat >= 15 else ""
     return (
         total_mate_ev,
-        f"👥{names_str}(+{est_extra_stat}{pull_badge}{tx_badge})",
+        f"👥{names_str}(+{est_extra_stat}{pull_badge}{tx_badge}{waste_badge})",
     )
 
 
@@ -2985,7 +3116,14 @@ def score_training_turn(state: dict, cmds: list, strategy: dict):
                                 already_maxed_crit_cnt=already_maxed_crit_cnt,
                             )
                             opt_ev = opt["ev"]
-                            if focus_st and focus_cur_ratio < 0.94 and _get_equip_pref_stat(cfg_id) == focus_st:
+                            pref_st_eq = _get_equip_pref_stat(cfg_id)
+                            if pref_st_eq:
+                                eq_main_cap_f = _facility_stat_cap_room_factor(pref_st_eq, state, strategy)
+                                eq_sub_st = FACILITY_STAT_TOPOLOGY.get(pref_st_eq - 100, (pref_st_eq, 0))[1]
+                                eq_sub_cap_f = _facility_stat_cap_room_factor(eq_sub_st, state, strategy) if eq_sub_st else eq_main_cap_f
+                                eq_cap_scale = eq_main_cap_f * 0.78 + eq_sub_cap_f * 0.22
+                                opt_ev = round(opt_ev * eq_cap_scale, 1)
+                            if focus_st and focus_cur_ratio < 0.94 and pref_st_eq == focus_st:
                                 opt_ev = round(opt_ev * (1.0 + (focus_bonus - 1.0) * 0.45), 1)
                             option_ev_total += opt_ev
                             option_cnt += 1
@@ -3042,10 +3180,13 @@ def score_training_turn(state: dict, cmds: list, strategy: dict):
                 # 日志尚未解析出器材熟练度时回退旧人头模型
                 grad_bonus = grad_100_cnt * (3.5 if rem_turns_factor > 0.25 else 1.5)
                 trammel_score = unmaxed_sup_cnt * head_w + grad_bonus
+            all_gains_capped = bool(gains) and all(
+                props.get(st_k, 200) >= prop_max.get(st_k, 1600) for st_k in gains
+            )
+            eff_gold_rb_bonus = 0.0 if all_gains_capped else (gold_cnt * gold_w + rainbow_cnt * rainbow_w)
             sup_score = (
                 trammel_score
-                + gold_cnt * gold_w
-                + rainbow_cnt * rainbow_w
+                + eff_gold_rb_bonus
                 + whistle_milestone_bonus
             )
             score += sup_score
@@ -3084,6 +3225,8 @@ def score_training_turn(state: dict, cmds: list, strategy: dict):
             )
             score += mate_total_ev
             reasons.append(mate_reason_str)
+            if "⚠️溢" in mate_reason_str:
+                hud_tags.append("⚠️倍率溢出")
 
         # 4. 经理在场 + 哨子同框判定(+1 / +2 / 满熟50%概率+3) + 3/6/9爆阶段性全局被动里程碑 + 溢出保留（无11爆上限，11爆后照常触发老虎机！）
         # 核心机制实证：
@@ -3222,7 +3365,10 @@ def score_training_turn(state: dict, cmds: list, strategy: dict):
         is_week_last_train = True if is_sat_train else (
             (exp_r_now == 46) if has_dm else (exp_r_now in (5, 12, 19, 26, 33, 40, 46))
         )
-        lineup_ps_thresh, thresh_label = get_lineup_ps_threshold(state)
+        ps_passive_info = calc_lineup_ps_passive_turn_ev(state, strategy)
+        lineup_ps_thresh = ps_passive_info["thresh"]
+        thresh_label = ps_passive_info["label"]
+        passive_turn_loss = ps_passive_info["turn_loss_ev"]
         if ps_cost < 0:
             cost_mult = float(w.get("stamina_cost_penalty_per_ps", 0.65))
             if is_last_train:
@@ -3234,15 +3380,24 @@ def score_training_turn(state: dict, cmds: list, strategy: dict):
             score += ps_cost * cost_mult
             if is_sat_train:
                 reasons.append(f"省体{ps_cost}")
-            # 若本训扣体后会导致下一训跌破望月透(59体)/克拉丽丝的精力被动门槛，计入下训全队表情Bonus断档损失
+            # 若本训扣体后会导致下一训跌破望月透(55~65体)/克拉丽丝的精力被动门槛，按真实合训倍率计入下训断档损失
             next_ps_est = cur_ps + ps_cost + next_heal
             safe_pots_avail = [
                 it for it in state.get("store_items", [])
-                if it["id"] in (1001, 1002, 1003, 1201, 1202) and it["num"] > 0 and state.get("gold", 0) >= it["price"]
+                if it["id"] in (1001, 1002, 1003, 1201, 1202, 1141, 1142) and it["num"] > 0 and state.get("gold", 0) >= it["price"]
             ]
             has_safe_pot = bool(safe_pots_avail)
             if lineup_ps_thresh > 0 and not is_week_last_train and cur_ps >= lineup_ps_thresh and next_ps_est < lineup_ps_thresh:
-                score -= (4.5 if has_safe_pot else 10.5)
+                raw_drop_pen = passive_turn_loss * 0.85
+                if has_safe_pot:
+                    cheapest_p = min(safe_pots_avail, key=lambda it: it["price"])
+                    g_now_p = float(state.get("gold", 0) or 0)
+                    pot_opp = max(6.0, calc_keep_gold_ev(g_now_p, state) - calc_keep_gold_ev(max(0.0, g_now_p - cheapest_p["price"]), state))
+                    drop_pen = min(raw_drop_pen, pot_opp * 0.65)
+                else:
+                    drop_pen = raw_drop_pen
+                score -= drop_pen
+                reasons.append(f"下训破{thresh_label}(-{drop_pen:.0f})")
                 if not has_safe_pot:
                     hud_tags.append(f"破{lineup_ps_thresh}体被动")
             # 百目鬼周六加训前瞻（纯 EV 计价，绝不写死硬拦）：
@@ -3293,7 +3448,9 @@ def score_training_turn(state: dict, cmds: list, strategy: dict):
                 elif cur_ps <= 43 and next_heal == 0 and not is_week_last_train:
                     score -= 10.0
                 elif lineup_ps_thresh > 0 and cur_ps < lineup_ps_thresh <= (cur_ps + eff_heal) and next_heal == 0 and not is_week_last_train:
-                    score += 11.0
+                    heal_passive_bonus = round(max(11.0, passive_turn_loss * 0.75), 1)
+                    score += heal_passive_bonus
+                    reasons.append(f"回{thresh_label}(+{heal_passive_bonus:.0f})")
                     hud_tags.append(f"回{lineup_ps_thresh}体保被动")
                 elif 44 <= cur_ps <= 58 and next_heal == 0:
                     score += 6.0
@@ -3373,9 +3530,36 @@ def score_training_turn(state: dict, cmds: list, strategy: dict):
             # 周中残体(<=44体，1~5号全红高危)且非本周最后一训：及时休息一次回满，防止硬点6号意识(+4体)导致次日依然无法点彩圈/同框
             rest_score += 9.0
 
+        # 望月(1012)/克拉丽丝(1009)体力线挽救评估：
+        # 仅当「当前已跌破精力线 + 商店无买得起的稳定补体药 + 下回合无免费回体 + 本周后续还有连训日」时，
+        # 提前休息可挽救后续 1~2 个连训日的全队表情被动断档（若商店有药应优先买药而非浪费回合休息；若本回合是大彩圈神局则仍远胜休息）。
+        rest_passive_info = calc_lineup_ps_passive_turn_ev(state, strategy)
+        rest_ps_th = rest_passive_info["thresh"]
+        rest_passive_rescue = 0.0
+        if not is_last_r and rest_ps_th > 0 and ps < rest_ps_th and next_heal == 0 and not is_week_last_r:
+            has_affordable_pot = find_best_stamina_potion(
+                state.get("store_items", []),
+                int(state.get("gold", 0) or 0),
+                ps,
+                ps_cap_rest,
+                rest_ps_th,
+                allow_gamble=False,
+            ) is not None
+            if not has_affordable_pot:
+                day_in_wk = ((exp_r_now - 1) % 7) if exp_r_now > 0 else 1  # 0=周一,1=周二,2=周三,3=周四,4=周五
+                rem_wk_trains = max(0, 4 - day_in_wk) + (1 if has_dm else 0)
+                if exp_r_now >= 43:
+                    rem_wk_trains = 1 if exp_r_now == 44 else 0
+                if rem_wk_trains >= 1:
+                    rest_passive_rescue = round(min(2, rem_wk_trains) * rest_passive_info["turn_loss_ev"] * 0.72, 1)
+                    rest_score += rest_passive_rescue
+
         best_train = max(scored, key=lambda x: x["score"]) if scored else None
         rest_reasons = [f"⚡精力+70~80({ps}➔{min(ps_cap_rest, ps + exp_gain)})"]
         rest_hud_tags = [f"有效+{eff_ps}体" if (over_ps > 0 and ps < 85) else f"回体+{exp_gain}"]
+        if rest_passive_rescue > 0:
+            rest_reasons.append(f"无药提前蓄力保{rest_passive_info['label']}(+{rest_passive_rescue:.0f})")
+            rest_hud_tags.append(f"保{rest_passive_info['char_name']}被动")
         if next_heal > 0:
             rest_reasons.append(f"下回合有+{next_heal}体事件，无需提前休息")
             rest_hud_tags.append(f"下训有+{next_heal}体")
@@ -7221,26 +7405,61 @@ def format_weekday_shop_tip(state: dict, best_ev: float = None, strategy: dict =
         if free_cnt > 0:
             tips.append("🎁商店有0金免费道具未领")
 
-        # 2. 低体力药水与角色精力被动门槛（望月透59体/克拉丽丝）提醒
-        lineup_th, th_lbl = get_lineup_ps_threshold(state)
-        low_ps_thresh = 50 if wk_next_heal >= 30 else max(75, lineup_th + 20)
-        if ps <= low_ps_thresh:
-            st_its = [
-                (
-                    STORE_ITEM_CATALOG[it["id"]]["name"],
-                    STORE_ITEM_CATALOG[it["id"]]["ps"],
-                    it["price"],
-                    bool(STORE_ITEM_CATALOG[it["id"]].get("is_gamble", False)),
-                    int(STORE_ITEM_CATALOG[it["id"]].get("max_ps", STORE_ITEM_CATALOG[it["id"]]["ps"])),
+        # 2. 望月/克拉丽丝精力被动门槛买药优先提醒 + 常规低体药水提醒（不点进商店也能前置看到！）
+        ps_passive_info = calc_lineup_ps_passive_turn_ev(state, strategy)
+        lineup_th = ps_passive_info["thresh"]
+        th_lbl = ps_passive_info["label"]
+        passive_char = ps_passive_info["char_name"]
+        passive_loss = ps_passive_info["turn_loss_ev"]
+        best_ps_cost = int(best_cmd.get("ps", 0) or 0)
+        is_last_tr_tip = (exp_r >= 48) if has_doumeki_in_lineup(state) else (exp_r >= 46)
+
+        passive_pot_prompted = False
+        if lineup_th > 0 and not is_last_tr_tip and ps < lineup_th:
+            pot = find_best_stamina_potion(store_items, gold, ps, ps_cap, lineup_th, allow_gamble=False)
+            if pot is None:
+                pot = find_best_stamina_potion(store_items, gold, ps, ps_cap, lineup_th, allow_gamble=True)
+            if pot is not None:
+                st_gain_str = f"🎲50%赌+{pot['max_ps']}/0体" if pot["is_gamble"] else f"+{pot['ps']}体"
+                tips.append(
+                    f"⚡低于{th_lbl}！先买商店【{pot['name']}({st_gain_str}/{pot['price']}金)】立刻激活{passive_char}被动(每训约+{passive_loss:.0f}EV)"
                 )
-                for it in store_items
-                if it["id"] in STORE_ITEM_CATALOG and STORE_ITEM_CATALOG[it["id"]]["cat"] == "stamina"
-            ]
-            if st_its:
-                # 稳定必回体药水优先于 50% 赌狗特价饮
-                best_st = min(st_its, key=lambda x: (x[3], x[2] / max(1, x[1])))
-                st_gain_str = f"🎲50%赌+{best_st[4]}/0体" if best_st[3] else f"+{best_st[1]}体"
-                tips.append(f"⚡低体可先买商店【{best_st[0]}({st_gain_str}/{best_st[2]}金)】防训练失败")
+                passive_pot_prompted = True
+        elif (
+            lineup_th > 0
+            and not is_last_tr_tip
+            and wk_next_heal == 0
+            and day_idx < 4
+            and ps >= lineup_th
+            and best_ps_cost < 0
+            and (ps + best_ps_cost) < lineup_th
+        ):
+            pot = find_best_stamina_potion(store_items, gold, ps, ps_cap, lineup_th - best_ps_cost, allow_gamble=False)
+            if pot is not None:
+                tips.append(
+                    f"⚡本训后将破{th_lbl}，可顺手买商店【{pot['name']}(+{pot['ps']}体/{pot['price']}金)】保下训{passive_char}被动"
+                )
+                passive_pot_prompted = True
+
+        if not passive_pot_prompted:
+            low_ps_thresh = 50 if wk_next_heal >= 30 else max(75, lineup_th + 20)
+            if ps <= low_ps_thresh:
+                st_its = [
+                    (
+                        STORE_ITEM_CATALOG[it["id"]]["name"],
+                        STORE_ITEM_CATALOG[it["id"]]["ps"],
+                        it["price"],
+                        bool(STORE_ITEM_CATALOG[it["id"]].get("is_gamble", False)),
+                        int(STORE_ITEM_CATALOG[it["id"]].get("max_ps", STORE_ITEM_CATALOG[it["id"]]["ps"])),
+                    )
+                    for it in store_items
+                    if it["id"] in STORE_ITEM_CATALOG and STORE_ITEM_CATALOG[it["id"]]["cat"] == "stamina"
+                ]
+                if st_its:
+                    # 稳定必回体药水优先于 50% 赌狗特价饮
+                    best_st = min(st_its, key=lambda x: (x[3], x[2] / max(1, x[1])))
+                    st_gain_str = f"🎲50%赌+{best_st[4]}/0体" if best_st[3] else f"+{best_st[1]}体"
+                    tips.append(f"⚡低体可先买商店【{best_st[0]}({st_gain_str}/{best_st[2]}金)】防训练失败")
 
         # 3. 盘点商店中的持续回合增益 Buff（同心护符 / 器材指导教程+ / 器材指导书 / 省体护具 / 神之庇佑）
         late_buff_warn = []
@@ -7392,24 +7611,41 @@ def format_weekday_hud_tips(state: dict, scored_cmds: list = None, include_shop:
         if free_cnt > 0:
             shop_alerts.append("🎁 商店有 0金免费道具")
 
-        lineup_th, _ = get_lineup_ps_threshold(state)
-        low_ps_thresh = 50 if wk_next_heal >= 30 else max(72, lineup_th + 18)
-        if ps <= low_ps_thresh and (max_top_fail >= 8 or ps <= 58):
-            st_its = [
-                (
-                    STORE_ITEM_CATALOG[it["id"]]["name"],
-                    STORE_ITEM_CATALOG[it["id"]]["ps"],
-                    it["price"],
-                    bool(STORE_ITEM_CATALOG[it["id"]].get("is_gamble", False)),
-                    int(STORE_ITEM_CATALOG[it["id"]].get("max_ps", STORE_ITEM_CATALOG[it["id"]]["ps"])),
+        ps_passive_info = calc_lineup_ps_passive_turn_ev(state)
+        lineup_th = ps_passive_info["thresh"]
+        passive_char = ps_passive_info["char_name"]
+        passive_loss = ps_passive_info["turn_loss_ev"]
+        is_last_tr_hud = (exp_r >= 48) if has_doumeki_in_lineup(state) else (exp_r >= 46)
+        passive_hud_added = False
+        if lineup_th > 0 and not is_last_tr_hud and ps < lineup_th:
+            pot = find_best_stamina_potion(store_items, gold, ps, ps_cap, lineup_th, allow_gamble=False)
+            if pot is None:
+                pot = find_best_stamina_potion(store_items, gold, ps, ps_cap, lineup_th, allow_gamble=True)
+            if pot is not None:
+                st_gain_str = f"赌+{pot['max_ps']}体" if pot["is_gamble"] else f"+{pot['ps']}体"
+                shop_alerts.append(
+                    f"⚡ 先买【{pot['name']}({st_gain_str}/{pot['price']}金)】保{passive_char}{lineup_th}体(+{passive_loss:.0f}EV/训)"
                 )
-                for it in store_items
-                if it["id"] in STORE_ITEM_CATALOG and STORE_ITEM_CATALOG[it["id"]]["cat"] == "stamina" and gold >= it["price"]
-            ]
-            if st_its:
-                best_st = min(st_its, key=lambda x: (x[3], x[2] / max(1, x[1])))
-                st_gain_str = f"赌+{best_st[4]}体" if best_st[3] else f"+{best_st[1]}体"
-                shop_alerts.append(f"⚡ 低体可买 {best_st[0]}({st_gain_str}/{best_st[2]}金)")
+                passive_hud_added = True
+
+        if not passive_hud_added:
+            low_ps_thresh = 50 if wk_next_heal >= 30 else max(72, lineup_th + 18)
+            if ps <= low_ps_thresh and (max_top_fail >= 8 or ps <= 58):
+                st_its = [
+                    (
+                        STORE_ITEM_CATALOG[it["id"]]["name"],
+                        STORE_ITEM_CATALOG[it["id"]]["ps"],
+                        it["price"],
+                        bool(STORE_ITEM_CATALOG[it["id"]].get("is_gamble", False)),
+                        int(STORE_ITEM_CATALOG[it["id"]].get("max_ps", STORE_ITEM_CATALOG[it["id"]]["ps"])),
+                    )
+                    for it in store_items
+                    if it["id"] in STORE_ITEM_CATALOG and STORE_ITEM_CATALOG[it["id"]]["cat"] == "stamina" and gold >= it["price"]
+                ]
+                if st_its:
+                    best_st = min(st_its, key=lambda x: (x[3], x[2] / max(1, x[1])))
+                    st_gain_str = f"赌+{best_st[4]}体" if best_st[3] else f"+{best_st[1]}体"
+                    shop_alerts.append(f"⚡ 低体可买 {best_st[0]}({st_gain_str}/{best_st[2]}金)")
 
         friday_buff_trap = False
         for it in store_items:
@@ -8560,19 +8796,24 @@ def extract_weekday_shop_badge(state: dict, scored_cmds: list = None) -> str:
             zf_ev = float(x.get("raw_zero_fail_score", x["score"]))
             best_zf_gain = max(best_zf_gain, zf_ev - best_safe_ev)
 
-    # 低体买药预警
-    lineup_th, _ = get_lineup_ps_threshold(state)
+    # 望月/克拉丽丝精力被动门槛前置买药预警（无需点进商店、0%失败率也立即亮灯！）
+    ps_passive_info = calc_lineup_ps_passive_turn_ev(state)
+    lineup_th = ps_passive_info["thresh"]
+    passive_char = ps_passive_info["char_name"]
+    is_last_tr_badge = (exp_r >= 48) if has_doumeki_in_lineup(state) else (exp_r >= 46)
+    if lineup_th > 0 and not is_last_tr_badge and ps < lineup_th:
+        pot = find_best_stamina_potion(store_items, gold, ps, ps_cap, lineup_th, allow_gamble=False)
+        if pot is None:
+            pot = find_best_stamina_potion(store_items, gold, ps, ps_cap, lineup_th, allow_gamble=True)
+        if pot is not None:
+            return f"⚡ 买{pot['name'][:4]}保{passive_char}"
+
+    # 常规低体买药预警
     low_ps_thresh = 50 if wk_next_heal >= 30 else max(72, lineup_th + 18)
     if ps <= low_ps_thresh and (max_top_fail >= 8 or ps <= 58):
-        st_its = [
-            STORE_ITEM_CATALOG[it["id"]]["name"]
-            for it in store_items
-            if it["id"] in STORE_ITEM_CATALOG
-            and STORE_ITEM_CATALOG[it["id"]]["cat"] == "stamina"
-            and gold >= it["price"]
-        ]
-        if st_its:
-            return f"🛒 低体买{st_its[0][:4]}"
+        pot = find_best_stamina_potion(store_items, gold, ps, ps_cap, max(75, lineup_th), allow_gamble=True)
+        if pot is not None:
+            return f"🛒 低体买{pot['name'][:4]}"
 
     # 必买/高优持续 Buff
     has_sat = has_doumeki_in_lineup(state)
