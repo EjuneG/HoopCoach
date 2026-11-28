@@ -1282,7 +1282,18 @@ class Win32LayeredBadgeWindow:
             left_of_box=left_of_box,
             min_top_y=0,
         )
-        sig = (id(img), tx, ty, pw, ph)
+        sig = (
+            spec.get("left"),
+            spec.get("right"),
+            spec.get("style"),
+            bool(spec.get("tail")),
+            spec.get("font_scale"),
+            spec.get("char_id"),
+            tx,
+            ty,
+            pw,
+            ph,
+        )
         if sig != self._last_sig or not self._visible:
             self._last_sig = sig
             self._last_box = (tx, ty, pw, ph)

@@ -367,6 +367,115 @@ class TestReportedBugfixes(unittest.TestCase):
                 self.assertIn("diagnostic_env.json", zf.namelist())
                 self.assertIn("detailed_runs_sanitized.json", zf.namelist())
 
+    def test_cross_day_no_stale_train_cmds_or_sig_swallow_and_partial_line(self):
+        import win_launcher as wl
+
+        def _make_cmds_block(boost_idx: int, gain: int) -> str:
+            parts = []
+            for i in range(1, 7):
+                g = gain if i == boost_idx else 10
+                parts.append(
+                    f"[{i}] = {{"
+                    f"before_bonus_property_tbl = {{ [1] = {{key = {100 + i},value = {g}}} }},"
+                    f"company_supactor_tbl = {{}},"
+                    f"company_teammate_tbl = {{}},"
+                    f"fail_rate = 0,"
+                    f"idx = {i},"
+                    f"is_edu_manager = false,"
+                    f"ps = -15,"
+                    f"pt = 10,"
+                    f"train_type = {i}"
+                    f"}}"
+                )
+            return "[EDU_MODEL] 更新育成数据 {\n  train_cmds = { " + ", ".join(parts) + " }\n}\n"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            log_fp = os.path.join(tmp, "11_28___09_00_00___log.txt")
+            day1 = (
+                "request_call:    education.cs_start_education    {initactor_cfg_id = 1002}\n"
+                "[SceneMgr] SetActiveScene: ycjm02\n"
+                "[EDU_MODEL] 更新育成数据    {\n"
+                "  experience_round = 11,\n"
+                "  round_type = 1,\n"
+                "  ps = 100\n"
+                "}\n"
+                + _make_cmds_block(boost_idx=1, gain=90)
+            )
+            with open(log_fp, "w", encoding="utf-8") as f:
+                f.write(day1)
+
+            mirror = LiveLogMirror(tmp)
+            try:
+                self.assertTrue(mirror.attach_latest())
+                self.assertEqual(len(mirror.last_train_cmds), 6)
+
+                class _DummyVar:
+                    def __init__(self, v=""):
+                        self.v = v
+
+                    def set(self, v):
+                        self.v = str(v)
+
+                    def get(self):
+                        return self.v
+
+                class _DummyHud:
+                    def __init__(self):
+                        self._last_turn_scored = None
+                        self._last_wk_adv = None
+                        self._last_story_adv = None
+                        self._last_skill_evals = None
+                        self.turn_renders = []
+
+                    def render_turn(self, state, scored, extra_tip=""):
+                        self._last_turn_scored = scored
+                        self.turn_renders.append((int(state.get("exp_round") or 0), scored[0]["idx"]))
+
+                    def refresh_scene_overlay(self, state):
+                        pass
+
+                app = wl.LQSNCoachDesktopApp.__new__(wl.LQSNCoachDesktopApp)
+                app.mirror = mirror
+                app.hud = _DummyHud()
+                app.strategy_name = "training_flow"
+                app.strategy = lc.load_strategy("training_flow")
+                app.hud_cfg = {"focus": {"stat": None, "bonus": 1.15}}
+                app._last_rendered_sig = ""
+                app._logged_runtime_errors = set()
+                app.var_live_preview = _DummyVar()
+
+                app._render_current_state(force=False)
+                self.assertEqual(app.hud.turn_renders[-1], (11, 1))
+
+                # 玩家在 Day 11 点击训练 -> 立即清空旧训练面板与 HUD 缓存，绝不把 Day 11 提示带入 Day 12
+                with open(log_fp, "a", encoding="utf-8") as f:
+                    f.write("request_call:    education.cs_train    {cmd_idx = 1}\n")
+                    f.write("[EDU_MODEL]UnlockData\n")
+                    f.write("[EDU_MODEL] 更新育成数据    {\n  experience_round = 12,\n  round_type = 1,\n  ps = 130\n}\n")
+                mirror.poll()
+                self.assertEqual(mirror.last_train_cmds, [])
+                app._render_current_state(force=False)
+                self.assertIsNone(app.hud._last_turn_scored)
+
+                # 先写入半截行（无换行符），poll 应暂存等待完整行，随后补完新一天 train_cmds（首选变为 4 号）
+                day2_cmds = _make_cmds_block(boost_idx=4, gain=120)
+                half = len(day2_cmds) // 2
+                with open(log_fp, "a", encoding="utf-8") as f:
+                    f.write(day2_cmds[:half])
+                mirror.poll()
+                self.assertEqual(mirror.last_train_cmds, [])
+
+                with open(log_fp, "a", encoding="utf-8") as f:
+                    f.write(day2_cmds[half:])
+                evs = mirror.poll()
+                self.assertTrue(evs)
+                self.assertEqual(len(mirror.last_train_cmds), 6)
+
+                # 即使 mode/exp_round/round/ps/gold 与上一包完全一致，也绝不吞掉新一天的 train_cmds
+                app._render_current_state(force=False)
+                self.assertEqual(app.hud.turn_renders[-1], (12, 4))
+            finally:
+                mirror.close()
 
 if __name__ == "__main__":
     unittest.main()

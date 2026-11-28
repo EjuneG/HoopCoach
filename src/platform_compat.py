@@ -666,7 +666,7 @@ class WindowsFloatingHUD:
         init_tip = "<span foreground='#94a3b8'>按住顶栏拖动  ·  右键折叠/切模式  ·  正文鼠标穿透</span>"
         self.set_markup(init_body, mini_summary="🏀 星奈待命", tip_markup=init_tip)
         self.sync_position_and_raise(force=True)
-        self.GLib.timeout_add(250, self.sync_position_and_raise)
+        self.GLib.timeout_add(150, self.sync_position_and_raise)
 
     def _rec_enabled(self, key: str) -> bool:
         recs = (self.hud_config or {}).get("recommendations")
@@ -1005,6 +1005,7 @@ class WindowsFloatingHUD:
                 return True
 
         native_slot = self._is_native_slot_mode()
+        was_shown = self._is_shown
         self._set_windows_visible(True, (not self.collapsed) and (not native_slot))
 
         self.root.update_idletasks()
@@ -1056,7 +1057,16 @@ class WindowsFloatingHUD:
 
         if native_slot:
             if rect and self._active_badge_specs:
-                if force or rect != prev_rect:
+                need_reapply = (
+                    force
+                    or not was_shown
+                    or rect != prev_rect
+                    or any(
+                        not w._visible
+                        for w in self.badge_pool.windows[: len(self._active_badge_specs)]
+                    )
+                )
+                if need_reapply:
                     self.badge_pool.apply_specs(self._active_badge_specs, rect)
             else:
                 self.badge_pool.hide_all()

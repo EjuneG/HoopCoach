@@ -2240,7 +2240,49 @@ class LQSNCoachDesktopApp:
                     self._render_current_state(force=False)
         except Exception as e:
             self._record_runtime_error("日志轮询", e)
-        self.root.after(220, self._poll_log_tick)
+        self.root.after(100, self._poll_log_tick)
+
+    @staticmethod
+    def _build_train_cmds_sig(cmds: list) -> tuple:
+        if not cmds:
+            return ()
+        out = []
+        for c in cmds:
+            if not isinstance(c, dict):
+                continue
+            gains_t = tuple(sorted((c.get("gains") or c.get("props") or {}).items()))
+            mates_t = tuple(c.get("mate_ids") or c.get("teammates") or ())
+            sup_t = tuple(
+                (int(s.get("card_id") or 0), int(s.get("val") or 0))
+                if isinstance(s, dict)
+                else s
+                for s in (c.get("sup_cards") or c.get("supactor_cards") or ())
+            )
+            out.append((
+                int(c.get("idx") or c.get("cmd_idx") or 0),
+                int(c.get("ps") or 0),
+                int(c.get("pt") or 0),
+                int(c.get("fail_rate") or 0),
+                bool(c.get("is_manager", False)),
+                gains_t,
+                mates_t,
+                sup_t,
+            ))
+        return tuple(out)
+
+    def _clear_stale_hud_caches(self, state: dict, skill_choices: object) -> None:
+        if not self.mirror or not self.mirror.last_train_cmds or len(self.mirror.last_train_cmds) != 6:
+            if hasattr(self.hud, "_last_turn_scored"):
+                self.hud._last_turn_scored = None
+        if int(state.get("round_type") or 1) != 2:
+            if hasattr(self.hud, "_last_wk_adv"):
+                self.hud._last_wk_adv = None
+        if not state.get("cur_story"):
+            if hasattr(self.hud, "_last_story_adv"):
+                self.hud._last_story_adv = None
+        if not skill_choices:
+            if hasattr(self.hud, "_last_skill_evals"):
+                self.hud._last_skill_evals = None
 
     def _render_current_state(self, force: bool = False) -> None:
         if not self.mirror:
@@ -2248,8 +2290,9 @@ class LQSNCoachDesktopApp:
         state = self.mirror.state
         mode = lc.compute_active_hud_view_mode(state)
 
-        # 生成轻量去重签名，避免重复重绘闪烁
+        # 生成完整状态签名，避免重复重绘闪烁，同时确保跨天/面板刷新绝不漏帧
         skill_choices_raw = state.get("cur_skill_choices") or state.get("skill_choices") or ()
+        self._clear_stale_hud_caches(state, skill_choices_raw)
         skill_sig = tuple(
             (int(x.get("id") or x.get("skill_id") or 0), int(x.get("lv") or x.get("level") or 0))
             if isinstance(x, dict)
@@ -2257,24 +2300,50 @@ class LQSNCoachDesktopApp:
             for x in skill_choices_raw
         )
         store_sig = tuple(
-            (int(it.get("id") or 0), int(it.get("num") or 0))
+            (int(it.get("id") or 0), int(it.get("num") or 0), int(it.get("price") or 0))
             for it in (state.get("store_items") or ())
             if isinstance(it, dict)
+        )
+        train_cmds_sig = self._build_train_cmds_sig(self.mirror.last_train_cmds)
+        wk_train_sig = self._build_train_cmds_sig(state.get("weekend_train_cmds") or [])
+        weekend_sig = (
+            int(state.get("weekend_day") or 0),
+            bool(state.get("weekend_train", False)),
+            wk_train_sig,
+            repr(state.get("weekend_selections") or {}),
+            repr(state.get("weekend_teammates") or {}),
+            repr(state.get("weekend_special") or {}),
+            repr(state.get("gashapon_list") or []),
+            repr(state.get("minigame_list") or []),
         )
         sig = (
             mode,
             int(state.get("exp_round") or 0),
             int(state.get("round") or 0),
             int(state.get("round_type") or 1),
+            int(state.get("left_round") or 0),
+            bool(state.get("rest_status", False)),
             int(state.get("ps") or 0),
+            int(state.get("ps_max") or 130),
             int(state.get("gold") or 0),
+            int(state.get("mgr_energy") or 0),
+            int(state.get("mgr_explosive") or 0),
+            tuple(sorted((state.get("props") or {}).items())),
+            tuple(sorted((state.get("prop_max") or {}).items())),
+            tuple(sorted((state.get("supactor_card_trammel") or {}).items())),
             bool(state.get("fired_70", False)),
             bool(state.get("fired_71", False)),
+            bool(state.get("store_open", False)),
             store_sig,
             state.get("cur_story"),
+            bool(state.get("in_story_choice", False)),
             state.get("pre_edu_char_id"),
+            state.get("main_char_id"),
             skill_sig,
-            len(self.mirror.last_train_cmds),
+            tuple(sorted(state.get("learned_skills") or ())),
+            int(getattr(self.mirror, "train_cmds_seq", 0)),
+            train_cmds_sig,
+            weekend_sig,
             self.strategy_name,
             (self.hud_cfg.get("focus") or {}).get("stat"),
             (self.hud_cfg.get("focus") or {}).get("bonus"),
