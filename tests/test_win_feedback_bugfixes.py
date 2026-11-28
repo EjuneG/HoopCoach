@@ -368,5 +368,90 @@ class TestReportedBugfixes(unittest.TestCase):
                 self.assertIn("detailed_runs_sanitized.json", zf.namelist())
 
 
+    def test_skill_choice_blue_rarity_and_unknown_slot_guard(self):
+        import skill_advisor as sa
+
+        sa.reload_skill_catalog()
+        # 1. 已知动作蓝卡（210223 灵巧背打）应排在白卡（210408 后段稳定）左侧、金卡（210418 后段稳固）右侧
+        known_cards = [
+            {"skill_id": 210408},  # 白 · 后段稳定
+            {"skill_id": 210223},  # 蓝 · 灵巧背打（动作卡）
+            {"skill_id": 210418},  # 金 · 后段稳固
+        ]
+        evals_known = sa.evaluate_skill_choices(1001, known_cards)
+        self.assertEqual([x["skill_id"] for x in evals_known], [210418, 210223, 210408])
+        self.assertFalse(any(x.get("slot_uncertain") for x in evals_known))
+        specs_k, trough_k = hb.build_badges_for_mode("skill_choice", {"main_char_id": 1001}, last_skill_evals=evals_known)
+        self.assertGreaterEqual(len(specs_k), 1)
+        self.assertIn("后段稳固", trough_k)
+
+        # 2. 含未收录技能时标记 slot_uncertain=True，隐藏可能贴错槽位的卡顶角标，仅在底槽按名称提示已知优选
+        mixed_cards = [
+            {"skill_id": 219999},  # 未收录
+            {"skill_id": 210418},  # 金 · 后段稳固
+            {"skill_id": 210408},  # 白 · 后段稳定
+        ]
+        evals_mixed = sa.evaluate_skill_choices(1001, mixed_cards)
+        self.assertTrue(all(x.get("slot_uncertain") for x in evals_mixed))
+        specs_m, trough_m = hb.build_badges_for_mode("skill_choice", {"main_char_id": 1001}, last_skill_evals=evals_mixed)
+        self.assertEqual(specs_m, [])
+        self.assertIn("后段稳固", trough_m)
+        self.assertIn("免贴错位", trough_m)
+
+    def test_skill_catalog_full_coverage_and_upgrade_chain(self):
+        import skill_advisor as sa
+
+        cat = sa.reload_skill_catalog()
+        skills = cat.get("skills") or {}
+        self.assertGreaterEqual(len(skills), 600)
+        # 校验真值纠偏：200101=投射擅长，210286=速度优势，210413=前期加持，2001001=澪奈被动斗志昂扬
+        self.assertEqual(skills["200101"]["name"], "投射擅长")
+        self.assertEqual(skills["210286"]["name"], "速度优势")
+        self.assertEqual(skills["210413"]["name"], "前期加持")
+        self.assertEqual(skills["2001001"]["name"], "斗志昂扬")
+        self.assertEqual(skills["2001001"]["owner_char_id"], 1001)
+
+        # 1) 已学上位金技 210418(后段稳固) 时，下位白技 210408(后段稳定) 自动识别为 ♻️ 已学上位
+        ev_sup = sa.evaluate_skill_choices(
+            1001,
+            [{"skill_id": 210408}, {"skill_id": 210406}],
+            learned_skills={210418},
+        )
+        by_sid = {x["skill_id"]: x for x in ev_sup}
+        self.assertTrue(by_sid[210408]["is_learned"])
+        self.assertTrue(by_sid[210408]["is_superseded"])
+        self.assertIn("已学上位", by_sid[210408]["badge_text"])
+        self.assertEqual(by_sid[210406]["rank"], 1)
+
+        # 2) 已学下位白技 210408 时，覆盖升级金技 210418(净评+25) 优先级低于全新同档金技 210416(净评+50)
+        ev_upg = sa.evaluate_skill_choices(
+            1001,
+            [{"skill_id": 210418}, {"skill_id": 210416}],
+            learned_skills={210408},
+        )
+        by_upg = {x["skill_id"]: x for x in ev_upg}
+        self.assertTrue(by_upg[210418]["upgrades_learned"])
+        self.assertIn("覆盖下位", by_upg[210418]["reason"])
+        self.assertEqual(by_upg[210416]["rank"], 1)
+        self.assertGreater(by_upg[210416]["score"], by_upg[210418]["score"])
+
+        # 3) 硬性限定（210171 快攻倾向 受组织者天赋加成；203201 篮板倾向 限中锋）对纯得分手小前 1001(澪奈) 判空转，
+        #    但普通跨职责白技（210307 二次手感）不误判空转，仅评分低于契合得分手白技（210296 远投擅长）
+        ev_roles = sa.evaluate_skill_choices(
+            1001,
+            [{"skill_id": 210171}, {"skill_id": 210307}, {"skill_id": 210296}],
+        )
+        by_r = {x["skill_id"]: x for x in ev_roles}
+        self.assertFalse(by_r[210171]["role_match"])
+        self.assertEqual(by_r[210171]["style_key"], "warn")
+        self.assertTrue(by_r[210307]["role_match"])
+        self.assertEqual(by_r[210296]["rank"], 1)
+        self.assertGreater(by_r[210296]["score"], by_r[210307]["score"])
+
+        ev_pos = sa.evaluate_skill_choices(1001, [{"skill_id": 203201}, {"skill_id": 210408}])
+        by_p = {x["skill_id"]: x for x in ev_pos}
+        self.assertFalse(by_p[203201]["role_match"])
+        self.assertFalse(by_p[203201]["pos_match"])
+        self.assertIn("位置不符", by_p[203201]["badge_text"])
 if __name__ == "__main__":
     unittest.main()
