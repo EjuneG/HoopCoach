@@ -538,6 +538,90 @@ class TestV010EVCore(unittest.TestCase):
         sc_god = lc.score_training_turn(st, [cmd_god], self.strategy)
         self.assertEqual(sc_god[0]["idx"], 2, f"大彩圈神局绝不应为了望月提前休息: {sc_god}")
 
+    # ------------------------------------------------------------------
+    # 13. 扭蛋 #25 (蓝档随机1件器材+30熟) 不得误算为全队 5 张器材
+    # ------------------------------------------------------------------
+    def test_13_gasha_25_random_single_card_trammel_ev(self):
+        st = _make_base_state(exp_round=13, round_no=8, ps=90, gold=160)
+        st["supactor_trammel"] = {
+            11004: 30,
+            11002: 30,
+            31003: 30,
+            32003: 30,
+            35002: 30,
+        }
+        ev25, tag25, _ = lc.calc_gashapon_dynamic_ev(25, 60, 0, st, strategy=self.strategy)
+        ev26, tag26, _ = lc.calc_gashapon_dynamic_ev(26, 80, 0, st, strategy=self.strategy)
+        ev27, tag27, _ = lc.calc_gashapon_dynamic_ev(27, 100, 0, st, strategy=self.strategy)
+        self.assertIn("随机1器材熟练+30", tag25)
+        self.assertIn("期望+30熟", tag25)
+        self.assertIn("随机2器材熟练+30", tag26)
+        self.assertIn("期望+60熟", tag26)
+        self.assertIn("全器材熟练+30", tag27)
+        self.assertLess(ev25, ev26, f"蓝档随机1件(25)不应高于紫档随机2件(26): {ev25} vs {ev26}")
+        self.assertLess(ev26, ev27, f"紫档随机2件(26)不应高于金档全队(27): {ev26} vs {ev27}")
+
+    # ------------------------------------------------------------------
+    # 14. 独立右上角商店微窗在 ycjm01/ycjm02 常驻 + 望月本训后破线外显 + 顶栏解耦防覆盖
+    # ------------------------------------------------------------------
+    def test_14_independent_shop_hud_ycjm02_and_wangyue_prebreak(self):
+        import hud_badges as hb
+
+        # 场景 A：望月 60 体线，当前 66 体（尚未破线，但本训 -20 体后下训将跌破 60 体，且下训无免费回体）
+        st = _make_base_state(exp_round=17, round_no=11, ps=66, gold=140)
+        st["main_char_id"] = 1046
+        st["teammate_char_ids"] = [1007, 1012, 1013, 1030]
+        st["char_talents"] = {1012: {101201: 3}}
+        st["supactor_trammel"] = {11004: 50}
+        st["active_states"] = {20102}  # 同时挂一个生效中的商店 Buff，验证顶栏与独立商店微窗解耦互不覆盖
+        st["state_rounds"] = {20102: 2}
+        st["store_items"] = [{"id": 1001, "num": 1, "price": 30}]
+        cmd_ok = _make_cmd(2, {102: 38, 106: 14}, mate_ids=[1007], mate_count=1, fail_rate=0, ps=-20)
+        scored = lc.score_training_turn(st, [cmd_ok], self.strategy)
+
+        # 1) 不点进商店，badge 与 hud_tips 均应直接给出「保下训望月」提醒
+        badge_txt = lc.extract_weekday_shop_badge(st, scored)
+        self.assertIn("保下训望月", badge_txt)
+        hud_tips = lc.format_weekday_hud_tips(st, scored, include_shop=True)
+        self.assertTrue(any("防破望月" in t for t in hud_tips), f"外部 HUD 漏掉本训后破线提醒: {hud_tips}")
+
+        # 2) ycjm02 训练界面必须出现独立薄荷绿商店微窗（位于右上角 ry=0.118，不与按钮冲突），且顶栏干净保留 Buff/哨子
+        specs_02, trough_02 = hb.build_badges_for_mode("ycjm02", st, last_turn_scored=scored)
+        shop_specs_02 = [sp for sp in specs_02 if sp.get("style") == "shop"]
+        self.assertEqual(len(shop_specs_02), 1, f"ycjm02 缺少独立商店提示微窗: {specs_02}")
+        self.assertIn("保下训望月", shop_specs_02[0]["right"])
+        self.assertLess(shop_specs_02[0]["ry"], 0.16, "ycjm02 商店微窗应位于右上角留白区，避免与1号训练按钮重叠")
+        self.assertNotIn("保下训望月", trough_02, "已有独立商店微窗时，顶栏第4槽应与商店提示解耦")
+
+        # 3) 若回退单行顶栏模式（include_shop=True），望月「先买」关键字也不得被哨子70回体前瞻覆盖
+        st_below = lc.clone_state_snapshot(st)
+        st_below["ps"] = 56
+        st_below["supactor_trammel"] = {11004: 75}
+        trough_fallback = hb.build_weekday_trough_line(st_below, scored, include_shop=True)
+        self.assertIn("保望月", trough_fallback, f"单行顶栏兜底模式望月买药被覆盖: {trough_fallback}")
+
+        # 4) 复现周五 (ER=5, day_idx=4) ps=68、望月55体线、最优训练 -28体 (训完仅剩40体)，外部商店微窗必须主动提示买药
+        st_fri = _make_base_state(exp_round=5, round_no=5, ps=68, gold=200)
+        st_fri["main_char_id"] = 1007
+        st_fri["teammate_char_ids"] = [1046, 1012, 1013, 1030]
+        st_fri["char_talents"] = {1012: {101201: 7}}  # 望月 55 体线
+        st_fri["store_items"] = [
+            {"id": 1002, "num": 2, "price": 50},
+            {"id": 1201, "num": 1, "price": 60},
+        ]
+        cmd_fri = _make_cmd(4, {104: 42, 102: 12}, mate_ids=[1046], mate_count=1, fail_rate=0, ps=-28)
+        scored_fri = lc.score_training_turn(st_fri, [cmd_fri], self.strategy)
+        badge_fri = lc.extract_weekday_shop_badge(st_fri, scored_fri)
+        self.assertIn("保下训望月", badge_fri, f"周五训完剩40体未提示保望月买药: {badge_fri}")
+
+        # 5) 无必买项时，独立商店微窗仍常驻显示「商店｜暂无必买」(style="muted")
+        st_idle = _make_base_state(exp_round=2, round_no=2, ps=100, gold=120)
+        st_idle["store_items"] = [{"id": 1002, "num": 1, "price": 50}]
+        specs_idle_01, _ = hb.build_badges_for_mode("ycjm01", st_idle, last_turn_scored=scored)
+        specs_idle_02, _ = hb.build_badges_for_mode("ycjm02", st_idle, last_turn_scored=scored)
+        self.assertTrue(any(sp.get("left") == "商店" and sp.get("right") == "暂无必买" and sp.get("style") == "muted" for sp in specs_idle_01))
+        self.assertTrue(any(sp.get("left") == "商店" and sp.get("right") == "暂无必买" and sp.get("style") == "muted" for sp in specs_idle_02))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

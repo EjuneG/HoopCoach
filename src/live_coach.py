@@ -666,7 +666,7 @@ GASHAPON_CFG_NOTES = {
     1:   {"score": 64, "stat": 0,   "gain": 35, "tag": "🔵多维属性小幅提升", "short": "🔵多维+35"},
     2:   {"score": 70, "stat": 0,   "gain": 50, "tag": "🟣多维属性中幅提升", "short": "🟣多维+50"},
     3:   {"score": 78, "stat": 0,   "gain": 65, "tag": "✨多维属性+省体Buff", "short": "✨多维+65"},
-    25:  {"score": 74, "trammel_all": 10, "tag": "🔥器材熟练度(全器材熟练度+10)", "short": "🔥全器材熟练+10"},
+    25:  {"score": 68, "trammel_gain": 30, "trammel_rand_n": 1, "tag": "🔥器材熟练度(随机1件器材熟练度+30)", "short": "🔥随机1器材熟练+30"},
     26:  {"score": 76, "trammel_gain": 30, "trammel_rand_n": 2, "tag": "🔥器材熟练度+(随机2件器材熟练度+30)", "short": "🔥随机2器材熟练+30"},
     27:  {"score": 92, "trammel_all": 30, "tag": "🔥器材熟练度++(全器材熟练度+30)", "short": "🔥全器材熟练+30"},
     109: {"score": 63, "stat": 0,   "gain": 32, "tag": "🔵基础属性扭蛋(60金)", "short": "🔵属性+32"},
@@ -4835,9 +4835,9 @@ def calc_gashapon_dynamic_ev(
             n_picks = 2 if cid == 100 else 1
             base_ev = round(n_picks * approx_one * 0.85 + perm_train_ev + 3.0, 1)
     elif cid in (25, 26, 27):
-        # 器材熟练度 (25,60金,全队+10) / 器材熟练度+ (26,80金,随机2件+30) / 器材熟练度++ (27,100金,全队+30)：
+        # 器材熟练度 (25,60金,随机1件+30) / 器材熟练度+ (26,80金,随机2件+30) / 器材熟练度++ (27,100金,全队+30)：
         # 逐卡区分 NON_CRIT_EQUIPMENT_IDS 并与 calc_equip_trammel_option_ev 对齐，剩训来不及满彩自动归零！
-        t_gain = int(g_meta.get("trammel_gain", g_meta.get("trammel_all", 30 if cid != 25 else 10)))
+        t_gain = int(g_meta.get("trammel_gain", g_meta.get("trammel_all", 30)))
         rand_n = int(g_meta.get("trammel_rand_n", 0))
         raw_map = trammel_map or state.get("supactor_card_trammel") or {}
         card_to_cfg = state.get("supactor_card_to_cfg", {})
@@ -7408,6 +7408,8 @@ def format_weekday_shop_tip(state: dict, best_ev: float = None, strategy: dict =
         is_last_tr_tip = (exp_r >= 48) if has_doumeki_in_lineup(state) else (exp_r >= 46)
 
         passive_pot_prompted = False
+        post_train_ps = ps + best_ps_cost
+        has_sat_train_tip = has_doumeki_in_lineup(state)
         if lineup_th > 0 and not is_last_tr_tip and ps < lineup_th:
             pot = find_best_stamina_potion(store_items, gold, ps, ps_cap, lineup_th, allow_gamble=False)
             if pot is None:
@@ -7422,15 +7424,15 @@ def format_weekday_shop_tip(state: dict, best_ev: float = None, strategy: dict =
             lineup_th > 0
             and not is_last_tr_tip
             and wk_next_heal == 0
-            and day_idx < 4
             and ps >= lineup_th
             and best_ps_cost < 0
-            and (ps + best_ps_cost) < lineup_th
+            and post_train_ps < lineup_th
+            and (day_idx < 4 or has_sat_train_tip or post_train_ps <= 45)
         ):
             pot = find_best_stamina_potion(store_items, gold, ps, ps_cap, lineup_th - best_ps_cost, allow_gamble=False)
             if pot is not None:
                 tips.append(
-                    f"⚡本训后将破{th_lbl}，可顺手买商店【{pot['name']}(+{pot['ps']}体/{pot['price']}金)】保下训{passive_char}被动"
+                    f"⚡本训后仅剩{post_train_ps}体(破{th_lbl})，可先买商店【{pot['name']}(+{pot['ps']}体/{pot['price']}金)】保{passive_char}被动"
                 )
                 passive_pot_prompted = True
 
@@ -7608,7 +7610,10 @@ def format_weekday_hud_tips(state: dict, scored_cmds: list = None, include_shop:
         lineup_th = ps_passive_info["thresh"]
         passive_char = ps_passive_info["char_name"]
         passive_loss = ps_passive_info["turn_loss_ev"]
-        is_last_tr_hud = (exp_r >= 48) if has_doumeki_in_lineup(state) else (exp_r >= 46)
+        best_ps_cost = int(best_cmd.get("ps", 0) or 0)
+        post_train_ps = ps + best_ps_cost
+        has_sat_train_hud = has_doumeki_in_lineup(state)
+        is_last_tr_hud = (exp_r >= 48) if has_sat_train_hud else (exp_r >= 46)
         passive_hud_added = False
         if lineup_th > 0 and not is_last_tr_hud and ps < lineup_th:
             pot = find_best_stamina_potion(store_items, gold, ps, ps_cap, lineup_th, allow_gamble=False)
@@ -7620,10 +7625,26 @@ def format_weekday_hud_tips(state: dict, scored_cmds: list = None, include_shop:
                     f"⚡ 先买【{pot['name']}({st_gain_str}/{pot['price']}金)】保{passive_char}{lineup_th}体(+{passive_loss:.0f}EV/训)"
                 )
                 passive_hud_added = True
+        elif (
+            lineup_th > 0
+            and not is_last_tr_hud
+            and wk_next_heal == 0
+            and ps >= lineup_th
+            and best_ps_cost < 0
+            and post_train_ps < lineup_th
+            and (day_idx < 4 or has_sat_train_hud or post_train_ps <= 45)
+        ):
+            pot = find_best_stamina_potion(store_items, gold, ps, ps_cap, lineup_th - best_ps_cost, allow_gamble=False)
+            if pot is not None:
+                shop_alerts.append(
+                    f"⚡ 顺手买【{pot['name']}(+{pot['ps']}体/{pot['price']}金)】训后防破{passive_char}{lineup_th}体"
+                )
+                passive_hud_added = True
 
         if not passive_hud_added:
             low_ps_thresh = 50 if wk_next_heal >= 30 else max(72, lineup_th + 18)
-            if ps <= low_ps_thresh and (max_top_fail >= 8 or ps <= 58):
+            need_post_low_pot = (not is_last_tr_hud) and wk_next_heal == 0 and best_ps_cost < 0 and post_train_ps <= 45
+            if (ps <= low_ps_thresh and (max_top_fail >= 8 or ps <= 58)) or need_post_low_pot:
                 st_its = [
                     (
                         STORE_ITEM_CATALOG[it["id"]]["name"],
@@ -8675,13 +8696,16 @@ def query_game_window_xid() -> str:
 
 def extract_weekday_shop_badge(state: dict, scored_cmds: list = None) -> str:
     """
-    提取平日一级界面右上角『商店』按钮的精简好货角标（无必买/高优道具时返回空串，绝不误报打扰）。
+    提取右上角独立「商店提示微窗」的精简好货摘要（最多汇总 2 条核心建议，无必买/高优道具时返回空串，绝不误报打扰）。
+    包含：0金免费领、望月/克拉丽丝体力线前置买药（已破线 + 本训后将破线）、常规低体买药、必买/推荐 Buff、冲哨/满彩熟练度与特调饮+。
     """
     store_items = [it for it in state.get("store_items", []) if it.get("num", 0) > 0]
     if not store_items:
         return ""
+
+    alerts: list[str] = []
     if any(it["price"] == 0 or it["id"] in (1151, 1152) for it in store_items):
-        return "🎁 0金免费领"
+        alerts.append("🎁 0金免费领")
 
     sched_ctx = get_upcoming_schedule_context(state)
     wk_next_heal = sched_ctx.get("weekday_next_turn_heal", 0)
@@ -8694,6 +8718,7 @@ def extract_weekday_shop_badge(state: dict, scored_cmds: list = None) -> str:
 
     best_train = next((x for x in (scored_cmds or []) if x.get("idx", 0) != 0), None)
     best_cmd = best_train["cmd"] if best_train else {}
+    best_ps_cost = int(best_cmd.get("ps", 0) or 0)
     mate_cnt = best_cmd.get("mate_count", 0) + (1 if best_cmd.get("is_manager") else 0)
     mate_ids = best_cmd.get("mate_ids", [])
     lineup_all = set(state.get("teammate_char_ids", [])) | (
@@ -8715,28 +8740,49 @@ def extract_weekday_shop_badge(state: dict, scored_cmds: list = None) -> str:
             zf_ev = float(x.get("raw_zero_fail_score", x["score"]))
             best_zf_gain = max(best_zf_gain, zf_ev - best_safe_ev)
 
-    # 望月/克拉丽丝精力被动门槛前置买药预警（无需点进商店、0%失败率也立即亮灯！）
+    # 1. 望月/克拉丽丝精力被动门槛前置买药预警（已破线 + 本训后将破线，无需点进商店即可看见！）
     ps_passive_info = calc_lineup_ps_passive_turn_ev(state)
     lineup_th = ps_passive_info["thresh"]
     passive_char = ps_passive_info["char_name"]
-    is_last_tr_badge = (exp_r >= 48) if has_doumeki_in_lineup(state) else (exp_r >= 46)
+    has_sat_train_badge = has_doumeki_in_lineup(state)
+    is_last_tr_badge = (exp_r >= 48) if has_sat_train_badge else (exp_r >= 46)
+    post_train_ps = ps + best_ps_cost
+    passive_pot_added = False
     if lineup_th > 0 and not is_last_tr_badge and ps < lineup_th:
         pot = find_best_stamina_potion(store_items, gold, ps, ps_cap, lineup_th, allow_gamble=False)
         if pot is None:
             pot = find_best_stamina_potion(store_items, gold, ps, ps_cap, lineup_th, allow_gamble=True)
         if pot is not None:
-            return f"⚡ 买{pot['name'][:4]}保{passive_char}"
-
-    # 常规低体买药预警
-    low_ps_thresh = 50 if wk_next_heal >= 30 else max(72, lineup_th + 18)
-    if ps <= low_ps_thresh and (max_top_fail >= 8 or ps <= 58):
-        pot = find_best_stamina_potion(store_items, gold, ps, ps_cap, max(75, lineup_th), allow_gamble=True)
+            alerts.append(f"⚡ 买{pot['name'][:4]}({pot['price']}金)保{passive_char}{lineup_th}体")
+            passive_pot_added = True
+    elif (
+        lineup_th > 0
+        and not is_last_tr_badge
+        and wk_next_heal == 0
+        and ps >= lineup_th
+        and best_ps_cost < 0
+        and post_train_ps < lineup_th
+        and (day_idx < 4 or has_sat_train_badge or post_train_ps <= 45)
+    ):
+        pot = find_best_stamina_potion(store_items, gold, ps, ps_cap, lineup_th - best_ps_cost, allow_gamble=False)
         if pot is not None:
-            return f"🛒 低体买{pot['name'][:4]}"
+            alerts.append(f"⚡ 买{pot['name'][:4]}({pot['price']}金)保下训{passive_char}")
+            passive_pot_added = True
 
-    # 必买/高优持续 Buff
+    # 2. 常规低体买药预警（含本训后跌至 <=45 严重低体前瞻）
+    if not passive_pot_added:
+        low_ps_thresh = 50 if wk_next_heal >= 30 else max(72, lineup_th + 18)
+        need_post_low_pot = (not is_last_tr_badge) and wk_next_heal == 0 and best_ps_cost < 0 and post_train_ps <= 45
+        if (ps <= low_ps_thresh and (max_top_fail >= 8 or ps <= 58)) or need_post_low_pot:
+            pot = find_best_stamina_potion(store_items, gold, ps, ps_cap, max(75, lineup_th), allow_gamble=not need_post_low_pot)
+            if pot is not None:
+                alerts.append(f"🛒 低体买{pot['name'][:4]}({pot['price']}金)")
+
+    # 3. 必买/高优持续 Buff
     has_sat = has_doumeki_in_lineup(state)
     for it in store_items:
+        if len(alerts) >= 2:
+            break
         iid, price = it["id"], it["price"]
         meta = STORE_ITEM_CATALOG.get(iid)
         if not meta or meta.get("cat") != "buff" or gold < price:
@@ -8748,33 +8794,41 @@ def extract_weekday_shop_badge(state: dict, scored_cmds: list = None) -> str:
         days = meta.get("days", 3)
         cov_trains = count_training_days_in_window(exp_r, days, has_sat_train=has_sat)
         if subcat == "zero_fail" and (best_zf_gain >= 35.0 or max_top_fail >= 12):
-            return f"🛒 必买{meta['name']}"
-        if subcat == "teammate_emoji" and (
+            alerts.append(f"🛒 必买{meta['name']}")
+        elif subcat == "teammate_emoji" and (
             (cov_trains >= 3 and (eff_mates_now >= 1 or gold >= 160))
             or (cov_trains >= 2 and (day_idx != 4 or has_sat) and eff_mates_now >= 1.8 and gold >= 150)
         ):
-            return f"🛒 必买{meta['name']}"
-        if subcat in ("equip_boost_ps", "equip_boost_free"):
+            alerts.append(f"🛒 必买{meta['name']}")
+        elif subcat in ("equip_boost_ps", "equip_boost_free"):
             eb = eval_equip_boost_shop_advice(subcat, meta, price, state, scored_cmds, exp_r, day_idx)
             if eb["recommend"]:
-                return f"🛒 {eb['level']}{meta['name']}"
-        if subcat == "ps_discount" and cov_trains >= 2 and day_idx in (1, 2, 3):
-            return f"🛒 推荐{meta['name']}"
+                alerts.append(f"🛒 {eb['level']}{meta['name']}")
+        elif subcat == "ps_discount" and cov_trains >= 2 and day_idx in (1, 2, 3):
+            alerts.append(f"🛒 推荐{meta['name']}")
 
-    # 冲哨/满彩全器材熟练度道具
-    for it in store_items:
-        if it["id"] in (1113, 1111, 1112) and gold >= it["price"]:
-            b_info = calc_shop_bond_item_ev(it["id"], it["price"], state)
-            net_b = b_info["ev"] - it["price"] * 0.30
-            if b_info["eff_total"] > 0 and (b_info["maxed_new"] > 0 or "哨➔" in b_info["tag"] or net_b >= 14.0):
-                return f"🛒 {STORE_ITEM_CATALOG[it['id']]['name'][:5]}"
+    # 4. 冲哨/满彩全器材熟练度道具
+    if len(alerts) < 2:
+        bond_cands = []
+        for it in store_items:
+            if it["id"] in (1113, 1111, 1112) and gold >= it["price"]:
+                b_info = calc_shop_bond_item_ev(it["id"], it["price"], state)
+                net_b = b_info["ev"] - it["price"] * 0.30
+                if b_info["eff_total"] > 0 and (b_info["maxed_new"] > 0 or "哨➔" in b_info["tag"] or net_b >= 14.0):
+                    bond_cands.append((net_b, it))
+        if bond_cands:
+            bond_cands.sort(key=lambda x: -x[0])
+            best_it = bond_cands[0][1]
+            alerts.append(f"🛒 {STORE_ITEM_CATALOG[best_it['id']]['name'][:6]}({best_it['price']}金)")
 
-    # 特调专属饮料+ (1152) 满额不折半高优提醒
-    for it in store_items:
-        if it["id"] == 1152 and gold >= it["price"] and state.get("round", 1) >= 20:
-            return "🛒 特调专属饮+"
+    # 5. 特调专属饮料+ (1152) 满额不折半高优提醒
+    if len(alerts) < 2:
+        for it in store_items:
+            if it["id"] == 1152 and gold >= it["price"] and state.get("round", 1) >= 20:
+                alerts.append("🛒 特调专属饮+")
+                break
 
-    return ""
+    return " · ".join(alerts[:2])
 
 
 class BadgePillWindow:
