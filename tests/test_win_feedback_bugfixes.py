@@ -477,5 +477,57 @@ class TestReportedBugfixes(unittest.TestCase):
             finally:
                 mirror.close()
 
+    def test_dashboard_refresh_all_scans_new_completed_runs(self):
+        import dashboard_server as ds
+        import note_advisor as na
+        import equipment_advisor as ea
+        from test_analyzer_regression import _make_synthetic_run_text
+
+        with tempfile.TemporaryDirectory() as tmp:
+            docs_dir = os.path.join(tmp, "Documents")
+            log_dir = os.path.join(docs_dir, "Logs")
+            runs_dir = os.path.join(tmp, "runs")
+            arch_dir = os.path.join(runs_dir, "archive")
+            os.makedirs(log_dir, exist_ok=True)
+            os.makedirs(arch_dir, exist_ok=True)
+
+            runs_json = os.path.join(runs_dir, "detailed_runs.json")
+            manifest_json = os.path.join(runs_dir, "manifest.json")
+            note_cache = os.path.join(tmp, "note_pool.json")
+            equip_cache = os.path.join(tmp, "equip_pool.json")
+            snap_dir = os.path.join(tmp, "dash_data")
+            os.makedirs(snap_dir, exist_ok=True)
+            snap_js = os.path.join(snap_dir, "snapshot.js")
+
+            with (
+                patch.object(az, "RUNS_DIR", runs_dir),
+                patch.object(az, "ARCHIVE_DIR", arch_dir),
+                patch.object(az, "OUT_PATH", runs_json),
+                patch.object(az, "MANIFEST_PATH", manifest_json),
+                patch.object(ds, "DETAILED_RUNS_FILE", runs_json),
+                patch.object(ds, "ARCHIVE_DIR", arch_dir),
+                patch.object(ds, "NOTE_POOL_FILE", note_cache),
+                patch.object(ds, "EQUIP_POOL_FILE", equip_cache),
+                patch.object(ds, "DASHBOARD_DATA_DIR", snap_dir),
+                patch.object(na, "NOTE_POOL_CACHE_FILE", note_cache),
+                patch.object(na, "NOTE_OVERRIDES_FILE", os.path.join(tmp, "no_ov.json")),
+                patch.object(ea, "EQUIP_POOL_FILE", equip_cache),
+            ):
+                eng = ds.DashboardEngine()
+                eng.set_game_dirs(docs_dir=docs_dir, log_dir=log_dir)
+                self.assertEqual(len(eng.get_overview()["runs"]), 0)
+
+                # 模拟玩家刚打完一局新完赛日志，直接在网页点击『重新加载』(/api/refresh -> engine.refresh_all)
+                log_fp = os.path.join(log_dir, "11_28___12_30_00___log.txt")
+                with open(log_fp, "w", encoding="utf-8") as f:
+                    f.write(_make_synthetic_run_text())
+
+                res = eng.refresh_all()
+                self.assertTrue(res["ok"])
+                self.assertTrue(res["runs_scanned"])
+                self.assertEqual(res["new_runs"], 1)
+                self.assertEqual(res["runs_total"], 1)
+                self.assertEqual(len(eng.get_overview()["runs"]), 1)
+                self.assertTrue(os.path.isfile(snap_js))
 if __name__ == "__main__":
     unittest.main()

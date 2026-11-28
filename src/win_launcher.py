@@ -1687,6 +1687,8 @@ class LQSNCoachDesktopApp:
         self.docs_dir, self.log_dir = chosen
         analyzer.LOG_DIR = self.log_dir
         self.var_dir_display.set(self.log_dir)
+        if self._dashboard_engine is not None:
+            self._dashboard_engine.set_game_dirs(self.docs_dir, self.log_dir)
         if self._dashboard_monitor is not None:
             self._dashboard_monitor.set_log_dir(self.log_dir)
         if self.mirror is not None:
@@ -2035,6 +2037,8 @@ class LQSNCoachDesktopApp:
         try:
             self.strategy = lc.load_strategy(self.strategy_name)
             self.hud.strategy = self.strategy
+            if self._dashboard_engine is not None:
+                self._dashboard_engine.strategy_name = self.strategy_name
             if self._dashboard_monitor is not None:
                 self._dashboard_monitor.strategy = self.strategy
         except Exception as e:
@@ -2079,6 +2083,7 @@ class LQSNCoachDesktopApp:
                 self._dashboard_srv = srv
                 self._dashboard_url = url
                 self._dashboard_engine = engine
+                self._dashboard_engine.strategy_name = self.strategy_name
                 self._dashboard_monitor = monitor
             except Exception as e:
                 messagebox.showerror("启动作战室失败", str(e), parent=self.root)
