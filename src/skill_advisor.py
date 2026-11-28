@@ -425,18 +425,10 @@ _UI_RARITY_ORDER = {"彩": 4, "SSR": 4, "金": 3, "SR": 3, "蓝": 2, "银": 2, "
 
 def sort_skill_choices_for_ui(skill_list: list[dict]) -> list[dict]:
     """
-    按实机三选一界面真实展示顺序重排技能卡（2026-11-27 R36/R43 实机截图验证）：
-    游戏 UI 会将高稀有度卡（彩 > 金 > 蓝/银 > 白）排在左侧槽位，同稀有度保持服务器下发相对顺序。
+    严格保留服务器下发 skill_list 的原始左中右槽位顺序（2026-11-28 实机验证）：
+    游戏三选一界面直接按服务器下发数组下标 [0]左 / [1]中 / [2]右 展示，不按稀有度重排。
     """
-    indexed = []
-    for raw_idx, card in enumerate(skill_list or ()):
-        c = card or {}
-        sid = int(c.get("skill_id") or c.get("id") or 0)
-        entry = get_skill_entry(sid) if sid > 0 else None
-        rar = str((entry or {}).get("rarity") or "未知")
-        indexed.append((-_UI_RARITY_ORDER.get(rar, 0), raw_idx, c))
-    indexed.sort(key=lambda x: (x[0], x[1]))
-    return [x[2] for x in indexed]
+    return [dict(c or {}) for c in (skill_list or ())]
 
 
 def evaluate_skill_choices(
@@ -447,7 +439,6 @@ def evaluate_skill_choices(
 ) -> list[dict]:
     """
     评估选技能左中右候选卡，按实机 UI 展示顺序 (slot_idx=0..N-1) 返回完整评分、排名、短角标与样式 key。
-    若存在未知技能（稀有度未确认，可能导致左中右排序与实机不一致），标记 slot_uncertain=True。
     """
     if not skill_list:
         return []
@@ -459,7 +450,7 @@ def evaluate_skill_choices(
         _score_single_card(idx, card or {}, char_profile, learned_set, note_pool)
         for idx, card in enumerate(ui_cards)
     ]
-    slot_uncertain = any(r["is_unknown"] for r in results) and len(results) > 1
+    slot_uncertain = False
 
     ordered = sorted(
         results,
