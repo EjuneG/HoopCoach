@@ -393,6 +393,19 @@ html, body {
   justify-content: center;
 }
 
+@keyframes hc-spin {
+  to { transform: rotate(360deg); }
+}
+
+.icon-btn.is-spinning svg {
+  animation: hc-spin 0.72s linear infinite;
+}
+
+.icon-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
 .action-btn {
   padding: 0 12px;
   display: inline-flex;

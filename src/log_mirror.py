@@ -30,12 +30,20 @@ class LiveLogMirror:
         self.fp = None
         self.state = lc.make_initial_state()
         self.last_train_cmds: list = []
+        self.train_cmds_seq: int = 0
         self._skill_buf = [""]
         self._edu_buf = ""
+        self._partial_line = ""
         self.recent_lines: deque[str] = deque(maxlen=45)
         self.recent_events: deque[dict] = deque(maxlen=60)
 
+    def _set_train_cmds(self, cmds: list) -> None:
+        if cmds or self.last_train_cmds:
+            self.train_cmds_seq += 1
+        self.last_train_cmds = cmds
+
     def close(self) -> None:
+        self._partial_line = ""
         if self.fp is not None:
             try:
                 self.fp.close()
@@ -93,9 +101,10 @@ class LiveLogMirror:
     def _reset_for_new_run(self) -> None:
         """开新局 (education.cs_start_education) 时彻底清空上一局残留状态（器材映射/哨子事件标记/训次/商店等）。"""
         self.state = lc.make_initial_state()
-        self.last_train_cmds = []
+        self._set_train_cmds([])
         self._skill_buf = [""]
         self._edu_buf = ""
+        self._partial_line = ""
 
     def attach_latest(self) -> bool:
         latest = self._find_latest_log()
@@ -143,9 +152,15 @@ class LiveLogMirror:
             return []
         batch_events: list[dict] = []
         while True:
-            line = self.fp.readline()
-            if not line:
+            chunk = self.fp.readline()
+            if not chunk:
                 break
+            if not chunk.endswith("\n") and len(self._partial_line) + len(chunk) < 65536:
+                # 防止游戏引擎按 4KB/8KB 缓冲块刷新时在行中截断导致正则漏匹配
+                self._partial_line += chunk
+                break
+            line = (self._partial_line + chunk) if self._partial_line else chunk
+            self._partial_line = ""
             evs = self._feed_line(line, record_events=True)
             if evs:
                 batch_events.extend(evs)
@@ -202,6 +217,7 @@ class LiveLogMirror:
                 elif rpc_name == "education.cs_train":
                     self.state["store_buy_pending"] = False
                     self.state["slot_machine_pending"] = False
+                    self._set_train_cmds([])
                     cm_t = re.search(r"cmd_idx\s*=\s*(\d+)", line)
                     if cm_t:
                         c_idx = int(cm_t.group(1))
@@ -212,6 +228,7 @@ class LiveLogMirror:
                     self.state["store_buy_pending"] = False
                     self.state["slot_machine_pending"] = False
                     if re.search(r"decide_type\s*=\s*2\b", line):
+                        self._set_train_cmds([])
                         self.state["round"] = int(self.state.get("round", 1) or 1) + 1
                 elif rpc_name == "education.cs_select_edu_slot_machines":
                     self.state["slot_machine_pending"] = True
@@ -223,6 +240,8 @@ class LiveLogMirror:
                 ):
                     self.state["store_buy_pending"] = False
                     self.state["slot_machine_pending"] = False
+                    if rpc_name != "education.cs_restore_education":
+                        self._set_train_cmds([])
                 if record_events:
                     events.append({"kind": "rpc", "name": rpc_name})
 
@@ -281,16 +300,22 @@ class LiveLogMirror:
             if em:
                 tok = em.group(0)
                 self._edu_buf = ""
+                prev_exp_round = int(self.state.get("exp_round") or 0)
                 lc.update_state_from_token(self.state, tok)
+                cur_exp_round = int(self.state.get("exp_round") or 0)
+                cur_round_type = int(self.state.get("round_type", 1) or 1)
                 token_updated = True
                 if "edu_store_info" in tok and self.state.get("store_open") is False:
                     self.state["store_buy_pending"] = False
                 if "train_cmds = {}" in tok:
-                    self.last_train_cmds = []
-                elif self.state.get("round_type", 1) == 1 and "train_cmds" in tok:
+                    self._set_train_cmds([])
+                elif cur_round_type == 1 and "train_cmds" in tok:
                     cmds = lc.parse_train_cmd_block(tok)
                     if len(cmds) == 6:
-                        self.last_train_cmds = cmds
+                        self._set_train_cmds(cmds)
+                elif cur_round_type != 1 or (prev_exp_round > 0 and cur_exp_round != prev_exp_round):
+                    # 跨天推进或切入周末/比赛日而当前包尚未携带新平日 train_cmds 时，清空前一天残留训练面板
+                    self._set_train_cmds([])
 
         if record_events and (ui_res.get("changed") or ui_res.get("skill_popup_ready") or token_updated):
             events.append({"kind": "state_changed", "mode": ui_res.get("mode", "")})

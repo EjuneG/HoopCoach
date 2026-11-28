@@ -73,6 +73,7 @@
     liveLast: null,
     plans: [],
     selectedPlanId: null,
+    refreshing: false,
   };
 
   /* -------------------- 工具函数 -------------------- */
@@ -3163,16 +3164,60 @@
     }
 
     $("btn-refresh-all").addEventListener("click", async () => {
-      if (state.online) {
-        try { await fetch("/api/refresh", { method: "POST" }); } catch (_) {}
+      if (state.refreshing) return;
+      const btn = $("btn-refresh-all");
+      state.refreshing = true;
+      if (btn) {
+        btn.disabled = true;
+        btn.classList.add("is-spinning");
       }
-      state.runDetailCache = {};
-      state.plannerData = null;
-      state.compatRevData = null;
-      await loadCoreData();
-      if (state.view === "box") loadPlanner();
-      if (state.view === "compat") ensureCompatReady();
-      if (state.view === "live") pollLiveNow();
+      let refreshInfo = null;
+      try {
+        if (state.online) {
+          setConnBadge(true, "正在扫描战绩与同步归档…");
+          try {
+            const resp = await fetch("/api/refresh", { method: "POST", cache: "no-store" });
+            if (resp.ok) {
+              refreshInfo = await resp.json();
+            }
+          } catch (_) {}
+        }
+        state.runDetailCache = {};
+        state.plannerData = null;
+        state.compatRevData = null;
+        await loadCoreData();
+        if (state.view === "runs") {
+          const allRuns = (state.overview && state.overview.runs) || [];
+          if (state.compareIds.length === 2) {
+            renderRunCompare(state.compareIds[0], state.compareIds[1]);
+          } else if (refreshInfo && refreshInfo.new_runs > 0 && allRuns.length) {
+            selectRun(allRuns[allRuns.length - 1].run_id);
+          } else if (state.selectedRunId && allRuns.some((r) => r.run_id === state.selectedRunId)) {
+            selectRun(state.selectedRunId);
+          } else if (allRuns.length) {
+            selectRun(allRuns[allRuns.length - 1].run_id);
+          }
+        }
+        if (state.view === "box") await loadPlanner();
+        if (state.view === "compat") ensureCompatReady();
+        if (state.view === "live") pollLiveNow();
+
+        if (refreshInfo && refreshInfo.runs_error) {
+          setConnBadge(false, "扫描异常：" + refreshInfo.runs_error);
+        } else if (refreshInfo && refreshInfo.new_runs > 0) {
+          setConnBadge(true, `✓ 新增 ${refreshInfo.new_runs} 局 · 共 ${refreshInfo.runs_total} 局 (${refreshInfo.refreshed_at || ""})`);
+        } else if (refreshInfo && refreshInfo.runs_scanned) {
+          setConnBadge(true, `✓ 已同步 ${refreshInfo.runs_total} 局 (${refreshInfo.refreshed_at || ""})`);
+        } else if (state.online) {
+          setConnBadge(true, "✓ 已刷新归档与角色池");
+        }
+      } finally {
+        if (btn) {
+          btn.classList.remove("is-spinning");
+          btn.disabled = false;
+        }
+        state.refreshing = false;
+      }
     });
 
     // 趋势图控制

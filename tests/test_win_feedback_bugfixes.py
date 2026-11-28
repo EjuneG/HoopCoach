@@ -367,6 +367,252 @@ class TestReportedBugfixes(unittest.TestCase):
                 self.assertIn("diagnostic_env.json", zf.namelist())
                 self.assertIn("detailed_runs_sanitized.json", zf.namelist())
 
+    def test_cross_day_no_stale_train_cmds_or_sig_swallow_and_partial_line(self):
+        import win_launcher as wl
+
+        def _make_cmds_block(boost_idx: int, gain: int) -> str:
+            parts = []
+            for i in range(1, 7):
+                g = gain if i == boost_idx else 10
+                parts.append(
+                    f"[{i}] = {{"
+                    f"before_bonus_property_tbl = {{ [1] = {{key = {100 + i},value = {g}}} }},"
+                    f"company_supactor_tbl = {{}},"
+                    f"company_teammate_tbl = {{}},"
+                    f"fail_rate = 0,"
+                    f"idx = {i},"
+                    f"is_edu_manager = false,"
+                    f"ps = -15,"
+                    f"pt = 10,"
+                    f"train_type = {i}"
+                    f"}}"
+                )
+            return "[EDU_MODEL] 更新育成数据 {\n  train_cmds = { " + ", ".join(parts) + " }\n}\n"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            log_fp = os.path.join(tmp, "11_28___09_00_00___log.txt")
+            day1 = (
+                "request_call:    education.cs_start_education    {initactor_cfg_id = 1002}\n"
+                "[SceneMgr] SetActiveScene: ycjm02\n"
+                "[EDU_MODEL] 更新育成数据    {\n"
+                "  experience_round = 11,\n"
+                "  round_type = 1,\n"
+                "  ps = 100\n"
+                "}\n"
+                + _make_cmds_block(boost_idx=1, gain=90)
+            )
+            with open(log_fp, "w", encoding="utf-8") as f:
+                f.write(day1)
+
+            mirror = LiveLogMirror(tmp)
+            try:
+                self.assertTrue(mirror.attach_latest())
+                self.assertEqual(len(mirror.last_train_cmds), 6)
+
+                class _DummyVar:
+                    def __init__(self, v=""):
+                        self.v = v
+
+                    def set(self, v):
+                        self.v = str(v)
+
+                    def get(self):
+                        return self.v
+
+                class _DummyHud:
+                    def __init__(self):
+                        self._last_turn_scored = None
+                        self._last_wk_adv = None
+                        self._last_story_adv = None
+                        self._last_skill_evals = None
+                        self.turn_renders = []
+
+                    def render_turn(self, state, scored, extra_tip=""):
+                        self._last_turn_scored = scored
+                        self.turn_renders.append((int(state.get("exp_round") or 0), scored[0]["idx"]))
+
+                    def refresh_scene_overlay(self, state):
+                        pass
+
+                app = wl.LQSNCoachDesktopApp.__new__(wl.LQSNCoachDesktopApp)
+                app.mirror = mirror
+                app.hud = _DummyHud()
+                app.strategy_name = "training_flow"
+                app.strategy = lc.load_strategy("training_flow")
+                app.hud_cfg = {"focus": {"stat": None, "bonus": 1.15}}
+                app._last_rendered_sig = ""
+                app._logged_runtime_errors = set()
+                app.var_live_preview = _DummyVar()
+
+                app._render_current_state(force=False)
+                self.assertEqual(app.hud.turn_renders[-1], (11, 1))
+
+                # 玩家在 Day 11 点击训练 -> 立即清空旧训练面板与 HUD 缓存，绝不把 Day 11 提示带入 Day 12
+                with open(log_fp, "a", encoding="utf-8") as f:
+                    f.write("request_call:    education.cs_train    {cmd_idx = 1}\n")
+                    f.write("[EDU_MODEL]UnlockData\n")
+                    f.write("[EDU_MODEL] 更新育成数据    {\n  experience_round = 12,\n  round_type = 1,\n  ps = 130\n}\n")
+                mirror.poll()
+                self.assertEqual(mirror.last_train_cmds, [])
+                app._render_current_state(force=False)
+                self.assertIsNone(app.hud._last_turn_scored)
+
+                # 先写入半截行（无换行符），poll 应暂存等待完整行，随后补完新一天 train_cmds（首选变为 4 号）
+                day2_cmds = _make_cmds_block(boost_idx=4, gain=120)
+                half = len(day2_cmds) // 2
+                with open(log_fp, "a", encoding="utf-8") as f:
+                    f.write(day2_cmds[:half])
+                mirror.poll()
+                self.assertEqual(mirror.last_train_cmds, [])
+
+                with open(log_fp, "a", encoding="utf-8") as f:
+                    f.write(day2_cmds[half:])
+                evs = mirror.poll()
+                self.assertTrue(evs)
+                self.assertEqual(len(mirror.last_train_cmds), 6)
+
+                # 即使 mode/exp_round/round/ps/gold 与上一包完全一致，也绝不吞掉新一天的 train_cmds
+                app._render_current_state(force=False)
+                self.assertEqual(app.hud.turn_renders[-1], (12, 4))
+            finally:
+                mirror.close()
+
+    def test_dashboard_refresh_all_scans_new_completed_runs(self):
+        import dashboard_server as ds
+        import note_advisor as na
+        import equipment_advisor as ea
+        from test_analyzer_regression import _make_synthetic_run_text
+
+        with tempfile.TemporaryDirectory() as tmp:
+            docs_dir = os.path.join(tmp, "Documents")
+            log_dir = os.path.join(docs_dir, "Logs")
+            runs_dir = os.path.join(tmp, "runs")
+            arch_dir = os.path.join(runs_dir, "archive")
+            os.makedirs(log_dir, exist_ok=True)
+            os.makedirs(arch_dir, exist_ok=True)
+
+            runs_json = os.path.join(runs_dir, "detailed_runs.json")
+            manifest_json = os.path.join(runs_dir, "manifest.json")
+            note_cache = os.path.join(tmp, "note_pool.json")
+            equip_cache = os.path.join(tmp, "equip_pool.json")
+            snap_dir = os.path.join(tmp, "dash_data")
+            os.makedirs(snap_dir, exist_ok=True)
+            snap_js = os.path.join(snap_dir, "snapshot.js")
+
+            with (
+                patch.object(az, "RUNS_DIR", runs_dir),
+                patch.object(az, "ARCHIVE_DIR", arch_dir),
+                patch.object(az, "OUT_PATH", runs_json),
+                patch.object(az, "MANIFEST_PATH", manifest_json),
+                patch.object(ds, "DETAILED_RUNS_FILE", runs_json),
+                patch.object(ds, "ARCHIVE_DIR", arch_dir),
+                patch.object(ds, "NOTE_POOL_FILE", note_cache),
+                patch.object(ds, "EQUIP_POOL_FILE", equip_cache),
+                patch.object(ds, "DASHBOARD_DATA_DIR", snap_dir),
+                patch.object(na, "NOTE_POOL_CACHE_FILE", note_cache),
+                patch.object(na, "NOTE_OVERRIDES_FILE", os.path.join(tmp, "no_ov.json")),
+                patch.object(ea, "EQUIP_POOL_FILE", equip_cache),
+            ):
+                eng = ds.DashboardEngine()
+                eng.set_game_dirs(docs_dir=docs_dir, log_dir=log_dir)
+                self.assertEqual(len(eng.get_overview()["runs"]), 0)
+
+                # 模拟玩家刚打完一局新完赛日志，直接在网页点击『重新加载』(/api/refresh -> engine.refresh_all)
+                log_fp = os.path.join(log_dir, "11_28___12_30_00___log.txt")
+                with open(log_fp, "w", encoding="utf-8") as f:
+                    f.write(_make_synthetic_run_text())
+
+                res = eng.refresh_all()
+                self.assertTrue(res["ok"])
+                self.assertTrue(res["runs_scanned"])
+                self.assertEqual(res["new_runs"], 1)
+                self.assertEqual(res["runs_total"], 1)
+                self.assertEqual(len(eng.get_overview()["runs"]), 1)
+                self.assertTrue(os.path.isfile(snap_js))
+
+    def test_win_launcher_initial_geometry_and_combobox_wheel_guard(self):
+        import win_launcher as wl
+        from unittest.mock import MagicMock
+
+        if wl.tk is None:
+            self.skipTest("tkinter unavailable")
+
+        app = None
+        try:
+            with (
+                patch.object(wl.pc, "resolve_game_dirs", return_value=("", "")),
+                patch.object(wl.pc, "WindowsFloatingHUD", return_value=MagicMock(diegetic_mode=True)),
+                patch.object(wl.LQSNCoachDesktopApp, "_prompt_first_time_dir", lambda self: None),
+                patch.object(wl.LQSNCoachDesktopApp, "_start_check_updates", lambda self, silent=True: None),
+            ):
+                try:
+                    app = wl.LQSNCoachDesktopApp()
+                except Exception as exc:
+                    if "display" in str(exc).lower() or "tclerror" in type(exc).__name__.lower():
+                        self.skipTest(f"headless display unavailable: {exc}")
+                    raise
+
+                # 移到屏幕外完成真实布局测量与事件派发，避免测试闪烁抢焦点
+                cur_size = app.root.geometry().split("+")[0]
+                app.root.geometry(f"{cur_size}+10000+10000")
+                app.root.update()
+
+                avail_w, avail_h = app._get_screen_work_area()
+                if avail_h >= 780:
+                    self.assertFalse(
+                        bool(app._scroll_bar.winfo_ismapped()),
+                        "常规桌面分辨率下初始窗口应完整展示首页卡片，无需出现滚动条",
+                    )
+                    btn_bottom = (
+                        app.btn_open_dashboard.winfo_rooty()
+                        - app._scroll_canvas.winfo_rooty()
+                        + app.btn_open_dashboard.winfo_height()
+                    )
+                    self.assertLessEqual(
+                        btn_bottom,
+                        app._scroll_canvas.winfo_height() + 2,
+                        "『打开作战室网页』按钮在初始窗口中必须无需滚动直接可见",
+                    )
+
+                # 验证鼠标滚轮划过中间三个下拉框时绝不篡改当前选中项
+                strat_before = app.var_strategy.get()
+                fstat_before = app.var_focus_stat.get()
+                fbonus_before = app.var_focus_bonus.get()
+                for cb in (app.cb_strategy, app.cb_focus_stat, app.cb_focus_bonus):
+                    self.assertIsNotNone(cb)
+                    res = app._on_combobox_mousewheel(
+                        type("Ev", (), {"widget": cb, "delta": -120, "num": None})()
+                    )
+                    self.assertEqual(res, "break")
+                    cb.event_generate("<MouseWheel>", delta=-120)
+                    cb.event_generate("<MouseWheel>", delta=120)
+                    app.root.update()
+
+                self.assertEqual(app.var_strategy.get(), strat_before)
+                self.assertEqual(app.var_focus_stat.get(), fstat_before)
+                self.assertEqual(app.var_focus_bonus.get(), fbonus_before)
+
+                # 当窗口被手动压矮需要滚动时，在中间下拉框上滚轮应顺畅滚动外层页面且仍不改值
+                app.root.minsize(468, 400)
+                app.root.geometry("520x420+10000+10000")
+                app.root.update()
+                app._sync_scroll_layout()
+                app.root.update()
+                y0 = app._scroll_canvas.yview()[0]
+                app._on_combobox_mousewheel(
+                    type("Ev", (), {"widget": app.cb_strategy, "delta": -120, "num": None})()
+                )
+                y1 = app._scroll_canvas.yview()[0]
+                self.assertGreater(y1, y0)
+                self.assertEqual(app.var_strategy.get(), strat_before)
+        finally:
+            if app is not None:
+                app._closing = True
+                try:
+                    app.root.destroy()
+                except Exception:
+                    pass
+
 
     def test_skill_choice_blue_rarity_and_unknown_slot_guard(self):
         import skill_advisor as sa

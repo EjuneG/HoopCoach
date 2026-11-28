@@ -246,6 +246,15 @@ class DashboardEngine:
         self._archive_index: dict[str, str] = {}
         self._archive_dir_mtime: float = -1.0
         self._pool_sync_lock = threading.Lock()
+        self.docs_dir: Optional[str] = None
+        self.log_dir: Optional[str] = None
+        self.strategy_name: str = "training_flow"
+
+    def set_game_dirs(self, docs_dir: Optional[str] = None, log_dir: Optional[str] = None) -> None:
+        if docs_dir:
+            self.docs_dir = docs_dir
+        if log_dir:
+            self.log_dir = log_dir
 
     def _char_pos_code(self, cid: Optional[int]) -> str:
         if not cid or cid not in self.chars:
@@ -392,6 +401,69 @@ class DashboardEngine:
 
             self.invalidate_caches()
             return res
+
+    def refresh_all(
+        self,
+        docs_dir: Optional[str] = None,
+        log_dir: Optional[str] = None,
+        strategy_name: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """网页端『重新加载』完整刷新：增量扫描新完赛战绩 + 同步角色/笔记/器材池 + 刷新缓存与离线快照。"""
+        active_docs = docs_dir or self.docs_dir
+        active_logs = log_dir or self.log_dir
+        if not active_docs or not active_logs:
+            try:
+                r_docs, r_logs = platform_compat.resolve_game_dirs(interactive_on_missing=False)
+                if not active_docs and r_docs:
+                    active_docs = r_docs
+                if not active_logs and r_logs:
+                    active_logs = r_logs
+                self.set_game_dirs(active_docs, active_logs)
+            except Exception:
+                pass
+
+        prev_count = len(self._get_runs_enriched())
+        runs_scanned = False
+        runs_total = prev_count
+        new_runs = 0
+        runs_error = ""
+
+        if active_logs and os.path.isdir(active_logs):
+            try:
+                import analyzer as _az
+
+                _az.LOG_DIR = active_logs
+                runs = _az.extract_all_runs(
+                    strategy_name=(strategy_name or self.strategy_name or "training_flow"),
+                    force_rebuild=False,
+                    log_dir=active_logs,
+                )
+                runs_scanned = True
+                runs_total = len(runs or [])
+                new_runs = max(0, runs_total - prev_count)
+            except Exception as e:
+                runs_error = str(e)
+
+        sync_info = self.sync_local_pools(docs_dir=active_docs, log_dir=active_logs)
+        if not runs_scanned:
+            runs_total = len(self._get_runs_enriched())
+
+        try:
+            export_static_snapshot(self)
+        except Exception:
+            pass
+
+        out: dict[str, Any] = {
+            "ok": True,
+            "refreshed_at": time.strftime("%H:%M:%S"),
+            "runs_scanned": runs_scanned,
+            "runs_total": runs_total,
+            "new_runs": new_runs,
+            "sync": sync_info,
+        }
+        if runs_error:
+            out["runs_error"] = runs_error
+        return out
 
     def get_overview(self) -> dict:
         runs = self._get_runs_enriched()
@@ -1387,8 +1459,8 @@ def make_handler(engine: DashboardEngine, live_monitor: LiveMonitor):
         def do_POST(self) -> None:
             parsed = urllib.parse.urlparse(self.path)
             if parsed.path == "/api/refresh":
-                sync_info = engine.sync_local_pools(log_dir=getattr(live_monitor, "log_dir", None))
-                self._send_json({"ok": True, "refreshed_at": time.strftime("%H:%M:%S"), "sync": sync_info})
+                res = engine.refresh_all(log_dir=getattr(live_monitor, "log_dir", None))
+                self._send_json(res)
                 return
             self.send_error(HTTPStatus.NOT_FOUND)
 
@@ -1560,6 +1632,7 @@ def start_background_server(
 ) -> tuple[ThreadingHTTPServer, str, DashboardEngine, LiveMonitor]:
     """供桌面控制台内嵌拉起本地作战室服务，自动尝试空闲端口。"""
     engine = DashboardEngine()
+    engine.set_game_dirs(docs_dir=docs_dir, log_dir=log_dir)
     if (docs_dir and os.path.isdir(docs_dir)) or (log_dir and os.path.isdir(log_dir)):
         try:
             engine.sync_local_pools(docs_dir=docs_dir, log_dir=log_dir)
@@ -1574,21 +1647,22 @@ def start_background_server(
         live_monitor.set_log_dir(log_dir)
     threading.Thread(target=live_monitor.get_snapshot, daemon=True).start()
 
-    # 若本地存在旧版 schema 归档（如 v3 可能误采队伍总评价/PVP 的 new_rank），后台静默自动重算自愈
+    # 后台静默增量同步完赛战绩（含旧版 schema 归档自动重算自愈）
     if log_dir and os.path.isdir(log_dir):
         def _auto_upgrade_stale_runs() -> None:
             try:
                 import analyzer as _az
-                if os.path.isfile(_az.MANIFEST_PATH):
-                    m = _az._load_manifest()
-                    if int(m.get("schema_version") or 0) < int(getattr(_az, "MANIFEST_SCHEMA_VERSION", 4)):
-                        _az.LOG_DIR = log_dir
-                        _az.extract_all_runs(force_rebuild=False, log_dir=log_dir)
-                        engine.invalidate_caches()
-                        try:
-                            export_static_snapshot(engine)
-                        except Exception:
-                            pass
+                _az.LOG_DIR = log_dir
+                _az.extract_all_runs(
+                    strategy_name=(engine.strategy_name or "training_flow"),
+                    force_rebuild=False,
+                    log_dir=log_dir,
+                )
+                engine.invalidate_caches()
+                try:
+                    export_static_snapshot(engine)
+                except Exception:
+                    pass
             except Exception:
                 pass
         threading.Thread(target=_auto_upgrade_stale_runs, daemon=True).start()
@@ -1619,8 +1693,10 @@ def main() -> None:
     args = parser.parse_args()
 
     engine = DashboardEngine()
+    d_dir, l_dir = "", ""
     try:
         d_dir, l_dir = platform_compat.resolve_game_dirs(interactive_on_missing=False)
+        engine.set_game_dirs(docs_dir=d_dir, log_dir=l_dir)
         if (d_dir and os.path.isdir(d_dir)) or (l_dir and os.path.isdir(l_dir)):
             engine.sync_local_pools(docs_dir=d_dir, log_dir=l_dir)
     except Exception:
@@ -1632,6 +1708,8 @@ def main() -> None:
         return
 
     live_monitor = LiveMonitor(engine)
+    if l_dir:
+        live_monitor.set_log_dir(l_dir)
     # 后台预热实时日志 tailer，避免首次点击监控页等待
     threading.Thread(target=live_monitor.get_snapshot, daemon=True).start()
 
