@@ -666,7 +666,7 @@ GASHAPON_CFG_NOTES = {
     1:   {"score": 64, "stat": 0,   "gain": 35, "tag": "🔵多维属性小幅提升", "short": "🔵多维+35"},
     2:   {"score": 70, "stat": 0,   "gain": 50, "tag": "🟣多维属性中幅提升", "short": "🟣多维+50"},
     3:   {"score": 78, "stat": 0,   "gain": 65, "tag": "✨多维属性+省体Buff", "short": "✨多维+65"},
-    25:  {"score": 74, "trammel_all": 10, "tag": "🔥器材熟练度(全器材熟练度+10)", "short": "🔥全器材熟练+10"},
+    25:  {"score": 68, "trammel_gain": 30, "trammel_rand_n": 1, "tag": "🔥器材熟练度(随机1件器材熟练度+30)", "short": "🔥随机1器材熟练+30"},
     26:  {"score": 76, "trammel_gain": 30, "trammel_rand_n": 2, "tag": "🔥器材熟练度+(随机2件器材熟练度+30)", "short": "🔥随机2器材熟练+30"},
     27:  {"score": 92, "trammel_all": 30, "tag": "🔥器材熟练度++(全器材熟练度+30)", "short": "🔥全器材熟练+30"},
     109: {"score": 63, "stat": 0,   "gain": 32, "tag": "🔵基础属性扭蛋(60金)", "short": "🔵属性+32"},
@@ -4835,9 +4835,9 @@ def calc_gashapon_dynamic_ev(
             n_picks = 2 if cid == 100 else 1
             base_ev = round(n_picks * approx_one * 0.85 + perm_train_ev + 3.0, 1)
     elif cid in (25, 26, 27):
-        # 器材熟练度 (25,60金,全队+10) / 器材熟练度+ (26,80金,随机2件+30) / 器材熟练度++ (27,100金,全队+30)：
+        # 器材熟练度 (25,60金,随机1件+30) / 器材熟练度+ (26,80金,随机2件+30) / 器材熟练度++ (27,100金,全队+30)：
         # 逐卡区分 NON_CRIT_EQUIPMENT_IDS 并与 calc_equip_trammel_option_ev 对齐，剩训来不及满彩自动归零！
-        t_gain = int(g_meta.get("trammel_gain", g_meta.get("trammel_all", 30 if cid != 25 else 10)))
+        t_gain = int(g_meta.get("trammel_gain", g_meta.get("trammel_all", 30)))
         rand_n = int(g_meta.get("trammel_rand_n", 0))
         raw_map = trammel_map or state.get("supactor_card_trammel") or {}
         card_to_cfg = state.get("supactor_card_to_cfg", {})

@@ -538,6 +538,29 @@ class TestV010EVCore(unittest.TestCase):
         sc_god = lc.score_training_turn(st, [cmd_god], self.strategy)
         self.assertEqual(sc_god[0]["idx"], 2, f"大彩圈神局绝不应为了望月提前休息: {sc_god}")
 
+    # ------------------------------------------------------------------
+    # 13. 扭蛋 #25 (蓝档随机1件器材+30熟) 不得误算为全队 5 张器材
+    # ------------------------------------------------------------------
+    def test_13_gasha_25_random_single_card_trammel_ev(self):
+        st = _make_base_state(exp_round=13, round_no=8, ps=90, gold=160)
+        st["supactor_trammel"] = {
+            11004: 30,
+            11002: 30,
+            31003: 30,
+            32003: 30,
+            35002: 30,
+        }
+        ev25, tag25, _ = lc.calc_gashapon_dynamic_ev(25, 60, 0, st, strategy=self.strategy)
+        ev26, tag26, _ = lc.calc_gashapon_dynamic_ev(26, 80, 0, st, strategy=self.strategy)
+        ev27, tag27, _ = lc.calc_gashapon_dynamic_ev(27, 100, 0, st, strategy=self.strategy)
+        self.assertIn("随机1器材熟练+30", tag25)
+        self.assertIn("期望+30熟", tag25)
+        self.assertIn("随机2器材熟练+30", tag26)
+        self.assertIn("期望+60熟", tag26)
+        self.assertIn("全器材熟练+30", tag27)
+        self.assertLess(ev25, ev26, f"蓝档随机1件(25)不应高于紫档随机2件(26): {ev25} vs {ev26}")
+        self.assertLess(ev26, ev27, f"紫档随机2件(26)不应高于金档全队(27): {ev26} vs {ev27}")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
