@@ -1167,7 +1167,8 @@ class WindowsFloatingHUD:
             f"<span weight='bold' foreground='#38bdf8'>🎯 技能三选一 · 职责[{html.escape(role_str)}]</span>"
         )
         lines = []
-        slot_names = ("左卡", "中卡", "右卡")
+        slot_uncertain = any(bool(x.get("slot_uncertain") or x.get("is_unknown")) for x in self._last_skill_evals)
+        slot_names = ("候选1", "候选2", "候选3") if slot_uncertain else ("左卡", "中卡", "右卡")
         show_sec = self._rec_enabled("secondary")
         for item in self._last_skill_evals[:3]:
             st_k = item.get("style_key", "second")

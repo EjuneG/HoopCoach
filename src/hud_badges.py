@@ -1218,36 +1218,51 @@ def build_badges_for_mode(
         if not show_skill:
             return [], ""
         sk_evals = last_skill_evals or []
-        sk_opts = anc.get("skill_choice_screen", {}).get("options", {})
-        for item in sk_evals[:3]:
-            s_idx = int(item.get("slot_idx", 0))
-            sc = sk_opts.get(str(s_idx + 1))
-            if not sc:
-                continue
-            st_key = item.get("style_key") or "second"
-            if not show_sec and st_key == "second":
-                continue
-            btxt = strip_markup_to_clean_text(item.get("badge_text") or "")
-            sname = strip_markup_to_clean_text(item.get("skill_name") or "")
-            l_txt = f"★ {btxt or '首选'}" if st_key == "best" else (btxt or "备选")
-            r_txt = (
-                sname
-                if (sname and not item.get("is_unknown"))
-                else strip_markup_to_clean_text(item.get("reason") or "")[:10]
-            )
-            specs.append({
-                "left": l_txt,
-                "right": r_txt,
-                "rx": sc["rx"],
-                "ry": sc["ry"] - 0.195,
-                "anchor": "bottom_center",
-                "style": st_key,
-                "tail": True,
-            })
+        slot_uncertain = any(bool(x.get("slot_uncertain") or x.get("is_unknown")) for x in sk_evals)
+        if not slot_uncertain:
+            sk_opts = anc.get("skill_choice_screen", {}).get("options", {})
+            for item in sk_evals[:3]:
+                s_idx = int(item.get("slot_idx", 0))
+                sc = sk_opts.get(str(s_idx + 1))
+                if not sc:
+                    continue
+                st_key = item.get("style_key") or "second"
+                if not show_sec and st_key == "second":
+                    continue
+                btxt = strip_markup_to_clean_text(item.get("badge_text") or "")
+                sname = strip_markup_to_clean_text(item.get("skill_name") or "")
+                l_txt = f"★ {btxt or '首选'}" if st_key == "best" else (btxt or "备选")
+                r_txt = (
+                    sname
+                    if (sname and not item.get("is_unknown"))
+                    else strip_markup_to_clean_text(item.get("reason") or "")[:10]
+                )
+                specs.append({
+                    "left": l_txt,
+                    "right": r_txt,
+                    "rx": sc["rx"],
+                    "ry": sc["ry"] - 0.195,
+                    "anchor": "bottom_center",
+                    "style": st_key,
+                    "tail": True,
+                })
         roles = sorted(get_char_role_tags_fn(int(state.get("main_char_id") or 0)) - {"通用"})
         role_str = "/".join(roles) if roles else "通用"
+        known_ranked = sorted(
+            [x for x in sk_evals if not x.get("is_unknown") and not x.get("is_learned") and x.get("role_match", True)],
+            key=lambda x: int(x.get("rank") or 99),
+        )
         top_sk = next((x for x in sk_evals if x.get("rank") == 1), None)
-        if top_sk:
+        if slot_uncertain:
+            if known_ranked:
+                k0 = known_ranked[0]
+                trough_line = (
+                    f"选技({role_str})｜已知优选：【{k0['skill_name']}】· "
+                    f"{strip_markup_to_clean_text(k0.get('reason', ''))[:16]}（含未收录卡免贴错位）"
+                )
+            else:
+                trough_line = f"选技({role_str})｜含未收录技能，请按卡面[{role_str}/通用]与品质选"
+        elif top_sk:
             trough_line = (
                 f"选技({role_str})｜首选：{top_sk['skill_name']} · "
                 f"{strip_markup_to_clean_text(top_sk.get('reason', ''))[:24]}"

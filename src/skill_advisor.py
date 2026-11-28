@@ -24,13 +24,14 @@ GEMINI_API_BIN = os.path.expanduser("~/.local/bin/gemini-api")
 PROBE_IMAGE_PATH = "/tmp/lqsn_skill_probe.jpg"
 
 VALID_ROLE_TAGS = ("得分手", "防守者", "组织者", "篮板手", "通用")
-VALID_RARITIES = ("彩", "金", "银", "白")
+VALID_RARITIES = ("彩", "金", "蓝", "银", "白")
 
 RARITY_BASE_SCORE = {
     "彩": 112.0,
     "SSR": 112.0,
     "金": 94.0,
     "SR": 94.0,
+    "蓝": 78.0,
     "银": 74.0,
     "白": 60.0,
     "未知": 50.0,
@@ -232,7 +233,7 @@ def _score_single_card(
     learned_set: set[int],
     note_pool: list | dict | None,
 ) -> dict[str, Any]:
-    skill_id = int(card.get("skill_id") or 0)
+    skill_id = int(card.get("skill_id") or card.get("id") or 0)
     note_id = int(card.get("note_id") or 0)
     skill_lib_type = int(card.get("skill_lib_type") or 0)
 
@@ -284,6 +285,8 @@ def _score_single_card(
         parts = [f"契合[{role_tag}]" if is_specific_match else "通用泛用"]
         if rarity in ("彩", "金"):
             parts.append(f"{rarity}级核心")
+        elif rarity == "蓝":
+            parts.append("行为卡")
         elif practical_bonus > 0:
             parts.append("实战高优白技")
         if has_note_discount:
@@ -311,18 +314,18 @@ def _score_single_card(
     }
 
 
-_UI_RARITY_ORDER = {"彩": 4, "SSR": 4, "金": 3, "SR": 3, "银": 2, "白": 1, "未知": 0}
+_UI_RARITY_ORDER = {"彩": 4, "SSR": 4, "金": 3, "SR": 3, "蓝": 2, "银": 2, "白": 1, "未知": 0}
 
 
 def sort_skill_choices_for_ui(skill_list: list[dict]) -> list[dict]:
     """
     按实机三选一界面真实展示顺序重排技能卡（2026-11-27 R36/R43 实机截图验证）：
-    游戏 UI 会将高稀有度卡（彩 > 金 > 银 > 白）排在左侧槽位，同稀有度保持服务器下发相对顺序。
+    游戏 UI 会将高稀有度卡（彩 > 金 > 蓝/银 > 白）排在左侧槽位，同稀有度保持服务器下发相对顺序。
     """
     indexed = []
     for raw_idx, card in enumerate(skill_list or ()):
         c = card or {}
-        sid = int(c.get("skill_id") or 0)
+        sid = int(c.get("skill_id") or c.get("id") or 0)
         entry = get_skill_entry(sid) if sid > 0 else None
         rar = str((entry or {}).get("rarity") or "未知")
         indexed.append((-_UI_RARITY_ORDER.get(rar, 0), raw_idx, c))
@@ -338,6 +341,7 @@ def evaluate_skill_choices(
 ) -> list[dict]:
     """
     评估选技能左中右候选卡，按实机 UI 展示顺序 (slot_idx=0..N-1) 返回完整评分、排名、短角标与样式 key。
+    若存在未知技能（稀有度未确认，可能导致左中右排序与实机不一致），标记 slot_uncertain=True。
     """
     if not skill_list:
         return []
@@ -349,6 +353,7 @@ def evaluate_skill_choices(
         _score_single_card(idx, card or {}, char_roles, learned_set, note_pool)
         for idx, card in enumerate(ui_cards)
     ]
+    slot_uncertain = any(r["is_unknown"] for r in results) and len(results) > 1
 
     ordered = sorted(
         results,
@@ -356,6 +361,7 @@ def evaluate_skill_choices(
     )
     for rank_idx, item in enumerate(ordered, start=1):
         item["rank"] = rank_idx
+        item["slot_uncertain"] = slot_uncertain
         pt_suffix = "·省PT" if item["has_note_discount"] else ""
         if item["is_learned"]:
             item["style_key"] = "dup"
@@ -365,7 +371,7 @@ def evaluate_skill_choices(
             item["badge_text"] = "⚠️ 职责不符空转"
         elif item["is_unknown"]:
             item["style_key"] = "unknown"
-            item["badge_text"] = ("🔍 识别中" if rank_idx == 1 else "🔍 待识别") + pt_suffix
+            item["badge_text"] = "🔍 未收录" + pt_suffix
         elif rank_idx == 1:
             item["style_key"] = "best"
             item["badge_text"] = "👑 契合首选" + pt_suffix
@@ -385,7 +391,8 @@ def has_unknown_skills(skill_list: list[dict]) -> bool:
     """判断候选列表中是否存在未收录于 data/skill_catalog.json 的 skill_id。"""
     for card in skill_list or ():
         try:
-            sid = int((card or {}).get("skill_id") or 0)
+            c = card or {}
+            sid = int(c.get("skill_id") or c.get("id") or 0)
         except (TypeError, ValueError):
             continue
         if sid > 0 and get_skill_entry(sid) is None:
@@ -407,6 +414,8 @@ def _normalize_rarity(raw: str) -> str:
         return "彩"
     if "金" in s or "SR" in s:
         return "金"
+    if "蓝" in s:
+        return "蓝"
     if "银" in s or "R" == s:
         return "银"
     return "白"

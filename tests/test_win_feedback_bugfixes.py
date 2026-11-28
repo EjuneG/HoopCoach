@@ -368,5 +368,35 @@ class TestReportedBugfixes(unittest.TestCase):
                 self.assertIn("detailed_runs_sanitized.json", zf.namelist())
 
 
+    def test_skill_choice_blue_rarity_and_unknown_slot_guard(self):
+        import skill_advisor as sa
+
+        sa.reload_skill_catalog()
+        # 1. 已知蓝卡（210308 快速启动）应排在白卡（210408 后段稳定）左侧、金卡（210418 后段稳固）右侧
+        known_cards = [
+            {"skill_id": 210408},  # 白
+            {"skill_id": 210308},  # 蓝
+            {"skill_id": 210418},  # 金
+        ]
+        evals_known = sa.evaluate_skill_choices(1001, known_cards)
+        self.assertEqual([x["skill_id"] for x in evals_known], [210418, 210308, 210408])
+        self.assertFalse(any(x.get("slot_uncertain") for x in evals_known))
+        specs_k, trough_k = hb.build_badges_for_mode("skill_choice", {"main_char_id": 1001}, last_skill_evals=evals_known)
+        self.assertGreaterEqual(len(specs_k), 1)
+        self.assertIn("后段稳固", trough_k)
+
+        # 2. 含未收录技能时标记 slot_uncertain=True，隐藏可能贴错槽位的卡顶角标，仅在底槽按名称提示已知优选
+        mixed_cards = [
+            {"skill_id": 219999},  # 未收录
+            {"skill_id": 210418},  # 金 · 后段稳固
+            {"skill_id": 210408},  # 白 · 后段稳定
+        ]
+        evals_mixed = sa.evaluate_skill_choices(1001, mixed_cards)
+        self.assertTrue(all(x.get("slot_uncertain") for x in evals_mixed))
+        specs_m, trough_m = hb.build_badges_for_mode("skill_choice", {"main_char_id": 1001}, last_skill_evals=evals_mixed)
+        self.assertEqual(specs_m, [])
+        self.assertIn("后段稳固", trough_m)
+        self.assertIn("免贴错位", trough_m)
+
 if __name__ == "__main__":
     unittest.main()
