@@ -454,6 +454,90 @@ class TestV010EVCore(unittest.TestCase):
         sc_low_shoot = next(x for x in lc.score_training_turn(st_low, [cmd_shoot, cmd_iq], self.strategy) if x["idx"] == 1)
         self.assertIn("周六加训低体风险", sc_low_shoot["reasons"])
 
+    # ------------------------------------------------------------------
+    # 10. 属性上限倍率溢出截断 & 触顶器材期权衰减
+    # ------------------------------------------------------------------
+    def test_10_cap_overflow_truncation_after_teammate_mult(self):
+        st = _make_base_state(exp_round=30, round_no=19, ps=105, gold=160)
+        st["main_char_id"] = 1046
+        st["teammate_char_ids"] = [1007, 1012, 1013, 1030]
+        st["char_talents"] = {
+            1046: {104601: 7},
+            1007: {100701: 7},
+            1012: {101201: 5},
+            1013: {101301: 5},
+            1030: {103001: 7},
+        }
+        # 101 投射距离上限仅剩 50 点（2300/2350），102 弹跳空间充裕（1200/1900）
+        st["props"] = {101: 2300, 102: 1200, 103: 1100, 104: 1100, 105: 1100, 106: 1100}
+        st["prop_max"] = {101: 2350, 102: 1900, 103: 1700, 104: 1700, 105: 1700, 106: 1700}
+
+        cmd_near_cap = _make_cmd(
+            1, {101: 45, 105: 15},
+            mate_ids=[1007, 1030], mate_count=2, is_manager=False, ps=-22, fail_rate=0,
+        )
+        cmd_open_room = _make_cmd(
+            2, {102: 40, 106: 14},
+            mate_ids=[1007, 1030], mate_count=2, is_manager=False, ps=-22, fail_rate=0,
+        )
+        scored = lc.score_training_turn(st, [cmd_near_cap, cmd_open_room], self.strategy)
+        self.assertEqual(scored[0]["idx"], 2, f"倍率放大后会严重溢出的 101 不应击败空间充裕的 102: {scored}")
+        sc1 = next(x for x in scored if x["idx"] == 1)
+        self.assertIn("⚠️溢", sc1["reasons"])
+        self.assertIn("⚠️倍率溢出", sc1["hud_tags"])
+
+    # ------------------------------------------------------------------
+    # 11. 望月体力线前置买药提醒（无需进商店 / 0% 失败率也亮灯）
+    # ------------------------------------------------------------------
+    def test_11_wangyue_ps_threshold_shop_alert_without_entering_shop(self):
+        st = _make_base_state(exp_round=17, round_no=11, ps=58, gold=120)
+        st["main_char_id"] = 1046
+        st["teammate_char_ids"] = [1007, 1012, 1013, 1030]
+        # 望月 Lv3 -> 60体线；当前 58 体已跌破但训练 0% 失败率
+        st["char_talents"] = {1012: {101201: 3}}
+        st["store_items"] = [{"id": 1001, "num": 1, "price": 30}]
+        cmd_ok = _make_cmd(2, {102: 38, 106: 14}, mate_ids=[1007], mate_count=1, fail_rate=0, ps=-20)
+        scored = lc.score_training_turn(st, [cmd_ok], self.strategy)
+
+        badge = lc.extract_weekday_shop_badge(st, scored)
+        self.assertIn("保望月", badge)
+        hud_tips = lc.format_weekday_hud_tips(st, scored, include_shop=True)
+        self.assertTrue(any("保望月" in line for line in hud_tips), f"HUD 未提示保望月买药: {hud_tips}")
+        shop_tip = lc.format_weekday_shop_tip(st, scored_cmds=scored, strategy=self.strategy)
+        self.assertIn("望月", shop_tip)
+
+    # ------------------------------------------------------------------
+    # 12. 望月无药烂回合提前休息 vs 有药不乱休 vs 好回合不乱休
+    # ------------------------------------------------------------------
+    def test_12_wangyue_early_rest_ev_decision(self):
+        st = _make_base_state(exp_round=16, round_no=10, ps=54, gold=120)  # 周二，后面还有 3 训
+        st["main_char_id"] = 1046
+        st["teammate_char_ids"] = [1007, 1012, 1013, 1030]
+        st["char_talents"] = {1012: {101201: 4, 10122: 1}}  # 59 体线 + ★2 心结
+        st["store_items"] = []  # 商店无药
+
+        # 场景 A：纯烂回合（无队友、无彩圈、无经理），提前休息应获得保望月被动挽救 EV 并胜出
+        cmd_bad = _make_cmd(1, {101: 18, 105: 7}, mate_count=0, is_manager=False, fail_rate=10, ps=-20)
+        sc_no_pot = lc.score_training_turn(st, [cmd_bad], self.strategy)
+        rest_no_pot = next(x for x in sc_no_pot if x["idx"] == 0)
+        self.assertEqual(sc_no_pot[0]["idx"], 0, f"无药+烂回合+连训日跌破望月线应推荐提前休息: {sc_no_pot}")
+        self.assertIn("保望月被动", rest_no_pot["hud_tags"])
+
+        # 场景 B：商店有稳定补体药时，不给休息加望月挽救 EV（优先引导买药而非浪费回合休息）
+        st_with_pot = lc.clone_state_snapshot(st)
+        st_with_pot["store_items"] = [{"id": 1001, "num": 1, "price": 30}]
+        rest_with_pot = next(x for x in lc.score_training_turn(st_with_pot, [cmd_bad], self.strategy) if x["idx"] == 0)
+        self.assertLess(rest_with_pot["score"], rest_no_pot["score"] - 15.0)
+
+        # 场景 C：无药但当回合是多人大彩圈神局，绝不能为了望月提前休息
+        cmd_god = _make_cmd(
+            2, {102: 52, 106: 18},
+            sup_cards=[{"card_id": 1, "val": 2}], sup_count=1, rainbow_count=1,
+            mate_ids=[1007, 1030], mate_count=2, is_manager=False, fail_rate=5, ps=-22,
+        )
+        sc_god = lc.score_training_turn(st, [cmd_god], self.strategy)
+        self.assertEqual(sc_god[0]["idx"], 2, f"大彩圈神局绝不应为了望月提前休息: {sc_god}")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
