@@ -210,6 +210,7 @@ DEFAULT_HUD_ANCHORS = {
             "6": {"rx": 0.832, "ry": 0.832},
         },
         "badge_right_rx": 0.742,
+        "shop_badge": {"rx": 0.972, "ry": 0.118},
     },
     "story_screen": {
         "two_options": {
@@ -538,7 +539,11 @@ def build_weekday_trough_line(
     if raw_tips:
         clean_tips = [strip_markup_to_clean_text(t) for t in raw_tips if strip_markup_to_clean_text(t)]
         shop_tip = next(
-            (t for t in clean_tips if any(k in t for k in ("商店", "0金免费", "低体可买", "必买", "急救", "勿买"))),
+            (
+                t
+                for t in clean_tips
+                if any(k in t for k in ("商店", "0金免费", "低体可买", "先买", "顺手买", "必买", "推荐", "急救", "勿买"))
+            ),
             "",
         )
         non_shop_tip = next((t for t in clean_tips if t != shop_tip), "")
@@ -558,7 +563,7 @@ def build_weekday_trough_line(
             chosen = f"{shop_tip[:22]} · {short_ev}" if short_ev else shop_tip[:38]
         else:
             chosen = (shop_tip or clean_tips[0])[:38]
-        color = "#E03A12" if any(k in chosen for k in ("必买", "免费", "急救", "低体可买", "哨", "集训", "海滩", "许愿")) else HUD_TEXT_INK
+        color = "#E03A12" if any(k in chosen for k in ("必买", "先买", "顺手买", "免费", "急救", "低体可买", "哨", "集训", "海滩", "许愿")) else HUD_TEXT_INK
         return f"{tag}｜<span foreground='{color}'>{html.escape(chosen)}</span>"
 
     if get_whistle_step_fn:
@@ -573,6 +578,34 @@ def build_weekday_trough_line(
         return f"{tag}｜<span foreground='{HUD_TEXT_INK}'>{w_esc}</span>"
 
     return f"{tag}｜<span foreground='{HUD_TEXT_INK}'>实时参谋就绪</span>"
+
+
+def _extract_weekend_shop_badge_text(wk: Optional[dict]) -> str:
+    """提炼周末独立薄荷绿「商店提示微窗」的精简具体内容，避免只写笼统的『先买商店好货』。"""
+    if not isinstance(wk, dict):
+        return ""
+    parts: list[str] = []
+    free_t = strip_markup_to_clean_text(wk.get("hud_free_tip") or "")
+    if free_t:
+        m_free = re.search(r"【([^】]+)】", free_t)
+        parts.append(f"0金领{m_free.group(1)[:10]}" if m_free else "0金免费领")
+
+    shop_t = strip_markup_to_clean_text(wk.get("hud_shop_tip") or "")
+    if shop_t:
+        cleaned = re.sub(r"^商店好货[：:]\s*", "", shop_t).strip()
+        if cleaned:
+            parts.append(cleaned[:22])
+    elif "🛒" in (wk.get("best_compact") or ""):
+        bc = wk.get("best_compact") or ""
+        m_buy = re.search(r"🛒([^+➔→|]+)", bc)
+        if m_buy:
+            buy_s = strip_markup_to_clean_text(m_buy.group(1))[:22]
+            if buy_s:
+                parts.append(buy_s)
+        elif not parts:
+            parts.append("按路线先买商店")
+
+    return " · ".join(parts[:2])
 
 
 def build_badges_for_mode(
@@ -729,22 +762,23 @@ def build_badges_for_mode(
             if (show_shop and extract_weekday_shop_badge_fn)
             else ""
         )
-        if shop_badge:
-            clean_sh = strip_markup_to_clean_text(shop_badge)
+        if show_shop:
+            clean_sh = strip_markup_to_clean_text(shop_badge) if shop_badge else ""
             specs.append({
                 "left": "商店",
-                "right": clean_sh,
+                "right": clean_sh or "暂无必买",
                 "rx": float(sh_btn.get("badge_rx", sh_btn["rx"] - 0.058)),
                 "ry": float(sh_btn.get("badge_ry", sh_btn["ry"] + 0.045)),
                 "anchor": "right",
-                "style": "shop",
+                "style": "shop" if clean_sh else "muted",
                 "tail": False,
+                "font_scale": 1.0 if clean_sh else 0.90,
             })
         if show_train:
             trough_line = build_weekday_trough_line(
                 state,
                 scored,
-                include_shop=show_shop,
+                include_shop=False,
                 format_weekday_hud_tips_fn=format_weekday_hud_tips_fn,
                 get_whistle_step_fn=get_whistle_step_fn,
                 check_lineup_and_equip_synergy_fn=check_lineup_and_equip_synergy_fn,
@@ -753,102 +787,140 @@ def build_badges_for_mode(
             trough_line = f"商店｜<span foreground='#E03A12'>{html.escape(strip_markup_to_clean_text(shop_badge))}</span>"
 
     elif mode == "ycjm02":
-        if not show_train:
+        if not show_train and not show_shop:
             return [], ""
         tr_a = anc.get("train_screen", {})
         btns = tr_a.get("buttons", {})
         right_rx = float(tr_a.get("badge_right_rx", 0.742))
+        tr_shop_a = tr_a.get("shop_badge", {"rx": 0.972, "ry": 0.118})
 
         if int(state.get("round_type", 1) or 1) == 2 and last_wk_adv and last_wk_adv.get("scored_sat_trains"):
             wk = last_wk_adv
             sat_trains = wk.get("scored_sat_trains") or []
             top_ev = float(wk.get("best_ev", sat_trains[0].get("route_ev", sat_trains[0]["score"])))
-            max_n = 3 if show_sec else 1
-            for rank_i, t_item in enumerate(sat_trains[:max_n]):
-                b_coord = btns.get(str(t_item["idx"]))
-                if not b_coord:
-                    continue
-                t_ev = float(t_item.get("route_ev", t_item["score"]))
-                if rank_i == 0:
-                    r_txt = format_train_subject_markup(
-                        t_item, state, stat_names=snames, style_key="best", include_tag=True
-                    )
-                    specs.append({
-                        "left": f"★ EV {t_ev:.0f}",
-                        "right": r_txt,
-                        "rx": right_rx,
-                        "ry": b_coord["ry"],
-                        "anchor": "right",
-                        "style": "best",
-                    })
-                elif show_sec:
-                    diff = max(0.0, top_ev - t_ev)
-                    if diff <= 32.0:
+            if show_train:
+                max_n = 3 if show_sec else 1
+                for rank_i, t_item in enumerate(sat_trains[:max_n]):
+                    b_coord = btns.get(str(t_item["idx"]))
+                    if not b_coord:
+                        continue
+                    t_ev = float(t_item.get("route_ev", t_item["score"]))
+                    if rank_i == 0:
                         r_txt = format_train_subject_markup(
-                            t_item, state, stat_names=snames, style_key="second", include_tag=True
+                            t_item, state, stat_names=snames, style_key="best", include_tag=True
                         )
                         specs.append({
-                            "left": f"EV {t_ev:.0f}",
+                            "left": f"★ EV {t_ev:.0f}",
                             "right": r_txt,
                             "rx": right_rx,
                             "ry": b_coord["ry"],
                             "anchor": "right",
-                            "style": "second",
+                            "style": "best",
                         })
-            trough_line = f"{wk.get('day_tag', '周六')}｜{strip_markup_to_clean_text(wk.get('best_compact', ''))}"
+                    elif show_sec:
+                        diff = max(0.0, top_ev - t_ev)
+                        if diff <= 32.0:
+                            r_txt = format_train_subject_markup(
+                                t_item, state, stat_names=snames, style_key="second", include_tag=True
+                            )
+                            specs.append({
+                                "left": f"EV {t_ev:.0f}",
+                                "right": r_txt,
+                                "rx": right_rx,
+                                "ry": b_coord["ry"],
+                                "anchor": "right",
+                                "style": "second",
+                            })
+            wk_shop_txt = _extract_weekend_shop_badge_text(wk) if show_shop else ""
+            if show_shop:
+                specs.append({
+                    "left": "商店",
+                    "right": wk_shop_txt or "暂无必买",
+                    "rx": float(tr_shop_a.get("rx", 0.972)),
+                    "ry": float(tr_shop_a.get("ry", 0.118)),
+                    "anchor": "right",
+                    "style": "shop" if wk_shop_txt else "muted",
+                    "tail": False,
+                    "font_scale": 0.92 if wk_shop_txt else 0.88,
+                })
+            if show_train:
+                trough_line = f"{wk.get('day_tag', '周六')}｜{strip_markup_to_clean_text(wk.get('best_compact', ''))}"
+            elif wk_shop_txt:
+                trough_line = f"商店｜<span foreground='#E03A12'>{html.escape(wk_shop_txt)}</span>"
         else:
             scored = last_turn_scored or []
             train_only = [x for x in scored if 1 <= int(x.get("idx", 0)) <= 6]
             rest_top = bool(scored and scored[0].get("idx", 0) == 0)
             ref_top_ev = scored[0]["score"] if scored else (train_only[0]["score"] if train_only else 0.0)
-            max_n = 3 if show_sec else 1
-            for rank_i, item in enumerate(train_only[:max_n]):
-                b_coord = btns.get(str(item["idx"]))
-                if not b_coord:
-                    continue
-                if rank_i == 0 and not rest_top:
-                    r_txt = format_train_subject_markup(
-                        item, state, stat_names=snames, style_key="best", include_tag=True
-                    )
-                    specs.append({
-                        "left": f"★ EV {item['score']:.0f}",
-                        "right": r_txt,
-                        "rx": right_rx,
-                        "ry": b_coord["ry"],
-                        "anchor": "right",
-                        "style": "best",
-                    })
-                else:
-                    diff = max(0.0, ref_top_ev - item["score"])
-                    if rank_i == 0 and rest_top:
-                        specs.append({
-                            "left": f"EV {item['score']:.0f}",
-                            "right": format_train_subject_markup(
-                                item,
-                                state,
-                                stat_names=snames,
-                                style_key="warn",
-                                include_tag=False,
-                                suffix_warn="退回休息更赚",
-                            ),
-                            "rx": right_rx,
-                            "ry": b_coord["ry"],
-                            "anchor": "right",
-                            "style": "warn",
-                        })
-                    elif show_sec and diff <= 32.0:
+            if show_train:
+                max_n = 3 if show_sec else 1
+                for rank_i, item in enumerate(train_only[:max_n]):
+                    b_coord = btns.get(str(item["idx"]))
+                    if not b_coord:
+                        continue
+                    if rank_i == 0 and not rest_top:
                         r_txt = format_train_subject_markup(
-                            item, state, stat_names=snames, style_key="second", include_tag=True
+                            item, state, stat_names=snames, style_key="best", include_tag=True
                         )
                         specs.append({
-                            "left": f"EV {item['score']:.0f}",
+                            "left": f"★ EV {item['score']:.0f}",
                             "right": r_txt,
                             "rx": right_rx,
                             "ry": b_coord["ry"],
                             "anchor": "right",
-                            "style": "second",
+                            "style": "best",
                         })
-            if rest_top and scored:
+                    else:
+                        diff = max(0.0, ref_top_ev - item["score"])
+                        if rank_i == 0 and rest_top:
+                            specs.append({
+                                "left": f"EV {item['score']:.0f}",
+                                "right": format_train_subject_markup(
+                                    item,
+                                    state,
+                                    stat_names=snames,
+                                    style_key="warn",
+                                    include_tag=False,
+                                    suffix_warn="退回休息更赚",
+                                ),
+                                "rx": right_rx,
+                                "ry": b_coord["ry"],
+                                "anchor": "right",
+                                "style": "warn",
+                            })
+                        elif show_sec and diff <= 32.0:
+                            r_txt = format_train_subject_markup(
+                                item, state, stat_names=snames, style_key="second", include_tag=True
+                            )
+                            specs.append({
+                                "left": f"EV {item['score']:.0f}",
+                                "right": r_txt,
+                                "rx": right_rx,
+                                "ry": b_coord["ry"],
+                                "anchor": "right",
+                                "style": "second",
+                            })
+            shop_badge = (
+                extract_weekday_shop_badge_fn(state, scored)
+                if (show_shop and extract_weekday_shop_badge_fn)
+                else ""
+            )
+            if show_shop:
+                clean_sh = strip_markup_to_clean_text(shop_badge) if shop_badge else ""
+                specs.append({
+                    "left": "商店",
+                    "right": clean_sh or "暂无必买",
+                    "rx": float(tr_shop_a.get("rx", 0.972)),
+                    "ry": float(tr_shop_a.get("ry", 0.118)),
+                    "anchor": "right",
+                    "style": "shop" if clean_sh else "muted",
+                    "tail": False,
+                    "font_scale": 0.92 if clean_sh else 0.88,
+                })
+            if not show_train:
+                if shop_badge:
+                    trough_line = f"商店｜<span foreground='#E03A12'>{html.escape(strip_markup_to_clean_text(shop_badge))}</span>"
+            elif rest_top and scored:
                 trough_line = (
                     f"{int(state.get('round', 1)):02d}训｜"
                     f"<span foreground='#F03E5A'>低体高危：建议退回点休息 (EV {scored[0]['score']:.0f})</span>"
@@ -857,7 +929,7 @@ def build_badges_for_mode(
                 trough_line = build_weekday_trough_line(
                     state,
                     scored,
-                    include_shop=show_shop,
+                    include_shop=False,
                     format_weekday_hud_tips_fn=format_weekday_hud_tips_fn,
                     get_whistle_step_fn=get_whistle_step_fn,
                     check_lineup_and_equip_synergy_fn=check_lineup_and_equip_synergy_fn,
@@ -928,24 +1000,16 @@ def build_badges_for_mode(
             )
 
             if show_shop and mode in ("weekend_main", "weekend_map"):
-                if wk.get("hud_free_tip"):
-                    specs.append({
-                        "left": "商店",
-                        "right": "0金免费领",
-                        "rx": float(sh_btn.get("badge_rx", 0.862)),
-                        "ry": float(sh_btn.get("badge_ry", 0.215)),
-                        "anchor": "right",
-                        "style": "shop",
-                    })
-                elif "🛒" in (wk.get("best_compact") or "") or wk.get("hud_shop_tip"):
-                    specs.append({
-                        "left": "商店",
-                        "right": "先买商店好货",
-                        "rx": float(sh_btn.get("badge_rx", 0.862)),
-                        "ry": float(sh_btn.get("badge_ry", 0.215)),
-                        "anchor": "right",
-                        "style": "shop",
-                    })
+                wk_shop_txt = _extract_weekend_shop_badge_text(wk)
+                specs.append({
+                    "left": "商店",
+                    "right": wk_shop_txt or "暂无必买",
+                    "rx": float(sh_btn.get("badge_rx", 0.862)),
+                    "ry": float(sh_btn.get("badge_ry", 0.215)),
+                    "anchor": "right",
+                    "style": "shop" if wk_shop_txt else "muted",
+                    "font_scale": 1.0 if wk_shop_txt else 0.90,
+                })
 
             if mode in ("weekend_main", "weekend_map") and not show_weekend:
                 if specs:
